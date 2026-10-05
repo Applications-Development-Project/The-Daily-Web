@@ -1,0 +1,24 @@
+{
+  "name": "the-web-daily",
+  "version": "1.0.0",
+  "description": "The Web Daily: a news site where reporters write articles, an editor approves them, and guests read and comment. Node.js, Express, EJS and MongoDB (MVC).",
+  "private": true,
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node scripts/seed.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "connect-mongo": "^6.0.0",
+    "dotenv": "^18.0.5",
+    "ejs": "^7.0.1",
+    "express": "^5.2.1",
+    "express-session": "^1.19.0",
+    "mongoose": "^9.11.0"
+  }
+}
