@@ -1,0 +1,12 @@
+# Files Git must never track.
+# Owner: OS. Shared file: change it only in a small, separate pull request.
+
+# Installed packages. Anyone can recreate them with "npm install" from package.json.
+node_modules/
+
+# Local settings and secrets (database URI, session secret, API key, demo password).
+# Only .env.example, with empty values, is committed.
+.env
+
+# Log files written by services/logger.js while the server runs.
+logs/
