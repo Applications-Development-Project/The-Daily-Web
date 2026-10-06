@@ -1,0 +1,49 @@
+<%#
+  views/editor/partials/editorNav.ejs
+
+  Navigation bar shared by every editor page, so the editor can move between the
+  article dashboard, Impact Analytics, user management and comment moderation.
+  Writing it once here means a new link is added in one place, not in every page.
+
+  How a page includes it, inside an unescaped output tag (the one with a minus sign),
+  with the path relative to the page, which lives in views/editor/:
+    include('partials/editorNav', { activePage: 'analytics' })
+  (The full tag isn't written here because its closing characters would end this comment.)
+  activePage is optional. It marks the current page's link, so the editor sees
+  where they are. Allowed values: 'dashboard', 'analytics', 'users', 'comments'.
+
+  This is only navigation. The links don't protect anything: every /editor route
+  checks requireRole('editor') on the server. Logging out is in the site header.
+
+  Included by: views/editor/dashboard.ejs, articleReview.ejs, analytics.ejs (SM),
+  views/editor/users.ejs and comments.ejs (OS).
+  Styled by: the .editor-nav rules in public/css/main.css.
+  Owner: SM.
+
+  This block is an EJS comment (it opens with a # sign), so it is never sent to the browser.
+%>
+<%
+  // The links, in the order they appear. Keeping them in a list means the HTML for
+  // a link is written once below, instead of four almost identical copies.
+  const editorLinks = [
+    { page: 'dashboard', href: '/editor', label: 'Articles' },
+    { page: 'analytics', href: '/editor/analytics', label: 'Impact Analytics' },
+    { page: 'users', href: '/editor/users', label: 'Users' },
+    { page: 'comments', href: '/editor/comments', label: 'Comments' },
+  ];
+
+  // "locals.activePage" instead of "activePage": if a page includes this partial
+  // without passing activePage, reading a missing variable directly would crash the
+  // render, while reading it from locals just gives undefined (no link is marked).
+  const activePage = locals.activePage;
+%>
+<nav class="editor-nav" aria-label="Editor area">
+  <ul class="editor-nav-list">
+    <% editorLinks.forEach(function (link) { %>
+      <li>
+        <%# aria-current="page" tells screen readers which page this is; the CSS uses it to highlight the link. %>
+        <a class="editor-nav-link" href="<%= link.href %>"<% if (link.page === activePage) { %> aria-current="page"<% } %>><%= link.label %></a>
+      </li>
+    <% }); %>
+  </ul>
+</nav>
