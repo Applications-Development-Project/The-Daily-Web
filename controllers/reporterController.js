@@ -19,6 +19,7 @@
 
 const Article = require('../models/Article');
 const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWorkflow');
+const logger = require('../services/logger');
 
 // An article id from the URL must be exactly 24 hexadecimal characters. We check the
 // shape ourselves ("Checking ids from the URL" in the plan) because
@@ -409,15 +410,113 @@ async function autosaveDraft(request, response) {
   response.json({ success: true, data: { savedAt: new Date().toISOString() } });
 }
 
+// The draft fields that must be filled in before an article can be sent to the editor, with
+// the name to show the reporter in the error message. imageUrl is not here: an article
+// may have no picture. While WRITING all five fields may be empty (autosave saves
+// half-written drafts), but an editor can't review an article without these four.
+const REQUIRED_SUBMIT_FIELDS = {
+  title: 'title',
+  summary: 'summary',
+  category: 'category',
+  body: 'article text',
+};
+
 /**
- * POST /api/reporter/articles/:id/submit - send the article to the editor. PLACEHOLDER.
+ * Lists the required fields of a draft that are still empty. A field made only of spaces
+ * or line breaks counts as empty: it looks filled-in on the screen but says nothing.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * @param {{title: string, summary: string, category: string, body: string}} draft - The
+ *   article's saved draft (from the database).
+ * @returns {string[]} The display names of the empty required fields, in form order;
+ *   an empty list means the draft is complete.
  */
-function submitArticleForApproval(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+function findMissingRequiredFields(draft) {
+  return Object.keys(REQUIRED_SUBMIT_FIELDS)
+    .filter(function (fieldName) {
+      // "|| ''" so a field that is missing altogether (not just empty) can't crash trim().
+      return (draft[fieldName] || '').trim() === '';
+    })
+    .map(function (fieldName) {
+      return REQUIRED_SUBMIT_FIELDS[fieldName];
+    });
+}
+
+/**
+ * POST /api/reporter/articles/:id/submit - the reporter sends the finished article to the
+ * editor: the status changes from "In preparation" (or "Returned for corrections") to
+ * "Awaiting editor approval".
+ *
+ * Requirement served (in our own words): a reporter may move an article that belongs to
+ * them from "in preparation" to "awaiting editor approval", and may do the same again for
+ * an article the editor returned, after fixing it. Every other change is not allowed.
+ *
+ * Steps, in this order (each can stop the request with an error):
+ *   1. findOwnedArticle: 400 bad id, 404 no such article, 403 not this reporter's article.
+ *   2. The four required fields of the saved draft must be filled in, otherwise 400 that
+ *      names the missing ones. We check the draft stored in the DATABASE, not anything
+ *      sent in this request, so what the editor will review is exactly what was checked.
+ *      This is done on the server because the browser can't be trusted: anyone can call
+ *      this route directly and skip any check in the page.
+ *   3. canTransition(current status, "pending", "reporter") must allow it, otherwise 409.
+ *      The transition table is the single place that knows the allowed changes, so this
+ *      route doesn't repeat them in its own if-statements. It allows draft -> pending and
+ *      returned -> pending; it refuses pending -> pending (already submitted) and
+ *      published -> pending (a live article must first be edited, which moves it to draft).
+ *   4. Set the status to "pending" and save.
+ *
+ * What is deliberately NOT changed:
+ *   - `published` stays as it is: readers keep seeing the last approved version while the
+ *     new one waits for the editor, also after this call.
+ *   - `editorNote` is not cleared. The editor's note belongs to the editor's decision: it is
+ *     cleared when the editor approves (SM's code). Until then the reporter can still read
+ *     what was asked of them, and the editor can check that it was done.
+ *
+ * After this the article is "pending", so autosave and the edit page answer 409: it is
+ * read-only while the editor reviews it, so the text under review can't change.
+ *
+ * The reporter and the status are NEVER read from the request body: the owner comes from
+ * the session, and the new status is decided here. No try/catch: in Express 5 an error
+ * thrown in an async handler reaches errorHandler by itself.
+ *
+ * @param {import('express').Request} request - request.params.id is the article id,
+ *   request.session.user the reporter.
+ * @param {import('express').Response} response - Answers 200
+ *   { success: true, data: { id, status, statusLabel } }.
+ * @returns {Promise<void>}
+ * @throws {Error} With statusCode 400, 403, 404 or 409 (see the steps above).
+ */
+async function submitArticleForApproval(request, response) {
+  const reporterId = request.session.user.id;
+  const article = await findOwnedArticle(request.params.id, reporterId);
+
+  const missingFields = findMissingRequiredFields(article.draft);
+  if (missingFields.length > 0) {
+    throw createHttpError(400, 'Please fill in these fields before submitting: ' + missingFields.join(', ') + '.');
+  }
+
+  if (!canTransition(article.status, STATUS.PENDING, 'reporter')) {
+    const message = article.status === STATUS.PENDING
+      ? 'This article is already waiting for the editor.'
+      : `An article that is "${STATUS_LABELS[article.status]}" cannot be submitted for approval.`;
+    throw createHttpError(409, message);
+  }
+
+  const previousStatus = article.status;
+  article.status = STATUS.PENDING;
+  await article.save();
+
+  // A status change is a significant event (requirement: keep logs of important events).
+  // Only ids and statuses are logged, never the article text.
+  logger.info(`Article ${article._id} submitted for approval by reporter ${reporterId} (${previousStatus} -> ${article.status})`);
+
+  response.json({
+    success: true,
+    data: {
+      id: article._id.toString(),
+      status: article.status,
+      statusLabel: STATUS_LABELS[article.status],
+    },
+  });
 }
 
 module.exports = {
