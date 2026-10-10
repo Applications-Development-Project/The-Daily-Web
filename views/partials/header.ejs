@@ -1,0 +1,20 @@
+<header class="site-header">
+    <h1><a href="/" style="color: white; text-decoration: none;">The Web Daily</a></h1>
+    <nav>
+        <% if (currentUser) { %>
+            <span>Welcome, <%= currentUser.displayName %></span>
+            <% if (currentUser.role === 'reporter') { %>
+                <a href="/reporter" class="btn btn-primary">My Articles</a>
+            <% } else if (currentUser.role === 'editor') { %>
+                <a href="/editor" class="btn btn-primary">Dashboard</a>
+            <% } %>
+            <!-- Logout button as a POST form without JS, as required -->
+            <form method="post" action="/logout" style="display: inline;">
+                <button type="submit" class="btn btn-danger">Log out</button>
+            </form>
+        <% } else { %>
+            <span>Welcome, Guest</span>
+            <a href="/login" class="btn btn-primary">Log in</a>
+        <% } %>
+    </nav>
+</header>

@@ -9,113 +9,98 @@
   Rendered by: controllers/authController.js (showLoginPage), for GET /login.
   Logged-in users never see it: showLoginPage sends them to their own area.
 
-  The small script at the bottom lives in this file because the work plan gives OS
-  this view but no separate browser script for it. It uses apiClient
-  (public/js/shared/apiClient.js), like every page script.
-
-  TEMP until the shared partials (views/partials/head, header, footer) are merged:
-  this page is a complete HTML document on its own. When they exist, replace the
-  head and header below with includes, so the page looks like the rest of the site.
-
-  Owner: OS.
+  Owner: OS (Logic) / SH (Layout & Partials).
 %>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Log in - The Web Daily</title>
-  <link rel="stylesheet" href="/css/main.css">
-</head>
-<body>
-  <header>
-    <a href="/">The Web Daily</a>
-  </header>
+<!-- Load the head partial and pass a dynamic title -->
+<%- include('../partials/head', { title: 'Log in - The Web Daily' }) %>
 
-  <main class="page-container">
-    <section class="card" aria-labelledby="login-title">
-      <h1 id="login-title">Log in</h1>
-      <p>For reporters and editors. Readers don't need an account.</p>
+<body class="page-container">
+    <%- include('../partials/header') %>
 
-      <%# method="post" matters even though the script sends the form itself: if the
-          script ever fails to load, the browser would otherwise send the form with GET
-          and put the password in the address bar and the browser history. %>
-      <form id="login-form" method="post" action="/api/auth/login">
-        <div class="form-field">
-          <label for="username">Username</label>
-          <%# autocomplete lets the browser's password manager fill and save the login. %>
-          <input id="username" name="username" type="text" autocomplete="username" maxlength="30" required autofocus>
-        </div>
+    <div class="main-content-wrapper login-container" style="max-width: 400px; margin: var(--spacing-lg) auto;">
+        <main class="main-content">
+            <section class="card login-card" aria-labelledby="login-title" style="padding: var(--spacing-lg);">
+                <h1 id="login-title" style="margin-bottom: var(--spacing-md); text-align: center;">Log in</h1>
+                <p style="text-align: center; margin-bottom: var(--spacing-md); color: #666;">For reporters and editors. Readers don't need an account.</p>
 
-        <div class="form-field">
-          <label for="password">Password</label>
-          <input id="password" name="password" type="password" autocomplete="current-password" maxlength="200" required>
-        </div>
+                <%# method="post" matters even though the script sends the form itself %>
+                <form id="login-form" method="post" action="/api/auth/login">
+                    
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <label for="username" style="display: block; margin-bottom: var(--spacing-sm);">Username</label>
+                        <input id="username" name="username" type="text" class="form-field" autocomplete="username" maxlength="30" required autofocus>
+                    </div>
 
-        <%# role="alert" makes screen readers announce the error as soon as it appears. %>
-        <p id="login-error" class="form-error" role="alert" hidden></p>
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <label for="password" style="display: block; margin-bottom: var(--spacing-sm);">Password</label>
+                        <input id="password" name="password" type="password" class="form-field" autocomplete="current-password" maxlength="200" required>
+                    </div>
 
-        <button id="login-button" class="btn btn-primary" type="submit">Log in</button>
-      </form>
-    </section>
-  </main>
+                    <%# role="alert" makes screen readers announce the error as soon as it appears. %>
+                    <p id="login-error" class="form-error" role="alert" hidden></p>
 
-  <script src="/js/shared/apiClient.js"></script>
-  <script>
-    const loginForm = document.getElementById('login-form');
-    const loginError = document.getElementById('login-error');
-    const loginButton = document.getElementById('login-button');
+                    <button id="login-button" class="btn btn-primary" type="submit" style="width: 100%;">Log in</button>
+                </form>
+            </section>
+        </main>
+    </div>
 
-    /**
-     * Shows an error under the form. textContent (not innerHTML) puts the message in
-     * as plain text, so a message can never add HTML or scripts to the page.
-     *
-     * @param {string} message - The text to show.
-     * @returns {void}
-     */
-    function showLoginError(message) {
-      loginError.textContent = message;
-      loginError.hidden = false;
-    }
+    <%- include('../partials/footer') %>
 
-    /**
-     * Sends the username and password with fetch instead of the browser's normal
-     * form submit, then goes to the user's area, or shows the server's error.
-     *
-     * @param {SubmitEvent} event - The form's submit event.
-     * @returns {Promise<void>}
-     */
-    async function submitLoginForm(event) {
-      // Stop the normal submit, which would load a new page.
-      event.preventDefault();
+    <!-- OS's original scripts -->
+    <script src="/js/shared/apiClient.js"></script>
+    <script>
+        const loginForm = document.getElementById('login-form');
+        const loginError = document.getElementById('login-error');
+        const loginButton = document.getElementById('login-button');
 
-      const username = loginForm.elements.username.value.trim();
-      const password = loginForm.elements.password.value;
+        /**
+         * Shows an error under the form. textContent (not innerHTML) puts the message in
+         * as plain text, so a message can never add HTML or scripts to the page.
+         *
+         * @param {string} message - The text to show.
+         * @returns {void}
+         */
+        function showLoginError(message) {
+            loginError.textContent = message;
+            loginError.hidden = false;
+        }
 
-      // Checked here for a quick answer, and checked again on the server,
-      // because anything in the browser can be bypassed.
-      if (username === '' || password === '') {
-        showLoginError('Please enter your username and password.');
-        return;
-      }
+        /**
+         * Sends the username and password with fetch instead of the browser's normal
+         * form submit, then goes to the user's area, or shows the server's error.
+         *
+         * @param {SubmitEvent} event - The form's submit event.
+         * @returns {Promise<void>}
+         */
+        async function submitLoginForm(event) {
+            event.preventDefault();
 
-      // Disabled while waiting, so a double click doesn't send two logins.
-      loginButton.disabled = true;
-      loginError.hidden = true;
+            const username = loginForm.elements.username.value.trim();
+            const password = loginForm.elements.password.value;
 
-      const result = await apiClient.post('/api/auth/login', { username: username, password: password });
+            if (username === '' || password === '') {
+                showLoginError('Please enter your username and password.');
+                return;
+            }
 
-      if (!result.success) {
-        showLoginError(result.error);
-        loginButton.disabled = false;
-        return;
-      }
+            loginButton.disabled = true;
+            loginError.hidden = true;
 
-      // The server decides where each role goes; the browser only follows.
-      window.location.assign(result.data.redirectTo);
-    }
+            const result = await apiClient.post('/api/auth/login', { username: username, password: password });
 
-    loginForm.addEventListener('submit', submitLoginForm);
-  </script>
+            if (!result.success) {
+                showLoginError(result.error);
+                loginButton.disabled = false;
+                return;
+            }
+
+            window.location.assign(result.data.redirectTo);
+        }
+
+        loginForm.addEventListener('submit', submitLoginForm);
+    </script>
 </body>
 </html>

@@ -1,0 +1,34 @@
+<aside class="sidebar">
+    <div id="weather-widget" class="card loading">
+        <h3>Weather</h3>
+        <div id="weather-content">Loading weather...</div>
+    </div>
+    
+    <script>
+    async function loadWeather() {
+        try {
+            const response = await fetch('/api/weather');
+            const result = await response.json();
+            const contentDiv = document.getElementById('weather-content');
+            
+            if (result.success) {
+                const w = result.data;
+                contentDiv.innerHTML = `
+                    <div class="weather-info">
+                        <img src="https://openweathermap.org/img/wn/${w.icon}.png" alt="${w.description}">
+                        <div>
+                            <strong>${w.city}</strong><br>
+                            ${w.temperature}°C, ${w.description}
+                        </div>
+                    </div>
+                `;
+            } else {
+                contentDiv.textContent = 'Weather unavailable';
+            }
+        } catch (error) {
+            document.getElementById('weather-content').textContent = 'Weather unavailable';
+        }
+    }
+    document.addEventListener('DOMContentLoaded', loadWeather);
+    </script>
+</aside>
