@@ -44,6 +44,8 @@
       aria-live="polite" makes screen readers announce the new text when it changes.
     %>
     <p id="article-list-message" class="loading" aria-live="polite">Loading articles...</p>
+    <%# The result of the editor's last action (for example "Deleted ..."). %>
+    <p id="article-action-message" aria-live="polite" hidden></p>
 
     <%# On a narrow screen the table scrolls sideways inside this box, not the whole page. %>
     <div style="overflow-x: auto;">

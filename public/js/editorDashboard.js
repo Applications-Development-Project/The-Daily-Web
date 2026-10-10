@@ -4,7 +4,8 @@
  * Fills the editor dashboard's table (views/editor/dashboard.ejs) with articles from
  * GET /api/editor/articles, 20 per page. Changing the status filter, typing in the title
  * search and moving between pages all reload only the table, never the page (Ajax).
- * Each row links to the article's review page.
+ * Each row links to the article's review page and has a Delete button, which asks
+ * for confirmation and then deletes the article with its comments and statistics.
  *
  * Every text from the server is put on the page with textContent, never innerHTML,
  * so a title like "<script>..." is shown as plain text and can't run as code.
@@ -53,9 +54,11 @@ function createTextCell(text) {
  *
  * @param {{id: string, title: string, reporterName: string, status: string,
  *   statusLabel: string, isLive: boolean, updatedAt: string}} article
+ * @param {function(Object, HTMLButtonElement): void} onDeleteClick - Called with the
+ *   article and its Delete button when the button is clicked.
  * @returns {HTMLTableRowElement}
  */
-function createArticleRow(article) {
+function createArticleRow(article, onDeleteClick) {
   const row = document.createElement('tr');
   const reviewUrl = `/editor/articles/${encodeURIComponent(article.id)}`;
 
@@ -84,7 +87,16 @@ function createArticleRow(article) {
   reviewLink.href = reviewUrl;
   reviewLink.className = 'btn btn-primary';
   reviewLink.textContent = 'Review';
-  actionsCell.append(reviewLink);
+
+  const deleteButton = document.createElement('button');
+  deleteButton.type = 'button';
+  deleteButton.className = 'btn btn-danger';
+  deleteButton.textContent = 'Delete';
+  deleteButton.addEventListener('click', function handleDeleteClick() {
+    onDeleteClick(article, deleteButton);
+  });
+
+  actionsCell.append(reviewLink, ' ', deleteButton);
 
   row.append(
     titleCell,
@@ -109,6 +121,7 @@ function setUpEditorDashboard() {
     return;
   }
   const listMessage = document.getElementById('article-list-message');
+  const actionMessage = document.getElementById('article-action-message');
   const filterForm = document.getElementById('article-filters');
   const statusFilter = document.getElementById('status-filter');
   const titleSearch = document.getElementById('title-search');
@@ -220,7 +233,8 @@ function setUpEditorDashboard() {
     listState.totalPages = totalPages;
 
     // replaceChildren removes the old rows and adds the new ones in one step.
-    tableBody.replaceChildren(...articles.map(createArticleRow));
+    const rows = articles.map((article) => createArticleRow(article, deleteArticle));
+    tableBody.replaceChildren(...rows);
     if (articles.length === 0) {
       const isFiltered = listState.status !== '' || listState.search !== '';
       showListMessage(isFiltered ? 'No articles match this filter and search.' : 'There are no articles yet.', 'empty-state');
@@ -228,6 +242,62 @@ function setUpEditorDashboard() {
       listMessage.hidden = true;
     }
     updatePaging(totalArticles);
+  }
+
+  /**
+   * Shows the result of the editor's last action above the table.
+   *
+   * @param {string} text - The message.
+   * @param {string} className - '' for a normal message, 'form-error' for an error.
+   * @returns {void}
+   */
+  function showActionMessage(text, className) {
+    actionMessage.textContent = text;
+    actionMessage.className = className;
+    actionMessage.hidden = false;
+  }
+
+  /**
+   * Asks the editor to confirm, then deletes the article and reloads the current page.
+   * The server checks again that the user is an editor; the confirmation only protects
+   * against a slip of the mouse, because a deleted article can't be brought back.
+   *
+   * @param {{id: string, title: string}} article - The article in the clicked row.
+   * @param {HTMLButtonElement} deleteButton - Disabled while deleting, so a double
+   *   click can't send the request twice.
+   * @returns {Promise<void>}
+   */
+  async function deleteArticle(article, deleteButton) {
+    const confirmed = window.confirm(
+      `Delete "${article.title}"?\n\nIts comments and view statistics will be deleted too. This can't be undone.`
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    deleteButton.disabled = true;
+    const result = await apiClient.delete(`${ARTICLES_API_URL}/${encodeURIComponent(article.id)}`);
+
+    if (result.status === 401) {
+      deleteButton.disabled = false;
+      showLoggedOutMessage();
+      return;
+    }
+    if (!result.success) {
+      // For example 404: someone else already deleted it. The reload below shows the truth.
+      showActionMessage(result.error, 'form-error');
+    } else {
+      const commentCount = result.data.deletedComments;
+      const commentWord = commentCount === 1 ? 'comment' : 'comments';
+      showActionMessage(`Deleted "${article.title}" (with ${commentCount} ${commentWord}).`, '');
+    }
+
+    // If that was the only row on the last page, that page no longer exists:
+    // go back one page instead of showing an empty table.
+    if (tableBody.children.length === 1 && listState.page > 1) {
+      listState.page -= 1;
+    }
+    await loadArticles();
   }
 
   /**
