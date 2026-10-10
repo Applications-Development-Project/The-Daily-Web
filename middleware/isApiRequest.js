@@ -21,7 +21,8 @@
  * request.path "/users". request.baseUrl holds the mount prefix ("/api" there,
  * "" in middleware on the whole app), so baseUrl + path is always the full path,
  * without the query string. requireLogin and requireRole run inside routers,
- * so this matters.
+ * so this matters: a first version used request.path alone, and testing every route
+ * as a guest showed that /api calls got a redirect to /login instead of 401 JSON.
  *
  * @param {import('express').Request} request - The incoming request.
  * @returns {boolean} true for "/api" and anything under "/api/".
