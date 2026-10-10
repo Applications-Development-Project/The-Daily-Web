@@ -108,14 +108,49 @@ async function listMyArticles(request, response) {
 }
 
 /**
- * POST /api/reporter/articles - create a new draft article. PLACEHOLDER.
+ * POST /api/reporter/articles - create a new, empty article for the logged-in reporter.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * Requirements served: "a new article is created in the 'In preparation' state" and
+ * "a reporter can create articles". The browser calls this when the reporter clicks
+ * "New article", then opens the edit page for the returned id, where the autosave
+ * fills in the content. So no content is sent here: the article starts empty.
+ *
+ * Why this function never reads request.body: the only values that matter (who the
+ * reporter is, the status, the published copy) must be decided by the server. If we
+ * accepted them from the body, a reporter could send { reporter: <someone else's id> }
+ * or { status: 'published' } and publish in another person's name. Anything the
+ * browser sends is simply ignored.
+ *
+ * Why no try/catch: in Express 5 an error thrown inside an async route handler (for
+ * example the database being down) is passed to errorHandler automatically, which
+ * logs it and answers with a clean 500 instead of crashing the server.
+ *
+ * @param {import('express').Request} request - request.session.user is the reporter
+ *   (requireRole('reporter') in the route file has already checked that).
+ * @param {import('express').Response} response - Answers 201 { success: true, data: { id } }.
+ * @returns {Promise<void>}
+ * @throws {Error} Database errors; they reach errorHandler and become a 500.
  */
-function createArticle(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function createArticle(request, response) {
+  const article = await Article.create({
+    // The owner comes from the server-side session, never from the request: this is
+    // what later lets every other route check "is this article yours?".
+    reporter: request.session.user.id,
+    // Every new article starts as "In preparation". STATUS.DRAFT instead of 'draft'
+    // so a typo can't silently create an article with a status that doesn't exist.
+    status: STATUS.DRAFT,
+    // null means "never approved", so the public site (which only reads `published`)
+    // can't show this article until an editor approves it.
+    published: null,
+    // `draft` is left out on purpose: the model gives every new article an empty
+    // content object (all fields ''), which is valid, so the reporter can start typing
+    // right away and autosave fills it in.
+  });
+
+  // 201 Created (not 200) because a new resource now exists. Only the id is returned:
+  // the browser needs nothing else to open /reporter/articles/<id>/edit.
+  // article._id is an ObjectId object, so it is converted to a plain string for JSON.
+  response.status(201).json({ success: true, data: { id: article._id.toString() } });
 }
 
 /**
