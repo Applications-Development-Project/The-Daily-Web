@@ -6,7 +6,7 @@
  *   (guests are limited to 3 per minute by middleware/commentRateLimiter.js, which runs
  *   before addComment).
  * - For the editor: the comment moderation page and API (search, edit, delete).
- *   These are still PLACEHOLDERS answering 501 until OS builds moderation.
+ *   Searching works; the page, edit and delete are still PLACEHOLDERS answering 501.
  *
  * Every comment sent to the browser has the shape { id, authorName, text, createdAt }.
  * deviceId is never sent: it identifies a reader's browser and is only for the server.
@@ -34,6 +34,12 @@ const MAX_COMMENTS_PER_ARTICLE = 100;
 const MAX_AUTHOR_NAME_LENGTH = 50;
 const MAX_COMMENT_TEXT_LENGTH = 1000;
 
+// The moderation list is shown 20 at a time, like every other list in the project.
+const COMMENTS_PER_PAGE = 20;
+
+// A search longer than a whole comment can't match anything.
+const MAX_SEARCH_LENGTH = 100;
+
 /**
  * Turns a comment from the database into the shape we send to the browser.
  * Choosing the fields one by one means nothing else (like deviceId) leaks out,
@@ -52,6 +58,37 @@ function toCommentResponse(comment) {
 }
 
 /**
+ * The moderation shape of a comment: the public shape plus the article it belongs to,
+ * so the editor can see where the comment was posted and open that article.
+ *
+ * The article title comes from the published version (what readers saw next to the
+ * comment). If the article has no published version any more, we fall back to its
+ * working copy's title. article is null if the article was deleted, which normally
+ * can't happen because deleting an article also deletes its comments.
+ *
+ * @param {Object} comment - A lean comment whose article field was populated.
+ * @returns {{id: string, authorName: string, text: string, createdAt: Date,
+ *   article: ({id: string, title: string}|null)}}
+ */
+function toModerationCommentResponse(comment) {
+  const response = toCommentResponse(comment);
+  response.article = null;
+
+  if (comment.article) {
+    const article = comment.article;
+    let title = '(untitled)';
+    if (article.published && article.published.title) {
+      title = article.published.title;
+    } else if (article.draft && article.draft.title) {
+      title = article.draft.title;
+    }
+    response.article = { id: article._id.toString(), title: title };
+  }
+
+  return response;
+}
+
+/**
  * Builds the error passed to errorHandler, which answers with this status and message.
  *
  * @param {number} statusCode - A 4xx status.
@@ -62,6 +99,55 @@ function createClientError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+/**
+ * Puts a backslash before every character that has a special meaning in a regular
+ * expression. Without this, searching for "a.b" would also match "axb" (the dot means
+ * "any character"), and a search like "(((" would make the regular expression invalid.
+ * (The same helper as in userController.js.)
+ *
+ * @param {string} text - What the editor typed.
+ * @returns {string} The same text, safe to use inside a RegExp.
+ */
+function escapeRegExp(text) {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Reads ?search= from the URL. Missing means "no search".
+ *
+ * @param {*} searchValue - request.query.search. Express gives an array if the
+ *   parameter appears twice (?search=a&search=b), so we check the type.
+ * @returns {string} The trimmed search text, or '' for none.
+ * @throws {Error} 400 if it isn't a single text value or is too long.
+ */
+function readSearchText(searchValue) {
+  if (searchValue === undefined) {
+    return '';
+  }
+  if (typeof searchValue !== 'string' || searchValue.length > MAX_SEARCH_LENGTH) {
+    throw createClientError(400, 'Invalid search.');
+  }
+  return searchValue.trim();
+}
+
+/**
+ * Reads ?page= from the URL. Missing means page 1.
+ *
+ * @param {*} pageValue - request.query.page.
+ * @returns {number} A whole number, 1 or more.
+ * @throws {Error} 400 for anything else, like "0", "-2", "1.5" or "abc".
+ */
+function readPageNumber(pageValue) {
+  if (pageValue === undefined) {
+    return 1;
+  }
+  const page = Number(pageValue);
+  if (typeof pageValue !== 'string' || !Number.isInteger(page) || page < 1) {
+    throw createClientError(400, 'Page must be a whole number, 1 or more.');
+  }
+  return page;
 }
 
 /**
@@ -188,14 +274,55 @@ function showCommentModerationPage(request, response) {
 }
 
 /**
- * GET /api/comments?search=&page= - search all comments, 20 per page. PLACEHOLDER.
+ * GET /api/comments?search=&page= - every comment in the system, newest first,
+ * 20 per page. With a search, only comments whose text or author name contains it
+ * (ignoring capital letters). Editor only.
+ * Answers 200 { success: true, data: { comments, page, totalPages, totalComments } };
+ * each comment also has article: { id, title }.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * populate() replaces each comment's article id with the article itself, loading only
+ * the two titles we need, so the whole page takes one query for the comments and one
+ * for their articles, not one query per comment.
+ *
+ * @param {import('express').Request} request - request.query.search and .page.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 for an invalid search or page (passed on to errorHandler).
  */
-function searchComments(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function searchComments(request, response) {
+  const searchText = readSearchText(request.query.search);
+  const page = readPageNumber(request.query.page);
+
+  // An empty filter {} matches every comment. With a search, $or matches either field.
+  let filter = {};
+  if (searchText !== '') {
+    const searchPattern = new RegExp(escapeRegExp(searchText), 'i');
+    filter = { $or: [{ text: searchPattern }, { authorName: searchPattern }] };
+  }
+
+  // countDocuments and find run at the same time, so the page waits for one round
+  // trip instead of two. _id breaks ties between comments from the same millisecond,
+  // so paging never shows a comment twice or skips one.
+  const [totalComments, comments] = await Promise.all([
+    Comment.countDocuments(filter),
+    Comment.find(filter)
+      .sort({ createdAt: -1, _id: -1 })
+      .skip((page - 1) * COMMENTS_PER_PAGE)
+      .limit(COMMENTS_PER_PAGE)
+      .select('article authorName text createdAt')
+      .populate('article', 'published.title draft.title')
+      .lean(),
+  ]);
+
+  response.json({
+    success: true,
+    data: {
+      comments: comments.map(toModerationCommentResponse),
+      page: page,
+      totalPages: Math.max(1, Math.ceil(totalComments / COMMENTS_PER_PAGE)),
+      totalComments: totalComments,
+    },
+  });
 }
 
 /**
