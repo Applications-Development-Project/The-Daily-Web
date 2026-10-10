@@ -409,14 +409,30 @@ async function updateUser(request, response) {
 }
 
 /**
- * DELETE /api/users/:id - delete a user. PLACEHOLDER.
+ * DELETE /api/users/:id - deletes a user, unless a safety rule forbids it.
+ * Answers 200 { success: true, data: { id } }, so the page knows which row to remove.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * @param {import('express').Request} request - request.params.id is the user to delete.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 for a malformed id, 404 for an unknown user, 409 for a safety rule.
  */
-function deleteUser(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function deleteUser(request, response) {
+  const user = await findUserById(request.params.id);
+
+  if (isOwnAccount(request, user)) {
+    throw createClientError(409, "You can't delete your own account.");
+  }
+  if (user.role === 'editor') {
+    await ensureAnotherEditorRemains();
+  } else {
+    await ensureReporterHasNoArticles(user, 'be deleted');
+  }
+
+  await user.deleteOne();
+
+  logger.info(`Editor "${request.session.user.displayName}" deleted user "${user.username}" (${user.role})`);
+  response.json({ success: true, data: { id: user._id.toString() } });
 }
 
 module.exports = { showUserManagementPage, searchUsers, createUser, updateUser, deleteUser };
