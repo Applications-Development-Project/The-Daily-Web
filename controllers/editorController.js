@@ -29,6 +29,8 @@ const ARTICLES_PER_PAGE = 20;
 const MAX_SEARCH_LENGTH = 200;
 // An article can't go live with any of these empty (the image is optional).
 const REQUIRED_CONTENT_FIELDS = ['title', 'summary', 'body', 'category'];
+// Same limit as Article.editorNote in the model.
+const MAX_EDITOR_NOTE_LENGTH = 2000;
 
 /**
  * Sends an error answer in the shape every API uses: { success: false, error }.
@@ -311,14 +313,57 @@ async function approveArticle(request, response) {
 }
 
 /**
- * POST /api/editor/articles/:id/return - return to the reporter with a note. PLACEHOLDER.
+ * POST /api/editor/articles/:id/return - body { note }. Sends the article back to its
+ * reporter for corrections, with a note saying what to fix.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * Only the working copy changes status. If the article is live, its published
+ * version stays exactly as it is, so readers keep seeing the last approved version.
+ *
+ * Answers 200 { success: true, data: { id, status, editorNote } },
+ * 400 if the note is missing, empty or too long (or the id is malformed),
+ * 404 if the article doesn't exist, and 409 if its status doesn't allow returning.
+ *
+ * @param {import('express').Request} request - params.id, body.note; session.user is the editor.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
  */
-function returnArticleToReporter(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function returnArticleToReporter(request, response) {
+  // In Express 5, request.body is undefined when the request has no body at all,
+  // so we fall back to an empty object instead of crashing on undefined.note.
+  const body = request.body || {};
+  const note = typeof body.note === 'string' ? body.note.trim() : '';
+
+  // The note is checked before the database is touched: without it there is
+  // nothing to do (the requirements say a return always comes with a note).
+  if (note === '') {
+    sendError(response, 400, 'Please write a note telling the reporter what to fix');
+    return;
+  }
+  if (note.length > MAX_EDITOR_NOTE_LENGTH) {
+    sendError(response, 400, `The note can be at most ${MAX_EDITOR_NOTE_LENGTH} characters`);
+    return;
+  }
+
+  const article = await findArticleFromUrl(request, response);
+  if (!article) {
+    return;
+  }
+
+  if (!canTransition(article.status, STATUS.RETURNED, request.session.user.role)) {
+    sendError(response, 409, `An article that is "${STATUS_LABELS[article.status]}" can't be returned`);
+    return;
+  }
+
+  // published is deliberately not touched.
+  article.status = STATUS.RETURNED;
+  article.editorNote = note;
+  await article.save();
+
+  logger.info(`Article ${article._id} returned to its reporter by editor "${request.session.user.displayName}"`);
+  response.json({
+    success: true,
+    data: { id: article._id.toString(), status: article.status, editorNote: article.editorNote },
+  });
 }
 
 /**
