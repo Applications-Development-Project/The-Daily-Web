@@ -7,10 +7,9 @@
  * their own if-statements, so the rules can't drift apart between the reporter
  * and editor areas.
  *
- * PHASE 0 STUB, written by SM so everyone can import the final names from day one.
- * STATUS and STATUS_LABELS are final. canTransition() allows everything for now;
- * EZ replaces its body with the real transition table ("Article status rules" in
- * "Shared contracts"). Callers never need to change.
+ * The skeleton version was a stub written by SM; this is the real one. The names and
+ * parameters of STATUS, STATUS_LABELS and canTransition() are unchanged, so callers
+ * didn't need to change. The rules follow "Article status rules" in "Shared contracts".
  *
  * Used by: controllers/reporterController.js, controllers/editorController.js,
  * scripts/seed.js.
@@ -70,10 +69,15 @@ const TRANSITIONS = Object.freeze({
 
 /**
  * Decides whether a user with the given role may move an article from one status
- * to another.
+ * to another, by looking the change up in TRANSITIONS.
  *
- * STUB: always returns true so the skeleton works before EZ's real rules are merged.
- * Do not rely on it rejecting anything yet.
+ * It never throws: any input it doesn't understand (missing, not a string, an
+ * unknown status or role) simply returns false. That matters because the values
+ * may come from the database or a request, and a bad value must be a clean
+ * "not allowed", never a crashed server (requirements: invalid data must not
+ * crash the server).
+ * It checks the ROLE only. Whether the article belongs to this reporter is the
+ * controller's job.
  *
  * @param {string} currentStatus - The article's status now, one of STATUS.
  * @param {string} nextStatus - The status the caller wants to move to, one of STATUS.
@@ -81,7 +85,27 @@ const TRANSITIONS = Object.freeze({
  * @returns {boolean} true if the change is allowed, false if not.
  */
 function canTransition(currentStatus, nextStatus, role) {
-  return true;
+  // Anything that is not a string can't be a valid status or role.
+  if (
+    typeof currentStatus !== 'string' ||
+    typeof nextStatus !== 'string' ||
+    typeof role !== 'string'
+  ) {
+    return false;
+  }
+
+  // Object.hasOwn checks only the table's own keys. A plain "TRANSITIONS[x]" would
+  // also find inherited names such as "constructor" or "__proto__" and misbehave.
+  if (!Object.hasOwn(TRANSITIONS, currentStatus)) {
+    return false;
+  }
+  const allowedNextStatuses = TRANSITIONS[currentStatus];
+  if (!Object.hasOwn(allowedNextStatuses, nextStatus)) {
+    return false;
+  }
+
+  // The change exists in the table; it is allowed only if this role is listed for it.
+  return allowedNextStatuses[nextStatus].includes(role);
 }
 
 module.exports = {
