@@ -20,6 +20,9 @@
 
 const mongoose = require('mongoose');
 const Article = require('../models/Article');
+const Comment = require('../models/Comment');
+const ArticleViewStats = require('../models/ArticleViewStats');
+const DeviceArticleView = require('../models/DeviceArticleView');
 const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWorkflow');
 const logger = require('../services/logger');
 
@@ -367,14 +370,57 @@ async function returnArticleToReporter(request, response) {
 }
 
 /**
- * DELETE /api/editor/articles/:id - delete an article and its related data. PLACEHOLDER.
+ * DELETE /api/editor/articles/:id - deletes an article together with everything
+ * that belongs to it: its comments, its hourly view statistics and the devices'
+ * "viewed" marks. Without this, those documents would stay in the database forever,
+ * pointing to an article that no longer exists. The browser asks the editor to
+ * confirm before calling this.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * Order matters because our MongoDB is a single server, which has no transactions
+ * (all-or-nothing writes need a replica set). We delete the article FIRST: if a
+ * later step failed, what is left are only leftovers nobody can see (the article
+ * page and chart answer 404 without the article). The other order could fail
+ * halfway and leave a live article whose comments and statistics are gone.
+ *
+ * Any status can be deleted: the requirements let the editor delete content
+ * "as needed", so this is not a status change and canTransition isn't asked.
+ *
+ * Answers 200 { success: true, data: { id, deletedComments, deletedViewStats,
+ * deletedDeviceViews } }, 400 for a malformed id, 404 if the article doesn't exist.
+ *
+ * @param {import('express').Request} request - params.id; session.user is the editor.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
  */
-function deleteArticle(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function deleteArticle(request, response) {
+  const article = await findArticleFromUrl(request, response);
+  if (!article) {
+    return;
+  }
+
+  await article.deleteOne();
+
+  // The three related deletes don't depend on each other, so they run at the same time.
+  const [commentsResult, viewStatsResult, deviceViewsResult] = await Promise.all([
+    Comment.deleteMany({ article: article._id }),
+    ArticleViewStats.deleteMany({ article: article._id }),
+    DeviceArticleView.deleteMany({ article: article._id }),
+  ]);
+
+  logger.info(
+    `Article ${article._id} deleted by editor "${request.session.user.displayName}" ` +
+    `(${commentsResult.deletedCount} comments, ${viewStatsResult.deletedCount} view counters, ` +
+    `${deviceViewsResult.deletedCount} device marks)`
+  );
+  response.json({
+    success: true,
+    data: {
+      id: article._id.toString(),
+      deletedComments: commentsResult.deletedCount,
+      deletedViewStats: viewStatsResult.deletedCount,
+      deletedDeviceViews: deviceViewsResult.deletedCount,
+    },
+  });
 }
 
 module.exports = {
