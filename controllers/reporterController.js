@@ -14,7 +14,11 @@
  * article for approval (checked with canTransition from services/articleWorkflow.js).
  *
  * Used by: routes/pageRoutes/reporterPageRoutes.js, routes/apiRoutes/reporterApiRoutes.js.
+ * Related: models/Article.js, services/articleWorkflow.js (STATUS, STATUS_LABELS).
  */
+
+const Article = require('../models/Article');
+const { STATUS, STATUS_LABELS } = require('../services/articleWorkflow');
 
 /**
  * GET /reporter - the reporter's dashboard. PLACEHOLDER.
@@ -39,14 +43,44 @@ function showArticleEditor(request, response) {
 }
 
 /**
- * GET /api/reporter/articles - the logged-in reporter's articles. PLACEHOLDER.
+ * GET /api/reporter/articles - the logged-in reporter's own articles, newest update
+ * first, each with its status label.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * The reporter id comes from the server-side session, never from the request, so a
+ * reporter can't ask for someone else's list. Each item describes the WORKING copy
+ * (draft), because that is what the reporter is editing; "isLive" says whether readers
+ * can see an approved version, so the dashboard can show a "Live version online" badge
+ * (an article that is live and back in "draft" is still online with its old text).
+ * The editor's note is sent only for returned articles, where it is relevant.
+ * No try/catch: in Express 5 an error thrown here reaches errorHandler by itself.
+ *
+ * @param {import('express').Request} request - request.session.user is the reporter.
+ * @param {import('express').Response} response - Answers { success: true, data: { articles } }.
+ * @returns {Promise<void>}
  */
-function listMyArticles(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function listMyArticles(request, response) {
+  const articles = await Article.find({ reporter: request.session.user.id })
+    // Uses the { reporter: 1, updatedAt: -1 } index, so this stays fast with many articles.
+    .sort({ updatedAt: -1 })
+    // Only the fields the dashboard shows; the long body is never loaded.
+    .select('status draft.title draft.summary draft.category published editorNote updatedAt')
+    // lean() returns plain objects instead of full Mongoose documents: faster, read-only.
+    .lean();
+
+  const items = articles.map((article) => ({
+    id: article._id.toString(),
+    title: article.draft.title,
+    summary: article.draft.summary,
+    category: article.draft.category,
+    status: article.status,
+    statusLabel: STATUS_LABELS[article.status],
+    // published is null until an editor approves the article for the first time.
+    isLive: article.published !== null && article.published !== undefined,
+    editorNote: article.status === STATUS.RETURNED ? article.editorNote : '',
+    updatedAt: article.updatedAt,
+  }));
+
+  response.json({ success: true, data: { articles: items } });
 }
 
 /**
