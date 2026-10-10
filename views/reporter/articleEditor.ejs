@@ -1,0 +1,98 @@
+<%#
+  views/reporter/articleEditor.ejs
+
+  The reporter's article editor: a form with the five fields of an article's draft
+  (title, summary, category, image URL, body), filled from the draft stored on the
+  server. There is deliberately NO Save button: the requirements say work must be saved
+  continuously, so a later commit adds public/js/reporterEditor.js, which sends the
+  form to the server a moment after the reporter stops typing.
+
+  Rendered by: controllers/reporterController.js (showArticleEditor), for
+  GET /reporter/articles/:id/edit. Only the owner of an editable article ever gets here.
+  Locals: title (the page title),
+  article ({ id, statusLabel, isLive, editorNote, draft: { title, summary, category,
+  imageUrl, body } }),
+  categories (the fixed category list, from Article.CATEGORIES in models/Article.js).
+  Includes: the shared head, header and footer (views/partials).
+
+  Every piece of text a user wrote (the draft fields and the editor's note) is printed
+  with the escaping tag (equals sign), never the raw one: if a title contained
+  "<script>", the browser would show it as plain text instead of running it (XSS).
+
+  The field names (title, summary, category, imageUrl, body) are fixed in "Shared
+  contracts", because SM's editor edit page uses the same names.
+  Owner: EZ.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+
+  <main class="main-content">
+    <h2>Edit article</h2>
+
+    <p><a href="/reporter">&larr; Back to my articles</a></p>
+
+    <p>Status: <span class="status-badge status-<%= article.isLive ? 'published' : 'draft' %>"><%= article.statusLabel %></span></p>
+
+    <%# The requirements: readers keep seeing the last approved version while the reporter
+        works on a new one. Telling the reporter avoids the worry "did I just change the live page?" %>
+    <% if (article.isLive) { %>
+      <p class="empty-state">
+        This article is live. Readers keep seeing the published version until an editor
+        approves your changes.
+      </p>
+    <% } %>
+
+    <%# Shown only for a returned article (the controller leaves the note empty otherwise). %>
+    <% if (article.editorNote) { %>
+      <p class="form-error"><strong>Editor's note:</strong> <%= article.editorNote %></p>
+    <% } %>
+
+    <%# No action, method or submit button on purpose: this form is never submitted to the
+        server in the normal way, because that would reload the whole page. The autosave
+        script reads the fields and sends them with fetch. data-article-id tells that
+        script which article to save to, without it having to read the URL. %>
+    <form id="article-form" data-article-id="<%= article.id %>">
+      <%# Each field has a label whose "for" matches the field's id. This is what lets a
+          screen reader announce the field name, and lets a click on the label focus the field. %>
+      <div class="form-field">
+        <label for="article-title">Title</label>
+        <input type="text" id="article-title" name="title" maxlength="200" value="<%= article.draft.title %>">
+      </div>
+
+      <div class="form-field">
+        <label for="article-summary">Summary</label>
+        <textarea id="article-summary" name="summary" rows="3" maxlength="500"><%= article.draft.summary %></textarea>
+      </div>
+
+      <div class="form-field">
+        <label for="article-category">Category</label>
+        <select id="article-category" name="category">
+          <%# The empty choice is the starting point of a new article. It is valid while
+              writing; the server requires a real category only when the article is submitted. %>
+          <option value="">Choose a category</option>
+          <% categories.forEach(function (category) { %>
+            <option value="<%= category %>"<%= article.draft.category === category ? ' selected' : '' %>><%= category %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label for="article-image-url">Image URL</label>
+        <input type="url" id="article-image-url" name="imageUrl" maxlength="2000" value="<%= article.draft.imageUrl %>">
+      </div>
+
+      <%# The body goes between the textarea tags (a textarea has no value attribute). %>
+      <div class="form-field">
+        <label for="article-body">Article text</label>
+        <textarea id="article-body" name="body" rows="15" maxlength="50000"><%= article.draft.body %></textarea>
+      </div>
+    </form>
+  </main>
+
+  <%- include('../partials/footer') %>
+</body>
+</html>
