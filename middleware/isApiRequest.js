@@ -16,15 +16,19 @@
 /**
  * Checks whether the request is for the JSON API.
  *
- * request.path is the full path without the query string (for example
- * "/api/articles" for "/api/articles?page=2"), because this helper runs in
- * middleware mounted on the whole app, not inside a router.
+ * Inside a router, Express makes request.path relative to where the router is
+ * mounted: in a router mounted at "/api", a request for "/api/users" has
+ * request.path "/users". request.baseUrl holds the mount prefix ("/api" there,
+ * "" in middleware on the whole app), so baseUrl + path is always the full path,
+ * without the query string. requireLogin and requireRole run inside routers,
+ * so this matters.
  *
  * @param {import('express').Request} request - The incoming request.
  * @returns {boolean} true for "/api" and anything under "/api/".
  */
 function isApiRequest(request) {
-  return request.path === '/api' || request.path.startsWith('/api/');
+  const fullPath = request.baseUrl + request.path;
+  return fullPath === '/api' || fullPath.startsWith('/api/');
 }
 
 module.exports = isApiRequest;
