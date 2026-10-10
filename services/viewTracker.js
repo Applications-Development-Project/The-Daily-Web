@@ -100,7 +100,47 @@ async function recordView(articleId, deviceId) {
 
 // How far back the analytics chart looks when no start date is given.
 const DEFAULT_RANGE_DAYS = 30;
-const DAY_MS = 24 * 60 * 60 * 1000;
+// The longest range the views API accepts (checked by its controller, which answers
+// 400). Every hour in the range becomes one bucket, so a year is 8,784 buckets;
+// without a limit, a range like "since 1970" would build half a million.
+const MAX_RANGE_DAYS = 366;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+
+/**
+ * Turns the stored counters into one bucket for EVERY hour between from and to,
+ * with views: 0 for the hours that have no counter.
+ *
+ * Why: a counter exists only for hours in which someone read the article. If the
+ * chart got only those, it would draw a straight line from, say, 55 views at 06:00
+ * to 3 views at 10:00, as if there were views in between. With the empty hours
+ * filled in, the line drops to 0, which is what really happened.
+ *
+ * Stepping by exactly one hour is safe because the hours are in UTC, which has no
+ * daylight-saving jumps.
+ *
+ * @param {{hourStart: Date, views: number}[]} storedBuckets - Counters from the database.
+ * @param {Date} from - Start of the range.
+ * @param {Date} to - End of the range.
+ * @returns {{hourStart: Date, views: number}[]} One bucket per hour, oldest first.
+ */
+function fillMissingHours(storedBuckets, from, to) {
+  // A Map from "hour as a number" to views, so each hour below is found directly
+  // instead of searching the whole list every time.
+  const viewsByHour = new Map();
+  for (const bucket of storedBuckets) {
+    viewsByHour.set(bucket.hourStart.getTime(), bucket.views);
+  }
+
+  const buckets = [];
+  for (let hour = getHourStart(from).getTime(); hour <= to.getTime(); hour += HOUR_MS) {
+    buckets.push({
+      hourStart: new Date(hour),
+      views: viewsByHour.get(hour) || 0,
+    });
+  }
+  return buckets;
+}
 
 /**
  * Returns the data for the Impact Analytics chart of one article: its hourly view
@@ -116,8 +156,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * @param {string|import('mongoose').Types.ObjectId} articleId - A valid article id
  *   (the caller checks the format first).
  * @param {Date} [from] - Start of the range. Default: 30 days before now.
- * @param {Date} [to] - End of the range. Default: now.
+ * @param {Date} [to] - End of the range. Default: now. The caller makes sure the
+ *   range is at most MAX_RANGE_DAYS long.
  * @returns {Promise<{buckets: {hourStart: Date, views: number}[], publishEvents: {publishedAt: Date}[]}|null>}
+ *   buckets: one per hour in the range, with views: 0 for hours without views.
  *   Both lists sorted from oldest to newest, or null if the article doesn't exist.
  * @throws {Error} If the database query fails.
  */
@@ -130,7 +172,7 @@ async function getViewsOverTime(articleId, from = new Date(Date.now() - DEFAULT_
 
   // getHourStart(from) includes the hour "from" falls in: with from = 14:37, the
   // 14:00 counter also holds views from 14:37 to 14:59, so it belongs in the range.
-  const buckets = await ArticleViewStats.find({
+  const storedBuckets = await ArticleViewStats.find({
     article: articleId,
     hourStart: { $gte: getHourStart(from), $lte: to },
   })
@@ -144,7 +186,10 @@ async function getViewsOverTime(articleId, from = new Date(Date.now() - DEFAULT_
     .filter((publishEvent) => publishEvent.publishedAt >= from && publishEvent.publishedAt <= to)
     .map((publishEvent) => ({ publishedAt: publishEvent.publishedAt }));
 
-  return { buckets: buckets, publishEvents: publishEvents };
+  return {
+    buckets: fillMissingHours(storedBuckets, from, to),
+    publishEvents: publishEvents,
+  };
 }
 
-module.exports = { recordView, getHourStart, getViewsOverTime };
+module.exports = { recordView, getHourStart, getViewsOverTime, MAX_RANGE_DAYS };
