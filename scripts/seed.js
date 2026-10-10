@@ -461,6 +461,20 @@ async function createDemoUsers(demoPassword) {
 }
 
 /**
+ * Prints the demo accounts, so whoever ran the seed knows how to log in.
+ * The password itself is never printed: terminal output gets copied into chats
+ * and screenshots, and the password must stay only in each person's .env.
+ *
+ * @returns {void}
+ */
+function printDemoLogins() {
+  logger.info('Demo logins (password: SEED_DEMO_PASSWORD from your .env):');
+  for (const demoUser of DEMO_USERS) {
+    logger.info(`  ${demoUser.username.padEnd(10)} ${demoUser.role.padEnd(9)} ${demoUser.displayName}`);
+  }
+}
+
+/**
  * Closes the database connection so the script can end.
  *
  * @returns {Promise<void>}
@@ -502,7 +516,8 @@ async function runSeed() {
   const liveCount = await createLiveArticles(users.reporters, users.editor, unpublishedCount);
   logger.info(`Created ${liveCount} live articles`);
 
-  logger.info('Seed finished');
+  logger.info(`Seed finished: ${unpublishedCount + liveCount} articles in total`);
+  printDemoLogins();
 }
 
 // We set process.exitCode instead of calling process.exit(), so the "finally"
