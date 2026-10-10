@@ -13,9 +13,31 @@
   STATUS (the status names from services/articleWorkflow.js).
   Includes: the shared head, header and footer (views/partials).
   Owner: EZ.
+
+  Why it is written this way (questions a lecturer may ask):
+  - XSS: every piece of text a user wrote (title, category, the editor's note) is printed
+    with the escaping output tag, the one with an equals sign. It turns < and > into
+    harmless text, so a title like "<script>alert(1)</script>" is shown as text and
+    never runs. The raw output tag (with a dash) does NOT escape; it is used here only
+    to include our own partials (head, header, footer), which are trusted files and
+    never user text.
+  - Comments: these are EJS comments (the tag with a hash sign), not HTML comments. An
+    HTML comment is sent to the browser and anyone can read it with "View page source";
+    an EJS comment is removed on the server. Never write the closing percent-and-bracket
+    characters inside one, because EJS would end the comment there.
+  - Actions per status: Edit for draft, returned and published; "Submit for approval"
+    only for draft and returned; no button for pending, because a pending article is
+    waiting for the editor and the reporter must not change it (requirements: transitions
+    are only allowed along the defined process). The server enforces this too (409 on a
+    pending article, and canTransition on submit); hiding a button is never the real permission.
+  - The "New article" button and the "Submit for approval" buttons are handled by
+    public/js/reporterDashboard.js. Edit leads to the editor page (articleEditor.ejs).
+  - The editor's note is shown while an article is returned or pending again, so it is
+    still readable after the reporter resubmits.
 %>
 <!DOCTYPE html>
 <html lang="en">
+<%# Trusted partial of ours (raw output is fine); the title is escaped inside head.ejs. %>
 <%- include('../partials/head', { title: title }) %>
 
 <body class="page-container">
@@ -33,6 +55,7 @@
     </p>
     <p id="new-article-error" class="form-error" role="alert"></p>
 
+    <%# A new reporter has no articles. Say so, instead of showing an empty table. %>
     <% if (articles.length === 0) { %>
       <p class="empty-state">You have no articles yet.</p>
     <% } else { %>
@@ -51,16 +74,20 @@
             </tr>
           </thead>
           <tbody>
+            <%# One row per article. The controller already sorted them, newest update first. %>
             <% articles.forEach(function (article) { %>
               <tr>
                 <td>
                   <%# An empty draft has no title yet, so show a placeholder instead of an empty cell. %>
+                  <%# The title is typed by a user, so it is printed escaped (XSS protection). %>
                   <%= article.title || '(Untitled)' %>
 
                   <%# The editor's reason for returning the article, shown right next to its title.
-                      The controller leaves the note empty except while the article is returned or
-                      pending again, so the reporter can still read it after resubmitting. %>
-                  <% if (article.editorNote) { %>
+                      It stays visible after the reporter resubmits (the article is "pending" again),
+                      so the reporter can still read what was asked of them until the editor decides. %>
+                  <%# The controller sends a note only for returned and pending articles; the status
+                      check here is a second guard. The note is text an editor typed, so it is escaped too. %>
+                  <% if ((article.status === STATUS.RETURNED || article.status === STATUS.PENDING) && article.editorNote) { %>
                     <p class="form-error"><strong>Editor's note:</strong> <%= article.editorNote %></p>
                   <% } %>
                 </td>
@@ -70,11 +97,17 @@
                   <span class="status-badge status-<%= article.status %>"><%= article.statusLabel %></span>
 
                   <%# Readers still see the approved version while a new one is being prepared. %>
+                  <%# Example: a live article the reporter is editing has the status badge "In
+                      preparation" AND this second badge. If the status is already "Published", the
+                      first badge says it, so a second one would only repeat it. %>
                   <% if (article.isLive && article.status !== STATUS.PUBLISHED) { %>
                     <span class="status-badge status-published">Live version online</span>
                   <% } %>
                 </td>
                 <td>
+                  <%# datetime holds the exact machine-readable moment; the text shows the same
+                      moment in the format used elsewhere on the site. It is formatted on the
+                      server, so it uses the server's time zone. %>
                   <time datetime="<%= new Date(article.updatedAt).toISOString() %>">
                     <%= new Date(article.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
                   </time>
@@ -84,6 +117,9 @@
                   <% if (article.status === STATUS.PENDING) { %>
                     Waiting for the editor
                   <% } else { %>
+                    <%# Draft, returned and published articles can be edited. This link opens the editor
+                        page (articleEditor.ejs). Editing a published article is allowed: its first
+                        change moves the working copy back to "In preparation". %>
                     <a href="/reporter/articles/<%= article.id %>/edit" class="btn btn-primary">Edit</a>
 
                     <%# Submit only for "In preparation" and "Returned for corrections" (this includes a

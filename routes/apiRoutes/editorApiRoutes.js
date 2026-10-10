@@ -4,9 +4,23 @@
  * JSON API routes for the editor's article management. Mounted at "/api" in app.js,
  * so "/editor/articles" here is "/api/editor/articles" in the browser.
  * Created by OS in phase 0 with the paths and access from the routes table in
- * "Shared contracts"; the controller behind them is a PLACEHOLDER until SM replaces it.
- * (The /editor/articles/:id/views routes live in analyticsApiRoutes.js.)
+ * "Shared contracts". SM has replaced the placeholders with the real list, approve,
+ * return and delete; editing a draft (PATCH .../draft) still answers 501 until it
+ * is built (decided: allowed only while the article is pending).
+ * (The /editor/articles/:id/views routes live in analyticsApiRoutes.js. They never
+ * clash with DELETE /editor/articles/:id below: Express matches whole path segments,
+ * so ".../:id/views" and ".../:id" are different paths.)
  *
+ * The paths follow REST (requirements: the APIs are designed by REST principles):
+ * the URL names the resource (an article, its draft, its views) and the HTTP method
+ * says what to do with it (GET reads, PATCH changes part, DELETE removes). Approve and
+ * return are POST, because they are actions with rules, not plain field updates.
+ *
+ * Every route checks requireRole('editor') on the server first: a guest gets 401 and
+ * a reporter 403, even when calling the API directly with curl or Postman, because
+ * the role comes from the server-side session, never from the request.
+ *
+ * Related: controllers/editorController.js, middleware/requireRole.js.
  * Owner: SM.
  */
 

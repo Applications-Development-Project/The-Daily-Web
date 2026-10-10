@@ -7,10 +7,19 @@
  *
  * The routes are protected with requireRole('editor'), so request.session.user is
  * always a logged-in editor here. The statistics themselves are read and written in
- * services/viewTracker.js; this file only checks the request and sends the answer.
+ * services/viewTracker.js; this file only checks the request and sends the answer
+ * (the conventions: controllers handle request and response, logic lives in services).
  *
- * Built step by step from OS's phase 0 placeholders: functions still marked
- * PLACEHOLDER answer 501. The function names must stay the same (the routes call them).
+ * Requirements this serves: the editor picks an article and sees a chart of its views
+ * over time, with a clear mark at each moment an update was published, to compare
+ * views before and after. The site may have thousands of readers at once, and we had
+ * to decide how to collect and store the data: one counter per article per hour
+ * (models/ArticleViewStats.js), so the chart reads at most 24 small documents per
+ * day per article, however many readers there are.
+ *
+ * Built step by step from OS's phase 0 placeholders. Only showAnalyticsPage is still
+ * a PLACEHOLDER answering 501. The function names must stay the same (the routes
+ * call them).
  *
  * Used by: routes/pageRoutes/analyticsPageRoutes.js, routes/apiRoutes/analyticsApiRoutes.js.
  * Related: services/viewTracker.js, models/ArticleViewStats.js, models/Article.js.
@@ -41,7 +50,8 @@ function sendError(response, statusCode, message) {
 /**
  * Reads one optional date from the query string, for example
  * ?from=2026-10-01T00:00:00.000Z. Anything JavaScript's Date understands is accepted;
- * the analytics page sends full ISO dates.
+ * the analytics page sends full ISO dates. A date without a time ("2026-10-01") is
+ * read by JavaScript as midnight UTC, which is why the page sends full timestamps.
  *
  * @param {*} value - request.query.from or request.query.to.
  * @param {string} name - 'from' or 'to', for the error message.
@@ -67,6 +77,11 @@ function readDateQuery(value, name) {
  * Works out the date range for the chart from ?from=&to=, with defaults:
  * no "to" means now, no "from" means DEFAULT_RANGE_DAYS before "to".
  * A "to" in the future is moved back to now, because no views can exist there yet.
+ *
+ * Why there is a maximum range: getViewsOverTime returns one point for EVERY hour in
+ * the range, so the answer's size depends on the range the browser sends. Without a
+ * limit, a request like "since 1970" would make the server build half a million
+ * points (invalid input must not hurt the server). 366 days is 8,784 points.
  *
  * @param {Object} query - request.query.
  * @returns {{from: Date, to: Date}|{error: string}} The range, or a message for a 400 answer.
@@ -104,6 +119,15 @@ function readDateRange(query) {
 /**
  * GET /editor/analytics - the Impact Analytics page. PLACEHOLDER.
  *
+ * Planned (work plan, SM phase 2): pick an article by title, choose a date range, and
+ * draw a Chart.js line of views per hour from GET /api/editor/articles/:id/views.
+ * The x-axis will be a "linear" axis of millisecond timestamps with labels formatted in
+ * a callback, because Chart.js's "time" axis needs an extra date-adapter package we
+ * don't use. Each publish event will be a dashed vertical line drawn by our own small
+ * Chart.js plugin (afterDraw), so the editor sees the views before and after each update.
+ * Waiting for the team's decision on how Chart.js is loaded (a CDN link or a file in
+ * the repo).
+ *
  * @param {import('express').Request} request
  * @param {import('express').Response} response
  * @returns {void}
@@ -118,8 +142,10 @@ function showAnalyticsPage(request, response) {
  * published it (the chart's markers). Without from/to it covers the last 30 days.
  *
  * Answers 200 { success: true, data: { buckets: [{ hourStart, views }],
- * publishEvents: [{ publishedAt }] } }, both oldest first; 400 for a malformed id or
- * an invalid range; 404 if the article doesn't exist (for example it was deleted).
+ * publishEvents: [{ publishedAt }] } }, both oldest first (the response shape in the
+ * routes table of "Shared contracts"); 400 for a malformed id or an invalid range;
+ * 404 if the article doesn't exist (for example it was deleted). These are the
+ * edge cases the work plan lists for the chart.
  * Database errors go to errorHandler (Express 5 passes them on from async functions).
  *
  * An article with no views still gets every hour, with views: 0, so the page can
@@ -157,7 +183,13 @@ async function getArticleViews(request, response) {
  * starts again from nothing. The page asks the editor to confirm first.
  *
  * The devices' "viewed" marks (DeviceArticleView) are not touched: they are not
- * statistics but each reader's own viewed / not-viewed filter in the feed.
+ * statistics but each reader's own viewed / not-viewed filter in the feed. The
+ * publish history is not touched either, so the chart keeps its update markers.
+ * This is the Delete of full CRUD on the statistics model (requirements).
+ *
+ * Known limit: the two steps (total, then counters) are separate writes, because our
+ * single MongoDB server has no transactions. A view arriving between them could leave
+ * totalViews and the counters one apart, which is harmless for a reset button.
  *
  * Answers 200 { success: true, data: { id, deletedViewStats } }, 400 for a malformed
  * id, 404 if the article doesn't exist.
