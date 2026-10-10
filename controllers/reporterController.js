@@ -94,6 +94,8 @@ function isEmptyOrHttpUrl(imageUrl) {
     const protocol = new URL(imageUrl).protocol;
     return protocol === 'http:' || protocol === 'https:';
   } catch (parseError) {
+    // new URL() throws when the text is not an address at all (for example "not a url"). That is
+    // not a program error: it is exactly the answer we want, "this is not a valid address".
     return false;
   }
 }
@@ -498,6 +500,35 @@ function findMissingRequiredFields(draft) {
 }
 
 /**
+ * Tells whether a LIVE article's draft is exactly the same as its published version, so
+ * submitting it would send the editor an "update" that changes nothing.
+ *
+ * Why this is a rule: every approval is a real event. The editor spends time reviewing it, it
+ * adds an entry to `publishHistory`, and the analytics chart draws a "published an update"
+ * marker for it. A submit without changes would produce all three for nothing.
+ *
+ * Why it is checked on the SERVER: the page only has the draft; it does not know the published
+ * text, and a script in the browser can be skipped by calling the route directly. The server has
+ * both copies and is the only place where the comparison can be trusted.
+ *
+ * The comparison is exact (every character, including spaces): the editor sees any difference as
+ * a change, so we do too. A missing field (a damaged document) counts as empty text, so it can't
+ * crash the comparison. An article that was never published has nothing to compare with, so its
+ * first submit is always allowed.
+ *
+ * @param {import('mongoose').Document} article - The article, with its draft and published copies.
+ * @returns {boolean} true if the article is live and every one of the five fields is identical.
+ */
+function hasNoChangesFromPublished(article) {
+  if (article.published === null || article.published === undefined) {
+    return false;
+  }
+  return DRAFT_FIELDS.every(function (fieldName) {
+    return (article.draft[fieldName] || '') === (article.published[fieldName] || '');
+  });
+}
+
+/**
  * POST /api/reporter/articles/:id/submit - the reporter sends the finished article to the
  * editor: the status changes from "In preparation" (or "Returned for corrections") to
  * "Awaiting editor approval".
@@ -518,7 +549,11 @@ function findMissingRequiredFields(draft) {
  *      route doesn't repeat them in its own if-statements. It allows draft -> pending and
  *      returned -> pending; it refuses pending -> pending (already submitted) and
  *      published -> pending (a live article must first be edited, which moves it to draft).
- *   4. Set the status to "pending" and save.
+ *   4. If the article is live, its draft must differ from the published version, otherwise 409
+ *      "There are no changes to submit" (see hasNoChangesFromPublished). This comes AFTER the
+ *      transition check on purpose: an article that is "Published" or "pending" gets the more
+ *      useful status message first, and only a draft or returned article reaches this step.
+ *   5. Set the status to "pending" and save.
  *
  * What is deliberately NOT changed:
  *   - `published` stays as it is: readers keep seeing the last approved version while the
@@ -555,6 +590,12 @@ async function submitArticleForApproval(request, response) {
       ? 'This article is already waiting for the editor.'
       : `An article that is "${STATUS_LABELS[article.status]}" cannot be submitted for approval.`;
     throw createHttpError(409, message);
+  }
+
+  // A live article whose draft equals what readers already see has nothing to review. The
+  // reporter keeps the article as it is (nothing is changed here) and can edit it and submit again.
+  if (hasNoChangesFromPublished(article)) {
+    throw createHttpError(409, 'There are no changes to submit: the text is the same as the published version.');
   }
 
   const previousStatus = article.status;

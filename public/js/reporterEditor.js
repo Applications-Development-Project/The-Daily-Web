@@ -443,9 +443,10 @@ function setUpReporterEditor() {
    *      server checks the draft that is stored in the database, so submitting after a
    *      failed save would send an OLDER version to the editor than the one on the screen.
    *   5. Only then ask the server to submit. The server checks the owner, that the required
-   *      fields are filled in, and that the status allows it, and answers with the reason
-   *      if not. On success we go to the dashboard, where the article is now
-   *      "Awaiting editor approval".
+   *      fields are filled in, that the status allows it, and that a live article differs from
+   *      its published version, and answers with the reason if not (for example "There are no
+   *      changes to submit", shown under the button; the reporter stays on this page). On
+   *      success we go to the dashboard, where the article is now "Awaiting editor approval".
    *
    * Why this works with an autosave that has no Save button: the final save in step 4 is what
    * makes "submit" safe, because the page can't know whether the last few seconds of typing

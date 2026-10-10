@@ -73,6 +73,10 @@ const createdArticleIds = [];
 // A complete, valid draft. Each test copies it and spoils one field.
 const GOOD_DRAFT = { title: 'API test', summary: 'A short summary', category: 'Economy', imageUrl: '', body: 'Some text' };
 
+// The content of a live (published) article. Used for the published copy of the live articles
+// the tests create, and, copied into the draft, to make a draft that equals the published text.
+const LIVE_CONTENT = { title: 'Live title', summary: 'Live summary', body: 'Live body', category: 'Economy', imageUrl: '' };
+
 // An id that has the right shape (24 hex characters) but belongs to no article.
 const MISSING_ID = '000000000000000000000000';
 
@@ -163,6 +167,18 @@ async function request(cookie, method, path, body, extraHeaders) {
     // Not JSON: the answer is an HTML page. That is normal for the page routes.
   }
   return { status: response.status, json, text };
+}
+
+/**
+ * The error message of an answer, or '' if the answer has none (for example a 200). The checks
+ * that look inside a message use this, so an unexpected answer is reported as a failed check
+ * instead of crashing the whole script with "cannot read properties of undefined".
+ *
+ * @param {{json: (Object|null)}} response - What request() returned.
+ * @returns {string} The "error" text of the JSON answer, or ''.
+ */
+function errorOf(response) {
+  return (response.json && typeof response.json.error === 'string') ? response.json.error : '';
 }
 
 /**
@@ -409,7 +425,7 @@ async function testEmptySubmit(fixtures, cookies) {
 
   const emptyResult = await request(cookies.reporter1, 'POST', submitPath, {});
   checkStatus('submit a brand-new empty article', 400, emptyResult);
-  check(emptyResult.json && ['title', 'summary', 'category', 'article text'].every((name) => emptyResult.json.error.includes(name)), 'the 400 message names all four missing fields');
+  check(['title', 'summary', 'category', 'article text'].every((name) => errorOf(emptyResult).includes(name)), 'the 400 message names all four missing fields');
 
   await request(cookies.reporter1, 'PATCH', draftPath, { ...GOOD_DRAFT, title: '   ', summary: '\n\t', body: '  ' });
   checkStatus('submit with title, summary and text made only of spaces', 400, await request(cookies.reporter1, 'POST', submitPath, {}));
@@ -537,7 +553,7 @@ async function testAllowedPaths(fixtures, cookies) {
   await request(cookies.reporter1, 'PATCH', `${API}/${newId}/draft`, GOOD_DRAFT);
   const submitted = await request(cookies.reporter1, 'POST', `${API}/${newId}/submit`, { status: 'published', reporter: fixtures.otherReporterId });
   checkStatus('POST submit of a complete draft (with junk fields in the body)', 200, submitted);
-  check(submitted.json && submitted.json.data.status === STATUS.PENDING, 'the answer says "pending"');
+  check(Boolean(submitted.json && submitted.json.data && submitted.json.data.status === STATUS.PENDING), 'the answer says "pending"');
   const afterSubmit = await readArticle(newId);
   check(afterSubmit.status === STATUS.PENDING && afterSubmit.published === null && String(afterSubmit.reporter) === String(fixtures.reporter1Id), 'submit sets "pending" and nothing else, whatever the body says');
   checkStatus('autosave after submit', 409, await request(cookies.reporter1, 'PATCH', `${API}/${newId}/draft`, GOOD_DRAFT));
@@ -565,6 +581,71 @@ async function testAllowedPaths(fixtures, cookies) {
 }
 
 /**
+ * Submitting a LIVE article whose draft is identical to the published text would send the
+ * editor an update that changes nothing (and add a pointless publish marker to the analytics
+ * chart), so the server answers 409 "There are no changes to submit". The comparison is exact,
+ * it only applies to live articles, and it comes after the other checks (required fields first,
+ * then the status). The article must stay exactly as it was after the refused request.
+ *
+ * @param {Object} fixtures - The ids from setUp.
+ * @param {Object} cookies - The login cookies from setUp.
+ * @returns {Promise<void>}
+ */
+async function testSubmitWithoutChanges(fixtures, cookies) {
+  const liveWithDraft = (status, draft, extra) => createArticleInDatabase(fixtures.reporter1Id, status, {
+    draft, published: LIVE_CONTENT, lastPublishedAt: new Date(), ...(extra || {}),
+  });
+  const submit = (id) => request(cookies.reporter1, 'POST', `${API}/${id}/submit`, {});
+
+  // The main case: a live article that is back in "draft" with the same text as the published one.
+  const sameId = await liveWithDraft(STATUS.DRAFT, LIVE_CONTENT);
+  const sameAnswer = await submit(sameId);
+  checkStatus('submit a live article whose draft equals the published text', 409, sameAnswer);
+  check(errorOf(sameAnswer).includes('There are no changes to submit'), 'the 409 message says "There are no changes to submit"');
+  const sameAfter = await readArticle(sameId);
+  check(sameAfter.status === STATUS.DRAFT && sameAfter.published.title === LIVE_CONTENT.title && sameAfter.publishHistory.length === 0, 'the refused submit changed nothing (status, published text, publish history)');
+
+  // Exact comparison: one extra space is a change, and so is any other field.
+  const spaceId = await liveWithDraft(STATUS.DRAFT, { ...LIVE_CONTENT, body: LIVE_CONTENT.body + ' ' });
+  checkStatus('submit when the text differs only by a trailing space', 200, await submit(spaceId));
+  const titleId = await liveWithDraft(STATUS.DRAFT, { ...LIVE_CONTENT, title: 'A new title' });
+  checkStatus('submit when only the title changed', 200, await submit(titleId));
+  const categoryId = await liveWithDraft(STATUS.DRAFT, { ...LIVE_CONTENT, category: 'Science' });
+  checkStatus('submit when only the category changed', 200, await submit(categoryId));
+  const imageId = await liveWithDraft(STATUS.DRAFT, { ...LIVE_CONTENT, imageUrl: 'https://example.com/a.png' });
+  checkStatus('submit when only the image address changed', 200, await submit(imageId));
+  check((await readArticle(titleId)).status === STATUS.PENDING, 'an article with real changes becomes "pending"');
+
+  // A returned live article whose draft was put back to the published text: nothing to review.
+  const returnedId = await liveWithDraft(STATUS.RETURNED, LIVE_CONTENT, { editorNote: 'Please check the numbers.' });
+  checkStatus('resubmit a returned live article with no changes', 409, await submit(returnedId));
+  check((await readArticle(returnedId)).editorNote === 'Please check the numbers.', 'the editor note is kept after the refused resubmit');
+
+  // The order of the checks: required fields (400) and status (409 "waiting") come first.
+  const emptyTitleId = await liveWithDraft(STATUS.DRAFT, { ...LIVE_CONTENT, title: '' });
+  const emptyTitleAnswer = await submit(emptyTitleId);
+  checkStatus('a live article with an empty title', 400, emptyTitleAnswer);
+  check(errorOf(emptyTitleAnswer).includes('title'), 'the empty field is reported before the "no changes" rule');
+  const waitingId = await liveWithDraft(STATUS.PENDING, LIVE_CONTENT);
+  const waitingAnswer = await submit(waitingId);
+  checkStatus('a pending live article with no changes', 409, waitingAnswer);
+  check(errorOf(waitingAnswer).includes('already waiting'), 'the status message wins ("already waiting for the editor")');
+
+  // An article that was never published has nothing to compare with: its first submit works.
+  const neverId = await createArticleInDatabase(fixtures.reporter1Id, STATUS.DRAFT, { draft: LIVE_CONTENT });
+  checkStatus('first submit of an article that was never published (text equal to a live one)', 200, await submit(neverId));
+
+  // What the editor page really does for a live article nobody changed: its final save sends the
+  // unchanged text (the first save moves the working copy to "draft"), then it submits.
+  const untouchedId = await createArticleInDatabase(fixtures.reporter1Id, STATUS.PUBLISHED, { draft: LIVE_CONTENT, published: LIVE_CONTENT, lastPublishedAt: new Date() });
+  checkStatus('editor page, step 1: save the unchanged text of a published article', 200, await request(cookies.reporter1, 'PATCH', `${API}/${untouchedId}/draft`, LIVE_CONTENT));
+  const untouchedAnswer = await submit(untouchedId);
+  checkStatus('editor page, step 2: submit the unchanged article', 409, untouchedAnswer);
+  check(errorOf(untouchedAnswer).includes('There are no changes to submit'), 'the editor page would show "There are no changes to submit"');
+  check((await readArticle(untouchedId)).published.body === LIVE_CONTENT.body, 'the published text is still untouched');
+}
+
+/**
  * Prepares everything the tests need: finds the seeded users, runs the two safety guards,
  * logs in, and creates articles in each state directly in the database.
  *
@@ -585,7 +666,7 @@ async function setUp() {
     editor: await login('editor'),
   };
 
-  const livePublished = { title: 'Live title', summary: 'Live summary', body: 'Live body', category: 'Economy', imageUrl: '' };
+  const livePublished = LIVE_CONTENT;
   const fixtures = {
     reporter1Id: reporter1._id,
     otherReporterId: reporter2._id.toString(),
@@ -617,6 +698,7 @@ async function main() {
     await testBadBodies(fixtures, cookies);
     await testRoutesThatDoNotExist(fixtures, cookies);
     await testAllowedPaths(fixtures, cookies);
+    await testSubmitWithoutChanges(fixtures, cookies);
   } finally {
     // Safety guard 3: delete exactly the articles this script created.
     await Article.deleteMany({ _id: { $in: createdArticleIds.filter(Boolean) } });
