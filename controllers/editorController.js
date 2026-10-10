@@ -18,13 +18,51 @@
  * Owner: SM.
  */
 
+const mongoose = require('mongoose');
 const Article = require('../models/Article');
-const { STATUS, STATUS_LABELS } = require('../services/articleWorkflow');
+const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWorkflow');
+const logger = require('../services/logger');
 
 // The dashboard shows 20 articles per page ("Shared contracts").
 const ARTICLES_PER_PAGE = 20;
 // Titles are at most 200 characters, so a longer search can never match anything.
 const MAX_SEARCH_LENGTH = 200;
+// An article can't go live with any of these empty (the image is optional).
+const REQUIRED_CONTENT_FIELDS = ['title', 'summary', 'body', 'category'];
+
+/**
+ * Sends an error answer in the shape every API uses: { success: false, error }.
+ *
+ * @param {import('express').Response} response - The response to send.
+ * @param {number} statusCode - 400, 404, 409...
+ * @param {string} message - A message the editor can read.
+ * @returns {void}
+ */
+function sendError(response, statusCode, message) {
+  response.status(statusCode).json({ success: false, error: message });
+}
+
+/**
+ * Loads the article named in the URL (/:id), or answers the request itself if it can't:
+ * 400 for an id that isn't a valid MongoDB id, 404 if no such article exists.
+ * Checking the format first gives a clear message instead of a database CastError.
+ *
+ * @param {import('express').Request} request - request.params.id is the article id.
+ * @param {import('express').Response} response - Used only to send the 400 or 404.
+ * @returns {Promise<Object|null>} The article document, or null if an error was sent.
+ */
+async function findArticleFromUrl(request, response) {
+  if (!mongoose.isValidObjectId(request.params.id)) {
+    sendError(response, 400, 'Invalid article id');
+    return null;
+  }
+  const article = await Article.findById(request.params.id);
+  if (!article) {
+    sendError(response, 404, 'Article not found');
+    return null;
+  }
+  return article;
+}
 
 /**
  * Reads one text value from the query string.
@@ -211,14 +249,65 @@ function editArticleDraft(request, response) {
 }
 
 /**
- * POST /api/editor/articles/:id/approve - publish the draft. PLACEHOLDER.
+ * POST /api/editor/articles/:id/approve - publishes the article: its working copy
+ * (draft) becomes the version readers see (published).
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * For an update to a live article this is the moment readers switch from the old
+ * version to the new one; until now they kept seeing the last approved version.
+ * Every approval is recorded in publishHistory, which the analytics chart marks.
+ *
+ * Answers 200 { success: true, data: { id, status, lastPublishedAt } },
+ * 400 for a malformed id, 404 if the article doesn't exist, and 409 if its status
+ * doesn't allow publishing or a required field is empty.
+ *
+ * @param {import('express').Request} request - params.id; session.user is the editor.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
  */
-function approveArticle(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function approveArticle(request, response) {
+  const article = await findArticleFromUrl(request, response);
+  if (!article) {
+    return;
+  }
+
+  // The status rules live in articleWorkflow.js (only pending -> published, only
+  // by an editor). The role comes from the server-side session, never the browser.
+  if (!canTransition(article.status, STATUS.PUBLISHED, request.session.user.role)) {
+    sendError(response, 409, `An article that is "${STATUS_LABELS[article.status]}" can't be published`);
+    return;
+  }
+
+  // The editor may have edited the draft after it was submitted, so we check again
+  // that nothing readers need is missing.
+  const missingFields = REQUIRED_CONTENT_FIELDS.filter((field) => !(article.draft[field] || '').trim());
+  if (missingFields.length > 0) {
+    sendError(response, 409, `The article can't be published without: ${missingFields.join(', ')}`);
+    return;
+  }
+
+  // One "now" for all three dates, so lastPublishedAt and the new publishHistory
+  // entry are exactly the same moment (the chart marker and the feed date agree).
+  const now = new Date();
+
+  // toObject() makes a separate plain copy of the draft. Later edits to the draft
+  // then can't change what readers see until the next approval.
+  article.published = article.draft.toObject();
+  article.status = STATUS.PUBLISHED;
+  article.editorNote = '';
+  if (!article.firstPublishedAt) {
+    article.firstPublishedAt = now;
+  }
+  article.lastPublishedAt = now;
+  article.publishHistory.push({ publishedAt: now, editor: request.session.user.id });
+
+  // save() runs the model's validation (lengths, category) before writing.
+  await article.save();
+
+  logger.info(`Article ${article._id} approved and published by editor "${request.session.user.displayName}"`);
+  response.json({
+    success: true,
+    data: { id: article._id.toString(), status: article.status, lastPublishedAt: article.lastPublishedAt },
+  });
 }
 
 /**
