@@ -20,13 +20,31 @@
  * Owner: OS.
  */
 
+const bcrypt = require('bcrypt');
 const User = require('../models/User');
+const logger = require('../services/logger');
 
 // The user list is shown 20 at a time, like every other list in the project.
 const USERS_PER_PAGE = 20;
 
 // A search box value longer than this can't match any username or display name.
 const MAX_SEARCH_LENGTH = 100;
+
+// How much work bcrypt does per hash; each +1 doubles it. 10 is what the whole team
+// uses (also in scripts/seed.js): fast enough for a login, slow for someone guessing.
+const BCRYPT_ROUNDS = 10;
+
+// Field rules. The username and display name limits match models/User.js.
+const MIN_USERNAME_LENGTH = 3;
+const MAX_USERNAME_LENGTH = 30;
+// Letters, digits, dot, dash and underscore only: no spaces or symbols that would be
+// confusing to type at the login page.
+const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
+const MAX_DISPLAY_NAME_LENGTH = 50;
+const MIN_PASSWORD_LENGTH = 8;
+// bcrypt only uses the first 72 bytes; the same limit as the login form.
+const MAX_PASSWORD_LENGTH = 200;
+const USER_ROLES = ['reporter', 'editor'];
 
 /**
  * Builds the error passed to errorHandler, which answers with this status and message.
@@ -68,6 +86,72 @@ function toUserResponse(user) {
  */
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Checks a new username. It is stored lowercase (see models/User.js), so we compare
+ * and save the lowercase form.
+ *
+ * @param {*} value - body.username.
+ * @returns {string} The trimmed, lowercase username.
+ * @throws {Error} 400 if it is missing, the wrong length, or has other characters.
+ */
+function readUsername(value) {
+  const username = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  if (username.length < MIN_USERNAME_LENGTH || username.length > MAX_USERNAME_LENGTH) {
+    throw createClientError(400, `Username must be ${MIN_USERNAME_LENGTH} to ${MAX_USERNAME_LENGTH} characters.`);
+  }
+  if (!USERNAME_PATTERN.test(username)) {
+    throw createClientError(400, 'Username can only contain letters, digits, dots, dashes and underscores.');
+  }
+  return username;
+}
+
+/**
+ * Checks a display name (the name readers see on articles).
+ *
+ * @param {*} value - body.displayName.
+ * @returns {string} The trimmed display name.
+ * @throws {Error} 400 if it is missing, blank or too long.
+ */
+function readDisplayName(value) {
+  const displayName = typeof value === 'string' ? value.trim() : '';
+  if (displayName === '' || displayName.length > MAX_DISPLAY_NAME_LENGTH) {
+    throw createClientError(400, `Display name must be 1 to ${MAX_DISPLAY_NAME_LENGTH} characters.`);
+  }
+  return displayName;
+}
+
+/**
+ * Checks a role.
+ *
+ * @param {*} value - body.role.
+ * @returns {string} "reporter" or "editor".
+ * @throws {Error} 400 for anything else.
+ */
+function readRole(value) {
+  if (!USER_ROLES.includes(value)) {
+    throw createClientError(400, 'Role must be "reporter" or "editor".');
+  }
+  return value;
+}
+
+/**
+ * Checks a new password and turns it into a bcrypt hash. Only the hash is ever stored;
+ * bcrypt adds a random salt, so two users with the same password get different hashes,
+ * and the password can't be recovered from the hash.
+ *
+ * Spaces are kept as typed (no trim): they can be part of a password.
+ *
+ * @param {*} value - body.password.
+ * @returns {Promise<string>} The bcrypt hash.
+ * @throws {Error} 400 if it isn't a string of the allowed length.
+ */
+async function hashNewPassword(value) {
+  if (typeof value !== 'string' || value.length < MIN_PASSWORD_LENGTH || value.length > MAX_PASSWORD_LENGTH) {
+    throw createClientError(400, `Password must be ${MIN_PASSWORD_LENGTH} to ${MAX_PASSWORD_LENGTH} characters.`);
+  }
+  return bcrypt.hash(value, BCRYPT_ROUNDS);
 }
 
 /**
@@ -163,14 +247,29 @@ async function searchUsers(request, response) {
 }
 
 /**
- * POST /api/users - create a reporter or editor. PLACEHOLDER.
+ * POST /api/users - body { username, displayName, role, password }.
+ * Creates a reporter or editor and answers 201 { success: true, data: <the new user> }.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * A taken username isn't checked here: the unique index on username refuses it,
+ * and errorHandler turns MongoDB's duplicate key error into 409. Checking first and
+ * then saving could still let two simultaneous requests both pass; the index can't.
+ *
+ * @param {import('express').Request} request - The new user's fields.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 for an invalid field, 409 (from the index) for a taken username.
  */
-function createUser(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function createUser(request, response) {
+  const body = request.body || {};
+  const username = readUsername(body.username);
+  const displayName = readDisplayName(body.displayName);
+  const role = readRole(body.role);
+  const passwordHash = await hashNewPassword(body.password);
+
+  const user = await User.create({ username, displayName, role, passwordHash });
+
+  logger.info(`Editor "${request.session.user.displayName}" created user "${user.username}" (${user.role})`);
+  response.status(201).json({ success: true, data: toUserResponse(user) });
 }
 
 /**
