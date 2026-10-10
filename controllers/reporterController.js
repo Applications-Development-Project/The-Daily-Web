@@ -1,20 +1,41 @@
 /**
  * controllers/reporterController.js
  *
- * PLACEHOLDER, created by OS in phase 0 so every route exists from day one.
- * Owner: EZ. Replace the function bodies with the real logic, but keep the function
- * names and module.exports: the route files below already call them.
- * If you already wrote your own version of this file on another branch, keep yours
- * when merging (with the same exported names) and drop this placeholder.
- * Until then, API functions answer 501 { success: false, error: "Not implemented yet" }
- * and page functions show the shared error page with status 501.
+ * The reporter's side of the site: the dashboard page and the JSON API behind it.
+ * OS created this file in phase 0 as a PLACEHOLDER so every route existed from day one;
+ * EZ replaced the function bodies one by one, so every function below is real now. The
+ * function names and module.exports stayed the same, because the route files call them.
  *
- * What it will do: the reporter's dashboard and article editor pages, listing and
- * creating the reporter's own articles, autosaving the draft, and submitting an
- * article for approval (checked with canTransition from services/articleWorkflow.js).
+ * What it does:
+ * - showReporterDashboard (GET /reporter) and listMyArticles (GET /api/reporter/articles),
+ *   both built on findReporterArticles.
+ * - showArticleEditor (GET /reporter/articles/:id/edit): the editor page, filled from the draft.
+ * - createArticle (POST /api/reporter/articles): a new, empty article in "In preparation".
+ * - autosaveDraft (PATCH /api/reporter/articles/:id/draft): saves the whole draft.
+ * - submitArticleForApproval (POST /api/reporter/articles/:id/submit): sends the article to
+ *   the editor. The status change is checked with canTransition from services/articleWorkflow.js.
+ *
+ * Rules that apply to every function here:
+ * - Only reporters get in: the route files use requireRole('reporter'), so the role is
+ *   checked on the server from the session.
+ * - The reporter's id always comes from request.session.user, never from the URL, the
+ *   query or the body, so a reporter can't act as someone else.
+ * - Ownership ("is this MY article?") is checked here in the controller, not in
+ *   canTransition, because it needs the article from the database. The list asks only for
+ *   articles whose reporter is the logged-in user. Every function that works on one article
+ *   (by :id: the edit page, autosave and submit) starts with findOwnedArticle.
+ * - No try/catch: this project uses Express 5, where an error thrown (or a rejected
+ *   promise) in an async function goes to errorHandler by itself. A database failure
+ *   therefore becomes a clean error response, not a crashed server.
+ *
+ * Article content (the contract with SM's editor page): an article's draft has the
+ * fields title, summary, category, imageUrl and body. The dashboard shows only the
+ * first three, so it never loads the body.
  *
  * Used by: routes/pageRoutes/reporterPageRoutes.js, routes/apiRoutes/reporterApiRoutes.js.
- * Related: models/Article.js, services/articleWorkflow.js (STATUS, STATUS_LABELS).
+ * Related: models/Article.js, services/articleWorkflow.js (STATUS, STATUS_LABELS),
+ * views/reporter/dashboard.ejs, views/reporter/articleEditor.ejs.
+ * Owner: EZ.
  */
 
 const Article = require('../models/Article');
@@ -112,7 +133,7 @@ function readDraftFromRequestBody(requestBody) {
   });
 
   // Empty is allowed while writing; the server requires a real category only when the
-  // article is submitted for approval (a later commit).
+  // article is submitted for approval (see submitArticleForApproval).
   if (draft.category !== '' && !Article.CATEGORIES.includes(draft.category)) {
     throw createHttpError(400, 'The field "category" must be empty or one of the known categories.');
   }
@@ -126,9 +147,9 @@ function readDraftFromRequestBody(requestBody) {
 
 /**
  * Loads the article with this id, but only if it exists AND belongs to this reporter.
- * Every reporter route that works on one article (the edit page now, autosave and
- * submit later) starts with this function, so the checks are written once and can't
- * be forgotten in one of them.
+ * Every reporter route that works on one article (the edit page, autosave and submit)
+ * starts with this function, so the checks are written once and can't be forgotten in
+ * one of them.
  *
  * The checks run in this order, each with its own status so the caller knows what went wrong:
  *   400 - the id in the URL is not a valid id (so we never ask the database a nonsense question)
@@ -167,7 +188,9 @@ async function findOwnedArticle(articleId, reporterId) {
  *
  * Only reporters reach this function (requireRole('reporter') in the route file),
  * and the list is filtered by the session's user id, so it only ever shows their own articles.
- * The view is views/reporter/dashboard.ejs.
+ * It uses the same findReporterArticles as the JSON API, so the page and the API can't
+ * disagree about which articles a reporter owns. The view is views/reporter/dashboard.ejs.
+ * No try/catch: in Express 5 an error thrown here reaches errorHandler by itself.
  *
  * @param {import('express').Request} request - request.session.user is the reporter.
  * @param {import('express').Response} response - Renders 'reporter/dashboard'.
@@ -180,13 +203,16 @@ async function showReporterDashboard(request, response) {
     title: 'My articles - The Web Daily',
     articles,
     // The view compares item.status with these names instead of typing 'draft' etc.
+    // (a typo in a string would silently show the wrong buttons; STATUS.PNDING is undefined).
     STATUS,
   });
 }
 
 /**
  * GET /reporter/articles/:id/edit - the article editor page: a form filled with the
- * article's draft. The autosave script (a later commit) saves what the reporter types.
+ * article's draft. The autosave script (public/js/reporterEditor.js) saves what the
+ * reporter types. The dashboard's "Edit" link leads here. Before showing anything,
+ * findOwnedArticle checks that the article belongs to the logged-in reporter.
  *
  * Requirement served: "when the reporter returns to editing, they get the latest version
  * they worked on". The form is filled from the draft stored on the SERVER, never from
@@ -241,6 +267,8 @@ async function showArticleEditor(request, response) {
 /**
  * Loads one reporter's articles as plain objects for the dashboard, newest update first.
  * Shared by the dashboard page and the JSON API, so the rules live in one place.
+ * That one place holds the ownership rule ("a reporter sees only articles whose
+ * reporter field is their own id"), so the page and the API cannot disagree.
  *
  * Each item describes the WORKING copy (draft), because that is what the reporter is
  * editing; "isLive" says whether readers can see an approved version, so the dashboard
@@ -248,21 +276,39 @@ async function showArticleEditor(request, response) {
  * is still online with its old text). The editor's note is included only for returned
  * and pending articles, where it is relevant (see the comment on editorNote below).
  *
+ * "status" and "isLive" are separate on purpose. Status describes the working copy;
+ * live means "published is not null". A live article that the reporter started editing
+ * has status "draft" ("In preparation") AND isLive true: both are true at once.
+ *
+ * Known limit we accepted: the list has no paging. It returns every article of the
+ * reporter. One reporter writes far fewer articles than the whole site holds, and
+ * only short fields are loaded, so this stays fast enough for the project. Paging
+ * would be needed if a single reporter could have thousands of articles.
+ *
  * @param {string} reporterId - The reporter's user id, always taken from the session.
+ *   It is a value the server created at login, not text typed by the user, so it is
+ *   safe to put in the query. Mongoose turns the string into an ObjectId.
  * @returns {Promise<Object[]>} Items { id, title, summary, category, status, statusLabel,
  *   isLive, editorNote, updatedAt }.
+ * @throws {Error} If the database query fails (Express 5 passes it to errorHandler).
  */
 async function findReporterArticles(reporterId) {
   const articles = await Article.find({ reporter: reporterId })
     // Uses the { reporter: 1, updatedAt: -1 } index, so this stays fast with many articles.
+    // The index matches the query exactly: filter on reporter, then newest update first,
+    // so MongoDB reads the articles already in order and doesn't sort them itself.
     .sort({ updatedAt: -1 })
     // Only the fields the dashboard shows; the long bodies are never loaded.
     // published.title is enough to tell "live" (an object) from "never approved" (null).
+    // We select published.title and not the whole "published" object because the
+    // dashboard only needs to know IF a published version exists, and the whole object
+    // would load a second full body for every live article.
     .select('status draft.title draft.summary draft.category published.title editorNote updatedAt')
     // lean() returns plain objects instead of full Mongoose documents: faster, read-only.
     .lean();
 
   return articles.map((article) => ({
+    // _id is an ObjectId object; as text it can go into JSON and into a URL.
     id: article._id.toString(),
     title: article.draft.title,
     summary: article.draft.summary,
@@ -270,12 +316,15 @@ async function findReporterArticles(reporterId) {
     status: article.status,
     statusLabel: STATUS_LABELS[article.status],
     // published is null until an editor approves the article for the first time.
+    // With lean() a null stays null, so we compare with null; undefined is also
+    // covered in case a document was stored without the field.
     isLive: article.published !== null && article.published !== undefined,
     // The editor's note is shown while the article is "returned" (what to fix) AND while it
     // is "pending" again: submitting keeps the note on purpose (see submitArticleForApproval),
     // so after resubmitting the reporter can still read what was asked of them until the
     // editor decides. A pending article that has a note can only have come from a return,
-    // because approving clears it. In every other status the note is empty or no longer relevant.
+    // because approving clears it. For every other status we send '' (an empty text), so a
+    // note that is old or no longer relevant never stays on the screen.
     editorNote: (article.status === STATUS.RETURNED || article.status === STATUS.PENDING) ? article.editorNote : '',
     updatedAt: article.updatedAt,
   }));
@@ -286,6 +335,8 @@ async function findReporterArticles(reporterId) {
  * The reporter id comes from the server-side session, never from the request, so a
  * reporter can't ask for someone else's list.
  * No try/catch: in Express 5 an error thrown here reaches errorHandler by itself.
+ * The answer is { success: true, data: { articles } } with status 200, the same shape
+ * every JSON answer in the project uses. It has no paging (see findReporterArticles).
  *
  * @param {import('express').Request} request - request.session.user is the reporter.
  * @param {import('express').Response} response - Answers { success: true, data: { articles } }.
@@ -345,7 +396,7 @@ async function createArticle(request, response) {
 /**
  * PATCH /api/reporter/articles/:id/draft - autosave: replaces the article's whole draft
  * with the five fields in the request body. The browser calls it a couple of seconds
- * after the reporter stops typing (public/js/reporterEditor.js, a later commit).
+ * after the reporter stops typing (public/js/reporterEditor.js).
  *
  * Requirements served (in our own words):
  *   - Continuity: the reporter's work is saved all the time without pressing "Save", and
