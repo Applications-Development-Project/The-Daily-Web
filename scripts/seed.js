@@ -403,7 +403,9 @@ async function createLiveArticles(reporters, editor, firstArticleNumber) {
  * Deletes every document in every collection of the connected database.
  *
  * We loop over the collections that actually exist instead of listing our models,
- * so data from models this script doesn't import (comments, sessions) is cleared too.
+ * so collections that have no model here (the "sessions" collection) are cleared too.
+ * Clearing "sessions" logs everyone out, which is what we want: the old sessions point
+ * to user ids that no longer exist after the seed.
  * We use deleteMany rather than dropping the collections, because dropping would
  * also delete their indexes, including the unique ones.
  *
