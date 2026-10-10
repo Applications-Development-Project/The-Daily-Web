@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- Load the head partial and pass a dynamic title -->
+<%- include('../partials/head', { title: 'The Web Daily - Feed' }) %>
+
+<body class="page-container">
+    <%- include('../partials/header') %>
+
+    <div class="main-content-wrapper">
+        <main class="main-content">
+            <h2>Latest News</h2>
+            
+            <!-- Filter and search area (will be handled by JS later) -->
+            <div class="card">
+                <input type="text" id="search-input" class="form-field" placeholder="Search articles...">
+                <select id="category-filter" class="form-field">
+                    <option value="">All Categories</option>
+                    <option value="Technology">Technology</option>
+                    <option value="Politics">Politics</option>
+                </select>
+                <select id="viewed-filter" class="form-field">
+                    <option value="all">All</option>
+                    <option value="unviewed">Unviewed</option>
+                </select>
+                <select id="sort-select" class="form-field">
+                    <option value="newest">Newest</option>
+                    <option value="popular">Popular</option>
+                </select>
+            </div>
+
+            <!-- The server and JS will inject the real articles here -->
+            <div id="feed-list">
+                <p class="empty-state">Articles will appear here shortly...</p>
+            </div>
+            
+        </main>
+
+        <%- include('../partials/sidebar') %>
+    </div>
+
+    <%- include('../partials/footer') %>
+</body>
+</html>
