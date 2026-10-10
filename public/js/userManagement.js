@@ -158,6 +158,9 @@ function setUpUserManagement() {
     const deleteButton = createButton('Delete', 'btn btn-danger');
     editButton.addEventListener('click', () => row.replaceWith(createEditRow(user)));
     deleteButton.addEventListener('click', () => deleteUser(user));
+    // Greying out the editor's own Delete button is only a convenience. The real rule
+    // is on the server (userController.deleteUser answers 409), because anyone can
+    // call the API directly without this page.
     if (user.id === currentUserId) {
       deleteButton.disabled = true;
       deleteButton.title = "You can't delete your own account.";
@@ -194,6 +197,8 @@ function setUpUserManagement() {
 
     const passwordInput = document.createElement('input');
     passwordInput.type = 'password';
+    // "new-password" tells the browser this is a password being set, so it doesn't fill
+    // in the editor's own saved password here by mistake.
     passwordInput.autocomplete = 'new-password';
     passwordInput.placeholder = 'New password (optional)';
     passwordInput.setAttribute('aria-label', `New password for ${user.username}`);
@@ -232,6 +237,10 @@ function setUpUserManagement() {
    * @returns {Promise<void>}
    */
   async function saveUser(user, row, saveButton, values) {
+    // Why only the changed fields: PATCH means "change these parts", unlike PUT, which
+    // would replace the whole user. Sending the role unchanged would still run the
+    // server's role rules for nothing, and an empty password box means "keep the old
+    // password", so it is left out.
     const changes = {};
     if (values.displayName !== user.displayName) {
       changes.displayName = values.displayName;
@@ -317,6 +326,9 @@ function setUpUserManagement() {
   }
 
   // Search: wait until the editor stops typing, then start again from page 1.
+  // Every key press cancels the timer of the previous key (clearTimeout) and starts a
+  // new one, so the search runs only once no key has been pressed for SEARCH_DELAY_MS.
+  // This technique is called "debouncing".
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
@@ -340,6 +352,8 @@ function setUpUserManagement() {
   loadUsers();
 }
 
+// The page may load this script in <head> or at the end of <body>. If the page is
+// still loading, wait until all elements exist; otherwise start right away.
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setUpUserManagement);
 } else {

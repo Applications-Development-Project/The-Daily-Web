@@ -177,6 +177,12 @@ async function findUserById(userId) {
   return user;
 }
 
+// The safety rules below answer 409 "Conflict", not 403 "Forbidden": the editor IS
+// allowed to manage users (403 would mean they aren't); the request is refused only
+// because of the current state of the data (it is their own account, the last editor,
+// or a reporter who still has articles). This matches the plan's meaning of 409:
+// "not allowed in the current state".
+
 /**
  * Safety rule: never leave the system with zero editors, because then nobody could
  * approve articles or manage users. Called before an editor is demoted or deleted.
@@ -289,7 +295,9 @@ async function searchUsers(request, response) {
   const page = readPageNumber(request.query.page);
 
   // An empty filter {} matches every user. With a search, $or matches either field,
-  // and the "i" flag makes the match ignore capital letters.
+  // and the "i" flag makes the match ignore capital letters. A "contains" RegExp can't
+  // use an index, so MongoDB checks every user; with a few dozen staff accounts that
+  // costs nothing.
   let filter = {};
   if (searchText !== '') {
     const searchPattern = new RegExp(escapeRegExp(searchText), 'i');
@@ -389,6 +397,14 @@ async function updateUser(request, response) {
     throw createClientError(400, 'Nothing to change: send displayName, role or password.');
   }
 
+  // Why findById + save() and not findByIdAndUpdate(): the safety rules in changeRole
+  // need the user's current role before deciding, save() always runs the model's
+  // validators (findByIdAndUpdate skips them unless told otherwise), and only the
+  // fields we assign below are written, so nothing from the body reaches the database
+  // unchecked.
+  // findById doesn't load passwordHash (select: false in the model). Mongoose saves only
+  // the fields that changed, so changing just the display name never touches the
+  // stored hash, and the user can still log in with their old password.
   const user = await findUserById(request.params.id);
 
   // Every field is checked before anything is saved, so a request with one bad field

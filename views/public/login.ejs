@@ -9,6 +9,9 @@
   Rendered by: controllers/authController.js (showLoginPage), for GET /login.
   Logged-in users never see it: showLoginPage sends them to their own area.
 
+  The small script is written inline, at the end of this page, because the work plan
+  lists no separate script file for the login page.
+
   Owner: OS (Logic) / SH (Layout & Partials).
 %>
 <!DOCTYPE html>
@@ -25,7 +28,11 @@
                 <h1 id="login-title" style="margin-bottom: var(--spacing-md); text-align: center;">Log in</h1>
                 <p style="text-align: center; margin-bottom: var(--spacing-md); color: #666;">For reporters and editors. Readers don't need an account.</p>
 
-                <%# method="post" matters even though the script sends the form itself %>
+                <%# method="post" matters even though the script sends the form itself: if the
+                    script ever fails to load, the browser would otherwise send the form with GET
+                    and put the password in the address bar and the browser history. %>
+                <%# autocomplete="username" and "current-password" let the browser's password
+                    manager fill in and save the login. %>
                 <form id="login-form" method="post" action="/api/auth/login">
                     
                     <div style="margin-bottom: var(--spacing-md);">
@@ -76,16 +83,20 @@
          * @returns {Promise<void>}
          */
         async function submitLoginForm(event) {
+            // Stop the normal submit, which would load a new page.
             event.preventDefault();
 
             const username = loginForm.elements.username.value.trim();
             const password = loginForm.elements.password.value;
 
+            // Checked here for a quick answer, and checked again on the server,
+            // because anything in the browser can be bypassed.
             if (username === '' || password === '') {
                 showLoginError('Please enter your username and password.');
                 return;
             }
 
+            // Disabled while waiting, so a double click doesn't send two logins.
             loginButton.disabled = true;
             loginError.hidden = true;
 
@@ -97,6 +108,7 @@
                 return;
             }
 
+            // The server decides where each role goes; the browser only follows.
             window.location.assign(result.data.redirectTo);
         }
 
