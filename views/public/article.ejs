@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Load the head partial and pass a dynamic title -->
-<%- include('../partials/head', { title: 'Tech Giants Release New AI Framework - The Web Daily' }) %>
+<!-- Load the head partial and pass the dynamic title from the controller -->
+<%- include('../partials/head', { title: title }) %>
 
 <body class="page-container">
     <%- include('../partials/header') %>
@@ -10,35 +10,51 @@
         <main class="main-content">
             
             <article class="card">
-                <span class="status-badge status-published">Technology</span>
-                <h1 style="margin: var(--spacing-md) 0;">Tech Giants Release New AI Framework</h1>
+                <span class="status-badge status-published"><%= article.category || 'News' %></span>
+                <h1 style="margin: var(--spacing-md) 0;"><%= article.title %></h1>
+                
                 <p style="color: #666; margin-bottom: var(--spacing-lg);">
-                    By John Doe | Published: <time>10 Oct 2026, 11:00</time>
+                    By <%= article.authorName %> | Published: 
+                    <time datetime="<%= article.publishedAt.toISOString() %>">
+                        <%= new Date(article.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                    </time>
                 </p>
                 
-                <img src="https://via.placeholder.com/800x400" alt="AI abstract representation" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-lg);">
+                <!-- Display an image only if the article has one -->
+                <% if (article.imageUrl) { %>
+                    <img src="<%= article.imageUrl %>" alt="<%= article.title %>" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-lg);">
+                <% } %>
                 
                 <div class="article-body">
-                    <p>This is the full text of the article. In the final version, this content will be injected by the server using EJS so search engines can read it immediately.</p>
-                    <p>It can span multiple paragraphs and contains the core value of the page.</p>
+                    <!-- Using <%- %> here so HTML formatting in the article content is rendered correctly -->
+                    <%- article.body %>
                 </div>
             </article>
 
             <!-- Comments Section -->
-            <section id="comments" data-article-id="1" class="card">
+            <!-- The data-article-id is dynamic so OS's script knows which article this is -->
+            <section id="comments" data-article-id="<%= article._id %>" class="card">
                 <h3>Comments</h3>
                 
                 <ul id="comment-list">
-                    <li class="comment">
-                        <p class="comment-meta">
-                            <span class="comment-author">Jane Reader</span>
-                            <time class="comment-date" datetime="2026-10-10T13:51:00.000Z">10 Oct 2026, 13:51</time>
-                        </p>
-                        <p class="comment-text">This framework looks amazing! Can't wait to test it out.</p>
-                    </li>
-                </ul>
+                    <% if (comments && comments.length > 0) { %>
+                        <% comments.forEach(function(comment) { %>
+                            <li class="comment">
+                                <p class="comment-meta">
+                                    <span class="comment-author"><%= comment.authorName %></span>
+                                    <time class="comment-date" datetime="<%= comment.createdAt.toISOString() %>">
+                                        <%= comment.createdAt.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                                    </time>
+                                </p>
+                                <p class="comment-text"><%= comment.text %></p>
+                            </li>
+                        <% }); %>
+                    <% } else { %>
+                        <li class="empty-state">No comments yet.</li>
+                    <% } %>
+                </ul>                </ul>
 
-                <div id="comment-error" class="form-error"></div>
+                <div id="comment-error" class="form-error" role="alert" hidden></div>
 
                 <form id="comment-form">
                     <input type="text" name="authorName" class="form-field" placeholder="Your Name" required maxlength="50">
