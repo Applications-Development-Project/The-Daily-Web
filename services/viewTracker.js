@@ -15,7 +15,10 @@
  * - DeviceArticleView: one (deviceId, article) pair per device and article,
  *   so the feed can show or hide articles this browser has already opened.
  *
- * Used by: controllers/articlePageController.js (SH).
+ * It also reads the statistics back for the chart: getViewsOverTime().
+ *
+ * Used by: controllers/articlePageController.js (SH, recordView),
+ * controllers/analyticsController.js (SM, getViewsOverTime).
  * Related: models/ArticleViewStats.js, models/DeviceArticleView.js, models/Article.js.
  * Owner: SM.
  */
@@ -95,4 +98,53 @@ async function recordView(articleId, deviceId) {
   }
 }
 
-module.exports = { recordView, getHourStart };
+// How far back the analytics chart looks when no start date is given.
+const DEFAULT_RANGE_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Returns the data for the Impact Analytics chart of one article: its hourly view
+ * counts and the moments the editor published it, between two dates.
+ *
+ * It reads at most one small document per hour (720 for 30 days), whatever the
+ * number of readers, and the query uses the { article, hourStart } index, so it
+ * never looks at other articles' statistics.
+ *
+ * Unlike recordView, errors are NOT swallowed here: the caller (the views API)
+ * must answer with an error, so it passes them on to errorHandler.
+ *
+ * @param {string|import('mongoose').Types.ObjectId} articleId - A valid article id
+ *   (the caller checks the format first).
+ * @param {Date} [from] - Start of the range. Default: 30 days before now.
+ * @param {Date} [to] - End of the range. Default: now.
+ * @returns {Promise<{buckets: {hourStart: Date, views: number}[], publishEvents: {publishedAt: Date}[]}|null>}
+ *   Both lists sorted from oldest to newest, or null if the article doesn't exist.
+ * @throws {Error} If the database query fails.
+ */
+async function getViewsOverTime(articleId, from = new Date(Date.now() - DEFAULT_RANGE_DAYS * DAY_MS), to = new Date()) {
+  // We only need the publish history from the article, so we load only that field.
+  const article = await Article.findById(articleId).select('publishHistory').lean();
+  if (!article) {
+    return null;
+  }
+
+  // getHourStart(from) includes the hour "from" falls in: with from = 14:37, the
+  // 14:00 counter also holds views from 14:37 to 14:59, so it belongs in the range.
+  const buckets = await ArticleViewStats.find({
+    article: articleId,
+    hourStart: { $gte: getHourStart(from), $lte: to },
+  })
+    .sort({ hourStart: 1 })
+    .select({ hourStart: 1, views: 1, _id: 0 })
+    .lean();
+
+  // Every approval inside the range becomes a marker on the chart. publishHistory
+  // is stored oldest first (each approval is pushed at the end), so it stays sorted.
+  const publishEvents = article.publishHistory
+    .filter((publishEvent) => publishEvent.publishedAt >= from && publishEvent.publishedAt <= to)
+    .map((publishEvent) => ({ publishedAt: publishEvent.publishedAt }));
+
+  return { buckets: buckets, publishEvents: publishEvents };
+}
+
+module.exports = { recordView, getHourStart, getViewsOverTime };
