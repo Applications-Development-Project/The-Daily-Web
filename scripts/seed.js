@@ -24,12 +24,27 @@
 require('dotenv').config({ quiet: true });
 
 const mongoose = require('mongoose');
+const bcrypt = require('bcrypt');
 const { connectToDatabase } = require('../config/database');
 const logger = require('../services/logger');
 const User = require('../models/User');
 const Article = require('../models/Article');
 const ArticleViewStats = require('../models/ArticleViewStats');
 const DeviceArticleView = require('../models/DeviceArticleView');
+
+// How much work bcrypt does per hash. Each +1 doubles the time, which slows down
+// anyone trying to guess passwords from a stolen hash. 10 is the value the whole
+// team uses (also in the Users API).
+const BCRYPT_ROUNDS = 10;
+
+// The demo accounts. Usernames are simple so they're easy to type in a demo;
+// display names are what readers see on articles. The requirements ask for one
+// editor and several reporters.
+const DEMO_USERS = [
+  { username: 'editor', displayName: 'Maya Cohen', role: 'editor' },
+  { username: 'reporter1', displayName: 'Dana Levi', role: 'reporter' },
+  { username: 'reporter2', displayName: 'Omer Ben-David', role: 'reporter' },
+];
 
 /**
  * Deletes every document in every collection of the connected database.
@@ -64,6 +79,36 @@ async function createAllIndexes() {
 }
 
 /**
+ * Creates the demo users from DEMO_USERS, all with the same demo password.
+ *
+ * Only a bcrypt hash is stored, never the password. We hash separately for each
+ * user, so even with the same password every user gets a different random salt
+ * and therefore a different hash: two equal hashes would reveal equal passwords.
+ *
+ * @param {string} demoPassword - The password from SEED_DEMO_PASSWORD.
+ * @returns {Promise<{editor: Object, reporters: Object[]}>} The saved users,
+ *   so the articles can point to their reporter and editor.
+ */
+async function createDemoUsers(demoPassword) {
+  const createdUsers = [];
+  for (const demoUser of DEMO_USERS) {
+    const passwordHash = await bcrypt.hash(demoPassword, BCRYPT_ROUNDS);
+    const user = await User.create({
+      username: demoUser.username,
+      displayName: demoUser.displayName,
+      role: demoUser.role,
+      passwordHash: passwordHash,
+    });
+    createdUsers.push(user);
+  }
+
+  return {
+    editor: createdUsers.find((user) => user.role === 'editor'),
+    reporters: createdUsers.filter((user) => user.role === 'reporter'),
+  };
+}
+
+/**
  * Closes the database connection so the script can end.
  *
  * @returns {Promise<void>}
@@ -94,6 +139,9 @@ async function runSeed() {
   logger.info(`Clearing database "${mongoose.connection.name}"`);
   await clearDatabase();
   await createAllIndexes();
+
+  const users = await createDemoUsers(process.env.SEED_DEMO_PASSWORD);
+  logger.info(`Created 1 editor and ${users.reporters.length} reporters`);
 
   logger.info('Seed finished');
 }
