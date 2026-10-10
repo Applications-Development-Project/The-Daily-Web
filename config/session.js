@@ -24,6 +24,11 @@ const session = require('express-session');
 const { MongoStore } = require('connect-mongo');
 const mongoose = require('mongoose');
 
+// Name of the session cookie. Written once here, because logging out must clear
+// the cookie by the same name (controllers/authController.js imports it).
+// The default name, "connect.sid", would also tell visitors which library we use.
+const SESSION_COOKIE_NAME = 'sessionId';
+
 // How long a login lasts without logging in again: 7 days, in milliseconds.
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -69,6 +74,8 @@ function createSessionMiddleware() {
   }
 
   return session({
+    name: SESSION_COOKIE_NAME,
+
     // Signs the session id cookie. Without the secret nobody can forge a valid cookie.
     secret: sessionSecret,
 
@@ -99,4 +106,4 @@ function createSessionMiddleware() {
   });
 }
 
-module.exports = { createSessionMiddleware };
+module.exports = { createSessionMiddleware, SESSION_COOKIE_NAME };
