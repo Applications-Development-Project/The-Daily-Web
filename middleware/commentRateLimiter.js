@@ -7,12 +7,16 @@
  *
  * How it counts: it asks MongoDB how many comments this device (req.deviceId, from the
  * deviceId cookie) created in the last 60 seconds. If there are already 3, the request
- * gets 429 "Too Many Requests". Counting saved comments, instead of keeping a counter
+ * gets 429 "Too Many Requests", the HTTP status made for exactly this case (it is in the
+ * plan's list of status codes). Counting saved comments, instead of keeping a counter
  * in memory, means:
  * - the limit still holds after a server restart,
  * - no extra collection or storage is needed,
  * - the check is fast: the { deviceId: 1, createdAt: -1 } index on Comment answers the
  *   count without reading any comment documents.
+ * The count relies on createdAt, which a guest can't fake: Mongoose sets it when the
+ * comment is saved, and commentController.addComment copies only the name and text
+ * from the request body, never a date.
  *
  * Who is limited: only guests. Logged-in reporters and editors skip the check, because
  * the requirement talks about guests.

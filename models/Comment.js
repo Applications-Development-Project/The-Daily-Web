@@ -30,6 +30,8 @@ const commentSchema = new mongoose.Schema(
 
     // The name the reader typed. trim removes spaces around it, so a name made only
     // of spaces becomes "" and fails "required" instead of being saved as blank.
+    // The maxlength limits here are a second safety net: commentController.js checks
+    // the same limits first and gives the reader a friendlier message.
     authorName: {
       type: String,
       required: [true, 'Name is required'],
@@ -40,6 +42,10 @@ const commentSchema = new mongoose.Schema(
     // The comment itself. Stored exactly as typed (no HTML is removed here); it is
     // always shown with textContent or EJS <%= %>, which display it as plain text,
     // so a comment containing <script> can never run in a reader's browser.
+    // Why make it safe when showing it, not when saving it: escaping at display time
+    // always works, whatever the text contains. Trying to remove "dangerous" HTML when
+    // saving is easy to get wrong (there are many tricky ways to write HTML) and would
+    // also change what honest readers typed, like "a < b".
     text: {
       type: String,
       required: [true, 'Comment text is required'],
@@ -49,7 +55,9 @@ const commentSchema = new mongoose.Schema(
 
     // The id from the browser's deviceId cookie (req.deviceId, set by
     // middleware/assignDeviceId.js). Always set by the server, never read from the
-    // request body, so a guest can't pretend to be a different device.
+    // request body, so a guest can't pretend to be a different device. (If it came from
+    // the body, a guest could send a new made-up id with each comment and the 3-per-minute
+    // limit would never apply.)
     deviceId: {
       type: String,
       required: [true, 'Device id is required'],

@@ -7,8 +7,12 @@
  *   2. Connects to MongoDB.
  *   3. Starts the HTTP server.
  * We connect before listening because every page and API reads the database
- * (and, from phase 2, every session is stored there too), so there is no point
+ * (and every login session is stored there too), so there is no point
  * accepting requests we can't answer.
+ *
+ * Why app.js and server.js are separate files: app.js builds the Express app and
+ * server.js runs it. A script or a test can load the app without opening a port or
+ * connecting to the real database.
  *
  * Related: app.js (the Express app), config/database.js, services/logger.js.
  * Owner: OS. Shared file: after phase 0, change it only in a small, separate pull request.
@@ -28,6 +32,8 @@ const DEFAULT_PORT = 3000;
  * Connects to the database, then starts listening for HTTP requests.
  * If either step fails we log why and stop the process with exit code 1,
  * because a server without a database or without a port can't do anything useful.
+ * Exit code 0 means "finished normally"; any other code tells whatever started the
+ * process (the terminal, npm, a hosting service) that startup failed.
  *
  * @returns {Promise<void>}
  */

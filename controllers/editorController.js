@@ -34,6 +34,118 @@ const MAX_SEARCH_LENGTH = 200;
 const REQUIRED_CONTENT_FIELDS = ['title', 'summary', 'body', 'category'];
 // Same limit as Article.editorNote in the model.
 const MAX_EDITOR_NOTE_LENGTH = 2000;
+// The same date format as the rest of the site, for example "10 Oct 2026, 14:32".
+const DATE_TIME_FORMAT = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+// The fields of a content object, with the names the review page shows, in page order.
+const CONTENT_FIELD_LABELS = {
+  title: 'Title',
+  summary: 'Summary',
+  category: 'Category',
+  imageUrl: 'Main image',
+  body: 'Body',
+};
+
+/**
+ * Creates an error for errorHandler with a 4xx status. On a page (not /api) it shows
+ * the shared error page with this status and message.
+ *
+ * @param {number} statusCode - For example 404.
+ * @param {string} message - What the editor reads on the error page.
+ * @returns {Error}
+ */
+function createPageError(statusCode, message) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+/**
+ * Formats a date for the page, or returns '' when there is no date.
+ *
+ * @param {Date|null|undefined} date
+ * @returns {string}
+ */
+function formatDateTime(date) {
+  return date ? new Date(date).toLocaleString('en-GB', DATE_TIME_FORMAT) : '';
+}
+
+/**
+ * Prepares one content object (draft or published) for the page. The body is
+ * plain text with a blank line between paragraphs, so it is split into paragraphs
+ * here and the view prints each one with the escaping <%= %> tag.
+ *
+ * @param {{title: string, summary: string, body: string, imageUrl: string, category: string}} content
+ * @returns {{title: string, summary: string, category: string, imageUrl: string, paragraphs: string[]}}
+ */
+function toContentView(content) {
+  const paragraphs = (content.body || '')
+    .split('\n\n')
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== '');
+  return {
+    title: content.title || '',
+    summary: content.summary || '',
+    category: content.category || '',
+    imageUrl: content.imageUrl || '',
+    paragraphs: paragraphs,
+  };
+}
+
+/**
+ * Lists the fields where the working copy differs from the live version, so the
+ * editor sees exactly what an update changes. Values are compared as stored, so
+ * even a changed space or line break counts as a change.
+ *
+ * @param {Object} draft - The working copy.
+ * @param {Object|null} published - The live version, or null if never published.
+ * @returns {string[]} Field names in page order, for example ['title', 'body'];
+ *   empty when the article isn't live or nothing changed.
+ */
+function findChangedFields(draft, published) {
+  if (!published) {
+    return [];
+  }
+  return Object.keys(CONTENT_FIELD_LABELS).filter((field) => (draft[field] || '') !== (published[field] || ''));
+}
+
+/**
+ * Prepares everything the review page shows, so the view only prints values.
+ *
+ * @param {Object} article - A lean article with reporter and publishHistory.editor populated.
+ * @param {string} role - The logged-in user's role, for canTransition.
+ * @returns {Object} The values views/editor/articleReview.ejs uses.
+ */
+function toReviewView(article, role) {
+  const isLive = Boolean(article.published);
+  const changedFields = findChangedFields(article.draft, article.published);
+  return {
+    id: article._id.toString(),
+    title: article.draft.title || (isLive ? article.published.title : '') || '(untitled)',
+    reporterName: article.reporter ? article.reporter.displayName : 'Unknown reporter',
+    status: article.status,
+    statusLabel: STATUS_LABELS[article.status],
+    isLive: isLive,
+    editorNote: article.editorNote,
+    updatedAt: formatDateTime(article.updatedAt),
+    draft: toContentView(article.draft),
+    published: isLive ? toContentView(article.published) : null,
+    changedFields: changedFields,
+    // The same fields as readable names, for the line "Changed in this update: ...".
+    changedFieldLabels: changedFields.map((field) => CONTENT_FIELD_LABELS[field]),
+    // Newest approval first, as the editor most often wants the latest one.
+    publishHistory: article.publishHistory
+      .slice()
+      .reverse()
+      .map((publishEvent) => ({
+        publishedAt: formatDateTime(publishEvent.publishedAt),
+        editorName: publishEvent.editor ? publishEvent.editor.displayName : 'Unknown editor',
+      })),
+    // The buttons appear only when the workflow allows the decision. The server
+    // checks again when a button is used; hiding a button protects nothing.
+    canApprove: canTransition(article.status, STATUS.PUBLISHED, role),
+    canReturn: canTransition(article.status, STATUS.RETURNED, role),
+  };
+}
 
 /**
  * Sends an error answer in the shape every API uses: { success: false, error }.
@@ -160,25 +272,58 @@ function toArticleRow(article) {
 }
 
 /**
- * GET /editor - the editor dashboard. PLACEHOLDER.
+ * GET /editor - the editor dashboard: a table of every article in the system.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
+ * The page arrives with an empty table; public/js/editorDashboard.js fills it from
+ * GET /api/editor/articles and refills it when the editor filters, searches or
+ * changes page, without reloading. That way the table is built in one place only.
+ *
+ * @param {import('express').Request} request - session.user is the editor.
+ * @param {import('express').Response} response - Renders views/editor/dashboard.ejs.
  * @returns {void}
  */
 function showEditorDashboard(request, response) {
-  response.status(501).render('public/error', { statusCode: 501, message: 'The editor dashboard is not built yet.' });
+  // The filter's choices come from the shared status names and labels, so the page
+  // always offers exactly the statuses the API accepts.
+  const statusOptions = Object.values(STATUS).map((status) => ({ value: status, label: STATUS_LABELS[status] }));
+  response.render('editor/dashboard', {
+    title: 'Articles - Editor - The Web Daily',
+    statusOptions: statusOptions,
+  });
 }
 
 /**
- * GET /editor/articles/:id - review one article. PLACEHOLDER.
+ * GET /editor/articles/:id - the review page of one article: who wrote it, its
+ * status, the submitted content and its publish history.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * A malformed or unknown id shows the shared error page with 404 (errorHandler
+ * renders it, because this is a page, not an /api request).
+ *
+ * @param {import('express').Request} request - params.id; session.user is the editor.
+ * @param {import('express').Response} response - Renders views/editor/articleReview.ejs.
+ * @returns {Promise<void>}
+ * @throws {Error} 404 if the id is malformed or no article has it.
  */
-function showArticleReview(request, response) {
-  response.status(501).render('public/error', { statusCode: 501, message: 'The article review page is not built yet.' });
+async function showArticleReview(request, response) {
+  // For a page, "not a valid id" and "no such article" mean the same to the editor.
+  if (!mongoose.isValidObjectId(request.params.id)) {
+    throw createPageError(404, 'Article not found');
+  }
+
+  // populate replaces the stored user ids with the users' display names.
+  const article = await Article.findById(request.params.id)
+    .populate('reporter', 'displayName')
+    .populate('publishHistory.editor', 'displayName')
+    .lean();
+  if (!article) {
+    throw createPageError(404, 'Article not found');
+  }
+
+  const review = toReviewView(article, request.session.user.role);
+  response.render('editor/articleReview', {
+    title: `Review: ${review.title} - Editor - The Web Daily`,
+    review: review,
+  });
 }
 
 /**

@@ -11,6 +11,12 @@
  * After login, every permission check (requireLogin, requireRole) reads the role from
  * this server-side session, never from anything the browser sends.
  *
+ * Known small leak (acceptable here): a login with an unknown username answers a little
+ * faster than one with a known username and a wrong password, because no bcrypt
+ * comparison runs. In theory, measuring that time could reveal which usernames exist.
+ * The usual fix is to compare the password against a dummy hash when the user isn't
+ * found, so both cases take the same time.
+ *
  * Used by: routes/pageRoutes/authPageRoutes.js, routes/apiRoutes/authApiRoutes.js.
  * Related: models/User.js, config/session.js, views/public/login.ejs, services/logger.js.
  * Owner: OS.
@@ -33,7 +39,8 @@ const MAX_USERNAME_LENGTH = 30;
 const MAX_PASSWORD_LENGTH = 200;
 
 // Where each role lands after logging in (requirements: a reporter goes to their
-// work area, an editor to the management area).
+// work area, an editor to the management area). The server decides this from the
+// role it found in the database; the login page only follows the address it is given.
 const HOME_PAGE_BY_ROLE = {
   reporter: '/reporter',
   editor: '/editor',
@@ -177,7 +184,8 @@ async function logIn(request, response) {
   const user = await findUserWithPassword(loginFields.username, loginFields.password);
   if (!user) {
     // JSON.stringify puts the username in quotes and escapes line breaks, so a username
-    // typed with a line break can't fake an extra line in the log.
+    // typed with a line break can't fake an extra line in the log ("log injection").
+    // The password is never logged, not even on failure.
     logger.info(`Failed login for username ${JSON.stringify(loginFields.username)}`);
     response.status(401).json({ success: false, error: LOGIN_FAILED_MESSAGE });
     return;
@@ -201,6 +209,12 @@ async function logIn(request, response) {
  * POST /logout - sent by the plain HTML form in the site header (works without
  * JavaScript). Deletes the session, clears the cookie and goes back to the home page.
  * requireLogin runs before it, so request.session.user always exists here.
+ *
+ * Why POST and not a simple GET link: GET requests should only read, never change
+ * anything. With a GET /logout, any other website could log our users out with a plain
+ * link, because a browser sends our sameSite: 'lax' cookie when someone clicks a link to
+ * us. A POST started by another website is sent without that cookie, so it arrives as
+ * a guest's request and requireLogin turns it away.
  *
  * @param {import('express').Request} request - The logout request.
  * @param {import('express').Response} response - Redirects to "/".

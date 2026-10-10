@@ -8,6 +8,8 @@
  * How it works: the browser only holds a cookie with a random, signed session id.
  * The session data itself (who the user is, their role) stays on the server, in the
  * MongoDB "sessions" collection, so the browser can't read or change the role.
+ * The cookie is signed with SESSION_SECRET: if even one character of it is changed,
+ * the signature no longer matches and the request is simply treated as a guest's.
  *
  * Why MongoDB and not the default in-memory store: memory is wiped when the server
  * restarts, which would log everyone out. The requirements say a logged-in user must
@@ -38,12 +40,15 @@ const MONGOOSE_CONNECTED = 1;
 /**
  * Waits until Mongoose is connected, then gives back the MongoDB driver client
  * inside it, which is what connect-mongo needs. This lets the session store reuse
- * Mongoose's connection instead of opening a second one.
+ * Mongoose's connection instead of opening a second one: one pool of connections to
+ * MongoDB for the whole app, opened in one place (config/database.js).
  *
  * Why we need to wait: app.js (and so this file) is loaded before server.js connects
  * to the database. If we asked for the client right away, it wouldn't exist yet.
  * (Mongoose's own asPromise() doesn't help here: before connect() has been called it
- * resolves immediately, with no client.)
+ * resolves immediately, with no client. An earlier version used it and only worked by
+ * luck of timing: a test that connected a little later crashed. Waiting for the
+ * "connected" event works whatever the order.)
  *
  * @returns {Promise<import('mongodb').MongoClient>} Resolves once Mongoose is connected.
  */
@@ -77,6 +82,7 @@ function createSessionMiddleware() {
     name: SESSION_COOKIE_NAME,
 
     // Signs the session id cookie. Without the secret nobody can forge a valid cookie.
+    // It comes only from .env, so it is never in the repo.
     secret: sessionSecret,
 
     // Sessions are saved in the "sessions" collection, through Mongoose's connection.

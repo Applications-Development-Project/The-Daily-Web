@@ -7,9 +7,12 @@
  * - Logged in with another role: 403, as JSON for /api or the error page for pages.
  *
  * The role comes only from the server-side session (copied from the User document at
- * login), never from anything the browser sends, so editing a cookie, a hidden field
- * or a request body can't give anyone more rights. This is what the requirements mean
- * by "permissions are checked on the server; hiding buttons is not enough".
+ * login and refreshed on every request by middleware/setCurrentUser.js, which runs
+ * before the routers), never from anything the browser sends, so editing a cookie, a
+ * hidden field or a request body can't give anyone more rights. This is what the
+ * requirements mean by "permissions are determined by the identified user, not by
+ * information that can be changed in the browser" and "permissions are checked on the
+ * server; hiding buttons is not enough".
  *
  * Used by: the reporter and editor route files.
  * Related: middleware/requireLogin.js, models/User.js (the allowed roles).
@@ -28,6 +31,12 @@ const KNOWN_ROLES = ['reporter', 'editor'];
  * middleware, which then runs on every request. Checking the role name here, at load
  * time, means a typo like requireRole('editr') stops the server at startup with a clear
  * message, instead of silently locking everyone out of that page.
+ *
+ * The returned checkRole function still "remembers" the role it was built with, even
+ * though requireRole has long finished running. That is a closure: each call
+ * requireRole('editor') or requireRole('reporter') makes its own checkRole with its own
+ * role. Express needs a function with (request, response, next), and this is how we
+ * give it one with the role already filled in.
  *
  * @param {string} role - "reporter" or "editor".
  * @returns {import('express').RequestHandler} Middleware that checks the session's role.
