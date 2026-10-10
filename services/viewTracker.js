@@ -192,4 +192,4 @@ async function getViewsOverTime(articleId, from = new Date(Date.now() - DEFAULT_
   };
 }
 
-module.exports = { recordView, getHourStart, getViewsOverTime, MAX_RANGE_DAYS };
+module.exports = { recordView, getHourStart, getViewsOverTime, DEFAULT_RANGE_DAYS, MAX_RANGE_DAYS };
