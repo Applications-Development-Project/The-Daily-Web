@@ -3,8 +3,9 @@
  *
  * Builds and configures the Express application: how request bodies are read,
  * where static files and EJS views live, sessions, the device cookie, the current
- * user for views, the 404 handler and the error handler, and (in a later step)
- * every router.
+ * user for views, every router, the 404 handler and the error handler.
+ * Page routers are mounted at "/" and API routers at "/api" (see "Mounting, views and
+ * CRUD coverage" in "Shared contracts"); each router file belongs to its controller's owner.
  * It does NOT start listening; server.js does that after the database is connected.
  * Keeping the two apart means the app can be loaded without opening a port.
  *
@@ -20,6 +21,27 @@ const express = require('express');
 const { createSessionMiddleware } = require('./config/session');
 const assignDeviceId = require('./middleware/assignDeviceId');
 const setCurrentUser = require('./middleware/setCurrentUser');
+
+// Page routers (HTML pages), mounted at "/".
+const feedPageRoutes = require('./routes/pageRoutes/feedPageRoutes');
+const articlePageRoutes = require('./routes/pageRoutes/articlePageRoutes');
+const authPageRoutes = require('./routes/pageRoutes/authPageRoutes');
+const reporterPageRoutes = require('./routes/pageRoutes/reporterPageRoutes');
+const editorPageRoutes = require('./routes/pageRoutes/editorPageRoutes');
+const analyticsPageRoutes = require('./routes/pageRoutes/analyticsPageRoutes');
+const userPageRoutes = require('./routes/pageRoutes/userPageRoutes');
+const commentPageRoutes = require('./routes/pageRoutes/commentPageRoutes');
+
+// API routers (JSON), mounted at "/api".
+const feedApiRoutes = require('./routes/apiRoutes/feedApiRoutes');
+const weatherApiRoutes = require('./routes/apiRoutes/weatherApiRoutes');
+const authApiRoutes = require('./routes/apiRoutes/authApiRoutes');
+const reporterApiRoutes = require('./routes/apiRoutes/reporterApiRoutes');
+const editorApiRoutes = require('./routes/apiRoutes/editorApiRoutes');
+const analyticsApiRoutes = require('./routes/apiRoutes/analyticsApiRoutes');
+const userApiRoutes = require('./routes/apiRoutes/userApiRoutes');
+const commentApiRoutes = require('./routes/apiRoutes/commentApiRoutes');
+
 const handleNotFound = require('./middleware/notFoundHandler');
 const handleError = require('./middleware/errorHandler');
 
@@ -55,6 +77,27 @@ app.use(assignDeviceId);
 
 // Every view gets currentUser (or null), for the header's login state.
 app.use(setCurrentUser);
+
+// Routers. Each router file writes its paths without the mount prefix, so for
+// example "/articles" in feedApiRoutes.js answers "/api/articles". Express matches
+// the full path, so a page route and an API route never answer the same request.
+app.use('/', feedPageRoutes);
+app.use('/', articlePageRoutes);
+app.use('/', authPageRoutes);
+app.use('/', reporterPageRoutes);
+app.use('/', editorPageRoutes);
+app.use('/', analyticsPageRoutes);
+app.use('/', userPageRoutes);
+app.use('/', commentPageRoutes);
+
+app.use('/api', feedApiRoutes);
+app.use('/api', weatherApiRoutes);
+app.use('/api', authApiRoutes);
+app.use('/api', reporterApiRoutes);
+app.use('/api', editorApiRoutes);
+app.use('/api', analyticsApiRoutes);
+app.use('/api', userApiRoutes);
+app.use('/api', commentApiRoutes);
 
 // The last two must stay at the end, after every router:
 // 1. No route matched: turn the request into a 404 error.
