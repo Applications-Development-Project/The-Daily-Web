@@ -8,6 +8,10 @@
  * - the 3-comments-per-minute limit for guests (middleware/commentRateLimiter.js),
  * - the feed's viewed / not-viewed filter (SH) and recordView (SM).
  *
+ * Why a separate cookie and not the session: the session identifies a logged-in USER
+ * and exists only after login (guests never get one, see config/session.js). The
+ * device id identifies a BROWSER, guests included. Two cookies for two different jobs.
+ *
  * The id lives in a cookie named "deviceId". We read it by parsing the Cookie header
  * ourselves (a small helper below), because the cookie-parser package is not on our
  * allowed list. express-session reads its own cookie, so it doesn't need a parser.
@@ -91,6 +95,8 @@ function assignDeviceId(request, response, next) {
   response.cookie(DEVICE_ID_COOKIE_NAME, newDeviceId, {
     // Page scripts can't read or change it; only the server uses it.
     httpOnly: true,
+    // Not sent with requests that other websites start (the same setting as the
+    // session cookie in config/session.js).
     sameSite: 'lax',
     maxAge: DEVICE_ID_MAX_AGE_MS,
   });
