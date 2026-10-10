@@ -32,7 +32,10 @@
  *
  * Security: everything a reader typed is put on the page with textContent, never
  * innerHTML, so a comment containing <script> or other HTML is shown as plain text
- * and never runs.
+ * and never runs. With innerHTML, a comment such as <img src=x onerror="..."> would run
+ * its code in the browser of every reader who opens the article (a "stored XSS"
+ * attack): it could, for example, act on the page as that reader. textContent always
+ * treats the value as text, whatever it contains.
  *
  * Owner: OS.
  */
@@ -124,7 +127,10 @@ function findCommentFieldError(authorName, text) {
  * so the script can never break another page.
  *
  * The handlers below are defined inside this function, so they can use its
- * variables (the form, the list, the article id) without making them global.
+ * variables (the form, the list, the article id) without making them global. Each
+ * handler keeps access to those variables after setUpCommentForm has finished, which
+ * is called a closure. Keeping them out of the global scope means no other script on
+ * the page can change them by accident.
  *
  * @returns {void}
  */
@@ -199,6 +205,10 @@ function setUpCommentForm() {
     submitButton.disabled = true;
     clearCommentError();
 
+    // encodeURIComponent: the id is read from the page, so we encode it before putting
+    // it in the URL; a changed data-article-id with "/" or "?" can't build another URL.
+    // apiClient never throws: a network failure also comes back as success: false,
+    // so the button is always enabled again below.
     const result = await apiClient.post(`/api/articles/${encodeURIComponent(articleId)}/comments`, {
       authorName: authorName,
       text: text,
