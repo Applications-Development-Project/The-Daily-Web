@@ -160,14 +160,24 @@ function toArticleRow(article) {
 }
 
 /**
- * GET /editor - the editor dashboard. PLACEHOLDER.
+ * GET /editor - the editor dashboard: a table of every article in the system.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
+ * The page arrives with an empty table; public/js/editorDashboard.js fills it from
+ * GET /api/editor/articles and refills it when the editor filters, searches or
+ * changes page, without reloading. That way the table is built in one place only.
+ *
+ * @param {import('express').Request} request - session.user is the editor.
+ * @param {import('express').Response} response - Renders views/editor/dashboard.ejs.
  * @returns {void}
  */
 function showEditorDashboard(request, response) {
-  response.status(501).render('public/error', { statusCode: 501, message: 'The editor dashboard is not built yet.' });
+  // The filter's choices come from the shared status names and labels, so the page
+  // always offers exactly the statuses the API accepts.
+  const statusOptions = Object.values(STATUS).map((status) => ({ value: status, label: STATUS_LABELS[status] }));
+  response.render('editor/dashboard', {
+    title: 'Articles - Editor - The Web Daily',
+    statusOptions: statusOptions,
+  });
 }
 
 /**
