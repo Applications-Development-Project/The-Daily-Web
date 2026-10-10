@@ -77,13 +77,17 @@ with the lecturer's answer.*
 
 ## Git
 
-- Never commit to `main` or to another student's branch. One branch per task, created from an up-to-date `main`,
-  named `<initials>/<type>-<feature>`, for example `sm/feature-editor-dashboard`, `os/fix-comment-rate-limit-message`.
+- Two long-lived branches: `dev` is where all work comes together (and is the default branch); `main` is the
+  stable version and only receives `dev`, through a pull request, at the end of a phase and before submission.
+  The submission zip and repo link come from `main`.
+- Never commit to `main`, `dev` or another student's branch. One branch per task, created from an up-to-date `dev`
+  (`git checkout dev`, `git pull`, `git checkout -b <branch>`), named `<initials>/<type>-<feature>`, for example
+  `sm/feature-editor-dashboard`, `os/fix-comment-rate-limit-message`. Every pull request targets `dev`.
 - Small commits: one change, usually one to three files, and the app still runs after each one.
 - Commit messages start with a prefix: `feat:` (new feature), `fix:` (bug fix), `docs:` (documentation),
   `chore:` (setup, stubs, configuration). For example `feat: add cursor pagination to feed API`.
 - Never commit `.env`, passwords, API keys or tokens.
-- Before opening a pull request, merge `main` into your branch and check the app still runs.
+- Before opening a pull request, merge `dev` into your branch and check the app still runs.
 
 ## Working with AI
 
