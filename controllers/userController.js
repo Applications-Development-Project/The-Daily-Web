@@ -261,14 +261,16 @@ function readPageNumber(pageValue) {
 }
 
 /**
- * GET /editor/users - the user management page. PLACEHOLDER.
+ * GET /editor/users - the user management page. It is sent empty; the browser script
+ * (public/js/userManagement.js) loads the users from GET /api/users, so the list is
+ * built in one place only. currentUser comes from res.locals (setCurrentUser).
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
+ * @param {import('express').Request} request - The page request (editor only).
+ * @param {import('express').Response} response - Renders views/editor/users.ejs.
  * @returns {void}
  */
 function showUserManagementPage(request, response) {
-  response.status(501).render('public/error', { statusCode: 501, message: 'User management is not built yet.' });
+  response.render('editor/users');
 }
 
 /**
