@@ -18,6 +18,7 @@
 
 const Comment = require('../models/Comment');
 const Article = require('../models/Article');
+const logger = require('../services/logger');
 
 // A MongoDB id is exactly 24 hexadecimal characters. We check the shape ourselves
 // to give a clear 400 message. (mongoose.isValidObjectId also accepts any 12-character
@@ -27,6 +28,11 @@ const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
 // The most comments one request returns. An article page shows the newest ones; this
 // keeps the answer small and fast even for an article with thousands of comments.
 const MAX_COMMENTS_PER_ARTICLE = 100;
+
+// Length limits from the work plan, the same as in models/Comment.js. The model
+// checks them again as a safety net; here we give the reader a friendly message.
+const MAX_AUTHOR_NAME_LENGTH = 50;
+const MAX_COMMENT_TEXT_LENGTH = 1000;
 
 /**
  * Turns a comment from the database into the shape we send to the browser.
@@ -80,6 +86,37 @@ async function findLiveArticle(articleId) {
 }
 
 /**
+ * Reads and checks the name and text of a new comment from the request body.
+ *
+ * Both must be strings: a number would otherwise be saved as text, and an object such
+ * as { "$gt": "" } has no business in a comment. Spaces around them are removed first,
+ * so a name made only of spaces counts as empty.
+ *
+ * @param {Object|undefined} body - req.body (undefined in Express 5 when there is no body).
+ * @returns {{authorName: string, text: string}} The cleaned values.
+ * @throws {Error} 400 with a message that says what to fix.
+ */
+function readNewCommentFields(body) {
+  const authorName = body && typeof body.authorName === 'string' ? body.authorName.trim() : '';
+  const text = body && typeof body.text === 'string' ? body.text.trim() : '';
+
+  if (authorName === '') {
+    throw createClientError(400, 'Please enter your name.');
+  }
+  if (authorName.length > MAX_AUTHOR_NAME_LENGTH) {
+    throw createClientError(400, `Your name can be at most ${MAX_AUTHOR_NAME_LENGTH} characters.`);
+  }
+  if (text === '') {
+    throw createClientError(400, 'Please write a comment.');
+  }
+  if (text.length > MAX_COMMENT_TEXT_LENGTH) {
+    throw createClientError(400, `A comment can be at most ${MAX_COMMENT_TEXT_LENGTH.toLocaleString('en-US')} characters.`);
+  }
+
+  return { authorName: authorName, text: text };
+}
+
+/**
  * GET /api/articles/:id/comments - the article's comments, newest first
  * (at most MAX_COMMENTS_PER_ARTICLE). Open to everyone.
  * Answers 200 { success: true, data: { comments: [...] } }.
@@ -106,14 +143,37 @@ async function listArticleComments(request, response) {
 }
 
 /**
- * POST /api/articles/:id/comments - add a comment. PLACEHOLDER.
+ * POST /api/articles/:id/comments - body { authorName, text }. Open to everyone;
+ * commentRateLimiter runs first and stops a guest's 4th comment within a minute.
+ * Answers 201 { success: true, data: <the new comment> }, so the page can add it to
+ * the list right away without loading the list again.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * The article comes from the URL and the device id from the deviceId cookie
+ * (req.deviceId), never from the body, so nobody can post as another device or
+ * attach a comment to a different article by editing the request.
+ *
+ * Text is saved exactly as typed, HTML included. It is made safe when shown:
+ * articleComments.js uses textContent and EJS uses the escaping <%= %> tag.
+ *
+ * @param {import('express').Request} request - The new comment.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 for bad fields or id, 404 if the article isn't live.
  */
-function addComment(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function addComment(request, response) {
+  // Fields first: a bad request is refused without touching the database.
+  const fields = readNewCommentFields(request.body);
+  const article = await findLiveArticle(request.params.id);
+
+  const comment = await Comment.create({
+    article: article._id,
+    authorName: fields.authorName,
+    text: fields.text,
+    deviceId: request.deviceId,
+  });
+
+  logger.info(`New comment on article ${article._id} by ${JSON.stringify(comment.authorName)}`);
+  response.status(201).json({ success: true, data: toCommentResponse(comment) });
 }
 
 /**
