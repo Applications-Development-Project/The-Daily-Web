@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log In - The Web Daily</title>
+    <link rel="stylesheet" href="public/css/main.css">
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: var(--spacing-lg) auto;
+        }
+        .login-card {
+            padding: var(--spacing-lg);
+        }
+    </style>
+</head>
+<body class="page-container">
+
+    <header class="site-header">
+        <h1>The Web Daily</h1>
+        <nav>
+            <a href="/feed.html">Back to Home</a>
+        </nav>
+    </header>
+
+    <div class="main-content-wrapper login-container">
+        <main class="main-content">
+            <div class="card login-card">
+                <h2 style="margin-bottom: var(--spacing-md); text-align: center;">Log In</h2>
+                
+                <form id="login-form">
+                    <!-- Placeholder for error messages -->
+                    <div id="login-error" class="form-error" style="display: none;">Invalid username or password.</div>
+                    
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <label for="username" style="display: block; margin-bottom: var(--spacing-sm);">Username</label>
+                        <input type="text" id="username" name="username" class="form-field" required>
+                    </div>
+                    
+                    <div style="margin-bottom: var(--spacing-md);">
+                        <label for="password" style="display: block; margin-bottom: var(--spacing-sm);">Password</label>
+                        <input type="password" id="password" name="password" class="form-field" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" style="width: 100%;">Log In</button>
+                </form>
+            </div>
+        </main>
+    </div>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 The Web Daily. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>
