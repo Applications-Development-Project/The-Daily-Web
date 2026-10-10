@@ -2,8 +2,8 @@
  * app.js
  *
  * Builds and configures the Express application: how request bodies are read,
- * where static files and EJS views live, and (in later steps) sessions, the device
- * cookie, every router, the 404 handler and the error handler.
+ * where static files and EJS views live, the 404 handler and the error handler,
+ * and (in later steps) sessions, the device cookie and every router.
  * It does NOT start listening; server.js does that after the database is connected.
  * Keeping the two apart means the app can be loaded without opening a port.
  *
@@ -16,6 +16,8 @@
 
 const path = require('path');
 const express = require('express');
+const handleNotFound = require('./middleware/notFoundHandler');
+const handleError = require('./middleware/errorHandler');
 
 const app = express();
 
@@ -35,5 +37,12 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 // Static files: a request for /css/main.css is answered with public/css/main.css,
 // without reaching any router.
 app.use(express.static(path.join(__dirname, 'public')));
+
+// The last two must stay at the end, after every router:
+// 1. No route matched: turn the request into a 404 error.
+app.use(handleNotFound);
+// 2. Every error from anywhere above (including that 404) is answered here.
+//    Express knows it is an error handler because the function has four parameters.
+app.use(handleError);
 
 module.exports = app;
