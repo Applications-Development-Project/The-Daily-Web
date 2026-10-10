@@ -22,7 +22,12 @@
 
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
+const Article = require('../models/Article');
 const logger = require('../services/logger');
+
+// A MongoDB id is exactly 24 hexadecimal characters; we check the shape to give a
+// clear 400 message instead of a database error.
+const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
 
 // The user list is shown 20 at a time, like every other list in the project.
 const USERS_PER_PAGE = 20;
@@ -155,6 +160,71 @@ async function hashNewPassword(value) {
 }
 
 /**
+ * Loads the user named in the URL, for an update or delete.
+ *
+ * @param {string} userId - request.params.id.
+ * @returns {Promise<import('mongoose').Document>} The user document (can be changed and saved).
+ * @throws {Error} 400 if the id is malformed, 404 if there is no such user.
+ */
+async function findUserById(userId) {
+  if (!OBJECT_ID_PATTERN.test(userId)) {
+    throw createClientError(400, 'Invalid user id.');
+  }
+  const user = await User.findById(userId);
+  if (!user) {
+    throw createClientError(404, 'User not found.');
+  }
+  return user;
+}
+
+/**
+ * Safety rule: never leave the system with zero editors, because then nobody could
+ * approve articles or manage users. Called before an editor is demoted or deleted.
+ *
+ * (The "can't change your own account" rules already make this nearly impossible,
+ * since the editor making the request stays an editor. We still check, as a second
+ * safety net that doesn't depend on that reasoning.)
+ *
+ * @returns {Promise<void>}
+ * @throws {Error} 409 if this is the last editor.
+ */
+async function ensureAnotherEditorRemains() {
+  const editorCount = await User.countDocuments({ role: 'editor' });
+  if (editorCount <= 1) {
+    throw createClientError(409, 'The system must keep at least one editor.');
+  }
+}
+
+/**
+ * Safety rule: a reporter who still has articles can't be deleted or made an editor,
+ * because their articles would be left without a reporter (moving articles to someone
+ * else is out of scope for this project).
+ *
+ * @param {import('mongoose').Document} user - The reporter.
+ * @param {string} actionDescription - For the message, for example "be deleted".
+ * @returns {Promise<void>}
+ * @throws {Error} 409 if the reporter has at least one article.
+ */
+async function ensureReporterHasNoArticles(user, actionDescription) {
+  // exists() stops at the first match instead of counting them all.
+  const hasArticles = await Article.exists({ reporter: user._id });
+  if (hasArticles) {
+    throw createClientError(409, `This reporter still has articles, so they can't ${actionDescription}.`);
+  }
+}
+
+/**
+ * Checks whether the logged-in editor is acting on their own account.
+ *
+ * @param {import('express').Request} request - request.session.user.id is the editor.
+ * @param {import('mongoose').Document} user - The account being changed.
+ * @returns {boolean}
+ */
+function isOwnAccount(request, user) {
+  return request.session.user.id === user._id.toString();
+}
+
+/**
  * Reads ?search= from the URL. Missing means "no search".
  *
  * @param {*} searchValue - request.query.search. Express gives an array if the
@@ -273,14 +343,69 @@ async function createUser(request, response) {
 }
 
 /**
- * PATCH /api/users/:id - change display name, role or password. PLACEHOLDER.
+ * Applies a role change after checking the safety rules.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * @param {import('express').Request} request - Who is asking.
+ * @param {import('mongoose').Document} user - The account being changed.
+ * @param {string} newRole - "reporter" or "editor".
+ * @returns {Promise<void>}
+ * @throws {Error} 409 if a safety rule forbids the change.
  */
-function updateUser(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function changeRole(request, user, newRole) {
+  if (newRole === user.role) {
+    return;
+  }
+
+  if (newRole === 'reporter') {
+    if (isOwnAccount(request, user)) {
+      throw createClientError(409, "You can't remove your own editor role.");
+    }
+    await ensureAnotherEditorRemains();
+  } else {
+    await ensureReporterHasNoArticles(user, 'become an editor');
+  }
+
+  user.role = newRole;
+}
+
+/**
+ * PATCH /api/users/:id - body with any of { displayName, role, password }.
+ * Answers 200 { success: true, data: <the updated user> }.
+ * The username can't be changed: it is how the person logs in.
+ *
+ * @param {import('express').Request} request - The changes.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 for invalid input, 404 for an unknown user, 409 for a safety rule.
+ */
+async function updateUser(request, response) {
+  const body = request.body || {};
+  if (body.username !== undefined) {
+    throw createClientError(400, "The username can't be changed.");
+  }
+  if (body.displayName === undefined && body.role === undefined && body.password === undefined) {
+    throw createClientError(400, 'Nothing to change: send displayName, role or password.');
+  }
+
+  const user = await findUserById(request.params.id);
+
+  // Every field is checked before anything is saved, so a request with one bad field
+  // changes nothing.
+  if (body.displayName !== undefined) {
+    user.displayName = readDisplayName(body.displayName);
+  }
+  if (body.role !== undefined) {
+    await changeRole(request, user, readRole(body.role));
+  }
+  if (body.password !== undefined) {
+    user.passwordHash = await hashNewPassword(body.password);
+  }
+
+  // save() runs the model's validators again before writing.
+  await user.save();
+
+  logger.info(`Editor "${request.session.user.displayName}" updated user "${user.username}"`);
+  response.json({ success: true, data: toUserResponse(user) });
 }
 
 /**
