@@ -1,0 +1,48 @@
+<%#
+  views/editor/partials/articleContent.ejs
+
+  Shows one version of an article's content (the working copy or the live version)
+  on the editor's review page: title, summary, category, main image and the body
+  split into paragraphs. Written once here so the review page can show two versions
+  side by side with exactly the same layout.
+
+  Locals:
+    heading - the box title, for example "Submitted content".
+    content - { title, summary, category, imageUrl, paragraphs } prepared by
+              toContentView() in controllers/editorController.js.
+
+  Everything is printed with the escaping tag (equals sign), so text a reporter typed
+  can never become HTML or script on the editor's page.
+
+  Included by: views/editor/articleReview.ejs.
+  Owner: SM.
+%>
+<section class="card">
+  <h3><%= heading %></h3>
+
+  <h4>Title</h4>
+  <p><%= content.title || '(empty)' %></p>
+
+  <h4>Summary</h4>
+  <p><%= content.summary || '(empty)' %></p>
+
+  <h4>Category</h4>
+  <p><%= content.category || '(not chosen)' %></p>
+
+  <h4>Main image</h4>
+  <% if (content.imageUrl) { %>
+    <%# loading="lazy": the browser fetches the image only when it scrolls into view. %>
+    <img src="<%= content.imageUrl %>" alt="Main image of the article" loading="lazy" style="max-width: 100%; height: auto;">
+    <p><small><%= content.imageUrl %></small></p>
+  <% } else { %>
+    <p>(no image)</p>
+  <% } %>
+
+  <h4>Body</h4>
+  <% if (content.paragraphs.length === 0) { %>
+    <p>(empty)</p>
+  <% } %>
+  <% content.paragraphs.forEach(function (paragraph) { %>
+    <p><%= paragraph %></p>
+  <% }); %>
+</section>

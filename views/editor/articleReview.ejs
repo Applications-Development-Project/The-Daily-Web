@@ -1,0 +1,63 @@
+<%#
+  views/editor/articleReview.ejs
+
+  The editor's review page for one article: who wrote it, its status, whether it is
+  live, the editor's note if it was returned, the submitted content and the
+  publish history (every approval, with its date and editor).
+
+  The whole page is rendered on the server; no script is needed to read it.
+
+  Rendered by: controllers/editorController.js (showArticleReview), for GET /editor/articles/:id.
+  Locals: title (the page title) and review (prepared by toReviewView() in the controller).
+  Includes: the shared head, header and footer, the editor nav and partials/articleContent.
+  Owner: SM.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'dashboard' }) %>
+
+  <main class="main-content">
+    <p><a href="/editor">&larr; All articles</a></p>
+
+    <article id="article-review" data-article-id="<%= review.id %>">
+      <header>
+        <h2><%= review.title %></h2>
+        <p>
+          <span class="status-badge status-<%= review.status %>"><%= review.statusLabel %></span>
+          By <%= review.reporterName %> &middot;
+          <%= review.isLive ? 'Live on the site' : 'Not published yet' %> &middot;
+          Last change <%= review.updatedAt %>
+        </p>
+      </header>
+
+      <% if (review.editorNote) { %>
+        <section class="card">
+          <h3>Note to the reporter</h3>
+          <p><%= review.editorNote %></p>
+        </section>
+      <% } %>
+
+      <%- include('partials/articleContent', { heading: 'Submitted content', content: review.draft }) %>
+
+      <section class="card">
+        <h3>Publish history</h3>
+        <% if (review.publishHistory.length === 0) { %>
+          <p class="empty-state">Never published.</p>
+        <% } else { %>
+          <ol reversed>
+            <% review.publishHistory.forEach(function (publishEvent) { %>
+              <li>Published <%= publishEvent.publishedAt %> by <%= publishEvent.editorName %></li>
+            <% }); %>
+          </ol>
+        <% } %>
+      </section>
+    </article>
+  </main>
+
+  <%- include('../partials/footer') %>
+</body>
+</html>
