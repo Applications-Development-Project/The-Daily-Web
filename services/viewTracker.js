@@ -12,6 +12,8 @@
  *   doesn't have to add up the hourly counters on every request.
  * Both are increased with $inc, which MongoDB applies atomically inside the
  * database, so views that arrive at the same moment are all counted.
+ * - DeviceArticleView: one (deviceId, article) pair per device and article,
+ *   so the feed can show or hide articles this browser has already opened.
  *
  * Used by: controllers/articlePageController.js (SH).
  * Related: models/ArticleViewStats.js, models/DeviceArticleView.js, models/Article.js.
@@ -20,6 +22,7 @@
 
 const Article = require('../models/Article');
 const ArticleViewStats = require('../models/ArticleViewStats');
+const DeviceArticleView = require('../models/DeviceArticleView');
 const logger = require('./logger');
 
 /**
@@ -72,6 +75,20 @@ async function recordView(articleId, deviceId) {
       { $inc: { views: 1 } },
       { upsert: true }
     );
+
+    // Remember that this device has opened the article, for the feed's "viewed"
+    // filter. We check the id ourselves because updates don't run the schema's
+    // "required" rule: without this check an empty id could be stored.
+    if (typeof deviceId === 'string' && deviceId !== '') {
+      // $setOnInsert only writes these fields when the pair is new. On a repeat
+      // visit nothing changes except updatedAt, which Mongoose sets automatically
+      // because the model has timestamps; upsert never creates a second pair.
+      await DeviceArticleView.updateOne(
+        { deviceId: deviceId, article: articleId },
+        { $setOnInsert: { deviceId: deviceId, article: articleId } },
+        { upsert: true }
+      );
+    }
   } catch (error) {
     // For example a malformed articleId (CastError) or a lost database connection.
     logger.error(`Could not record a view of article ${articleId}`, error);
