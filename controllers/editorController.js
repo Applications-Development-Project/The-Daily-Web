@@ -36,6 +36,14 @@ const REQUIRED_CONTENT_FIELDS = ['title', 'summary', 'body', 'category'];
 const MAX_EDITOR_NOTE_LENGTH = 2000;
 // The same date format as the rest of the site, for example "10 Oct 2026, 14:32".
 const DATE_TIME_FORMAT = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+// The fields of a content object, with the names the review page shows, in page order.
+const CONTENT_FIELD_LABELS = {
+  title: 'Title',
+  summary: 'Summary',
+  category: 'Category',
+  imageUrl: 'Main image',
+  body: 'Body',
+};
 
 /**
  * Creates an error for errorHandler with a 4xx status. On a page (not /api) it shows
@@ -84,6 +92,23 @@ function toContentView(content) {
 }
 
 /**
+ * Lists the fields where the working copy differs from the live version, so the
+ * editor sees exactly what an update changes. Values are compared as stored, so
+ * even a changed space or line break counts as a change.
+ *
+ * @param {Object} draft - The working copy.
+ * @param {Object|null} published - The live version, or null if never published.
+ * @returns {string[]} Field names in page order, for example ['title', 'body'];
+ *   empty when the article isn't live or nothing changed.
+ */
+function findChangedFields(draft, published) {
+  if (!published) {
+    return [];
+  }
+  return Object.keys(CONTENT_FIELD_LABELS).filter((field) => (draft[field] || '') !== (published[field] || ''));
+}
+
+/**
  * Prepares everything the review page shows, so the view only prints values.
  *
  * @param {Object} article - A lean article with reporter and publishHistory.editor populated.
@@ -92,6 +117,7 @@ function toContentView(content) {
  */
 function toReviewView(article, role) {
   const isLive = Boolean(article.published);
+  const changedFields = findChangedFields(article.draft, article.published);
   return {
     id: article._id.toString(),
     title: article.draft.title || (isLive ? article.published.title : '') || '(untitled)',
@@ -103,6 +129,9 @@ function toReviewView(article, role) {
     updatedAt: formatDateTime(article.updatedAt),
     draft: toContentView(article.draft),
     published: isLive ? toContentView(article.published) : null,
+    changedFields: changedFields,
+    // The same fields as readable names, for the line "Changed in this update: ...".
+    changedFieldLabels: changedFields.map((field) => CONTENT_FIELD_LABELS[field]),
     // Newest approval first, as the editor most often wants the latest one.
     publishHistory: article.publishHistory
       .slice()
