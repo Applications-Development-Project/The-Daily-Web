@@ -6,7 +6,7 @@
  *   (guests are limited to 3 per minute by middleware/commentRateLimiter.js, which runs
  *   before addComment).
  * - For the editor: the comment moderation page and API (search, edit, delete).
- *   Searching works; the page, edit and delete are still PLACEHOLDERS answering 501.
+ *   The API works; the page is still a PLACEHOLDER answering 501.
  *
  * Every comment sent to the browser has the shape { id, authorName, text, createdAt }.
  * deviceId is never sent: it identifies a reader's browser and is only for the server.
@@ -172,19 +172,39 @@ async function findLiveArticle(articleId) {
 }
 
 /**
- * Reads and checks the name and text of a new comment from the request body.
+ * Checks a comment's text. Used both for a new comment and for an editor's edit, so
+ * the two can never accept different text.
  *
- * Both must be strings: a number would otherwise be saved as text, and an object such
- * as { "$gt": "" } has no business in a comment. Spaces around them are removed first,
- * so a name made only of spaces counts as empty.
+ * It must be a string: a number would otherwise be saved as text, and an object such
+ * as { "$gt": "" } has no business in a comment. Spaces around it are removed first,
+ * so text made only of spaces counts as empty.
+ *
+ * @param {*} value - body.text.
+ * @returns {string} The trimmed text.
+ * @throws {Error} 400 if it is missing, blank or too long.
+ */
+function readCommentText(value) {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (text === '') {
+    throw createClientError(400, 'Please write a comment.');
+  }
+  if (text.length > MAX_COMMENT_TEXT_LENGTH) {
+    throw createClientError(400, `A comment can be at most ${MAX_COMMENT_TEXT_LENGTH.toLocaleString('en-US')} characters.`);
+  }
+  return text;
+}
+
+/**
+ * Reads and checks the name and text of a new comment from the request body.
+ * The name follows the same rules as the text: a string, trimmed, not blank.
  *
  * @param {Object|undefined} body - req.body (undefined in Express 5 when there is no body).
  * @returns {{authorName: string, text: string}} The cleaned values.
  * @throws {Error} 400 with a message that says what to fix.
  */
 function readNewCommentFields(body) {
-  const authorName = body && typeof body.authorName === 'string' ? body.authorName.trim() : '';
-  const text = body && typeof body.text === 'string' ? body.text.trim() : '';
+  const fields = body || {};
+  const authorName = typeof fields.authorName === 'string' ? fields.authorName.trim() : '';
 
   if (authorName === '') {
     throw createClientError(400, 'Please enter your name.');
@@ -192,14 +212,26 @@ function readNewCommentFields(body) {
   if (authorName.length > MAX_AUTHOR_NAME_LENGTH) {
     throw createClientError(400, `Your name can be at most ${MAX_AUTHOR_NAME_LENGTH} characters.`);
   }
-  if (text === '') {
-    throw createClientError(400, 'Please write a comment.');
-  }
-  if (text.length > MAX_COMMENT_TEXT_LENGTH) {
-    throw createClientError(400, `A comment can be at most ${MAX_COMMENT_TEXT_LENGTH.toLocaleString('en-US')} characters.`);
-  }
 
-  return { authorName: authorName, text: text };
+  return { authorName: authorName, text: readCommentText(fields.text) };
+}
+
+/**
+ * Loads the comment named in the URL, for an edit or delete.
+ *
+ * @param {string} commentId - request.params.id.
+ * @returns {Promise<import('mongoose').Document>} The comment document (can be changed and saved).
+ * @throws {Error} 400 if the id is malformed, 404 if there is no such comment.
+ */
+async function findCommentById(commentId) {
+  if (!OBJECT_ID_PATTERN.test(commentId)) {
+    throw createClientError(400, 'Invalid comment id.');
+  }
+  const comment = await Comment.findById(commentId);
+  if (!comment) {
+    throw createClientError(404, 'Comment not found.');
+  }
+  return comment;
 }
 
 /**
@@ -326,25 +358,48 @@ async function searchComments(request, response) {
 }
 
 /**
- * PATCH /api/comments/:id - edit a comment's text. PLACEHOLDER.
+ * PATCH /api/comments/:id - body { text }. The editor corrects a comment's text,
+ * for example to remove an insult while keeping the rest. Editor only.
+ * Only the text can change: the author's name, the article and the device stay as
+ * they were, so the comment still shows who wrote it and where.
+ * Answers 200 { success: true, data: <the updated comment> }.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * The text is checked before the comment is loaded, so a bad request never touches
+ * the database. save() runs the model's validators again as a safety net.
+ *
+ * @param {import('express').Request} request - request.params.id and request.body.text.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 for bad text or id, 404 if the comment doesn't exist.
  */
-function updateComment(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function updateComment(request, response) {
+  const body = request.body || {};
+  const text = readCommentText(body.text);
+  const comment = await findCommentById(request.params.id);
+
+  comment.text = text;
+  await comment.save();
+
+  logger.info(`Editor ${request.session.user.id} edited comment ${comment._id}`);
+  response.json({ success: true, data: toCommentResponse(comment) });
 }
 
 /**
- * DELETE /api/comments/:id - delete a comment. PLACEHOLDER.
+ * DELETE /api/comments/:id - removes a comment for good. Editor only. The page asks
+ * for confirmation first; the server can't know whether it did, so this is final.
+ * Answers 200 { success: true, data: { id } }, so the page knows which row to remove.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * @param {import('express').Request} request - request.params.id is the comment id.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 if the id is malformed, 404 if the comment doesn't exist.
  */
-function deleteComment(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function deleteComment(request, response) {
+  const comment = await findCommentById(request.params.id);
+  await comment.deleteOne();
+
+  logger.info(`Editor ${request.session.user.id} deleted comment ${comment._id} on article ${comment.article}`);
+  response.json({ success: true, data: { id: comment._id.toString() } });
 }
 
 module.exports = {
