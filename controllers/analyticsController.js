@@ -18,7 +18,10 @@
  */
 
 const mongoose = require('mongoose');
+const Article = require('../models/Article');
+const ArticleViewStats = require('../models/ArticleViewStats');
 const { getViewsOverTime, DEFAULT_RANGE_DAYS, MAX_RANGE_DAYS } = require('../services/viewTracker');
+const logger = require('../services/logger');
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -149,14 +152,44 @@ async function getArticleViews(request, response) {
 }
 
 /**
- * DELETE /api/editor/articles/:id/views - reset an article's statistics. PLACEHOLDER.
+ * DELETE /api/editor/articles/:id/views - resets an article's view statistics:
+ * deletes all its hourly counters and sets its totalViews back to 0, so the chart
+ * starts again from nothing. The page asks the editor to confirm first.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * The devices' "viewed" marks (DeviceArticleView) are not touched: they are not
+ * statistics but each reader's own viewed / not-viewed filter in the feed.
+ *
+ * Answers 200 { success: true, data: { id, deletedViewStats } }, 400 for a malformed
+ * id, 404 if the article doesn't exist.
+ *
+ * @param {import('express').Request} request - params.id; session.user is the editor.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
  */
-function resetArticleViews(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function resetArticleViews(request, response) {
+  if (!mongoose.isValidObjectId(request.params.id)) {
+    sendError(response, 400, 'Invalid article id');
+    return;
+  }
+
+  // Setting totalViews to 0 also tells us whether the article exists:
+  // matchedCount is 0 when no article has this id.
+  const articleUpdate = await Article.updateOne({ _id: request.params.id }, { $set: { totalViews: 0 } });
+  if (articleUpdate.matchedCount === 0) {
+    sendError(response, 404, 'Article not found');
+    return;
+  }
+
+  const deleteResult = await ArticleViewStats.deleteMany({ article: request.params.id });
+
+  logger.info(
+    `View statistics of article ${request.params.id} reset by editor "${request.session.user.displayName}" ` +
+    `(${deleteResult.deletedCount} hourly counters deleted)`
+  );
+  response.json({
+    success: true,
+    data: { id: request.params.id, deletedViewStats: deleteResult.deletedCount },
+  });
 }
 
 module.exports = { showAnalyticsPage, getArticleViews, resetArticleViews };
