@@ -246,7 +246,7 @@ async function showArticleEditor(request, response) {
  * editing; "isLive" says whether readers can see an approved version, so the dashboard
  * can show a "Live version online" badge (an article that is live and back in "draft"
  * is still online with its old text). The editor's note is included only for returned
- * articles, where it is relevant.
+ * and pending articles, where it is relevant (see the comment on editorNote below).
  *
  * @param {string} reporterId - The reporter's user id, always taken from the session.
  * @returns {Promise<Object[]>} Items { id, title, summary, category, status, statusLabel,
@@ -271,7 +271,12 @@ async function findReporterArticles(reporterId) {
     statusLabel: STATUS_LABELS[article.status],
     // published is null until an editor approves the article for the first time.
     isLive: article.published !== null && article.published !== undefined,
-    editorNote: article.status === STATUS.RETURNED ? article.editorNote : '',
+    // The editor's note is shown while the article is "returned" (what to fix) AND while it
+    // is "pending" again: submitting keeps the note on purpose (see submitArticleForApproval),
+    // so after resubmitting the reporter can still read what was asked of them until the
+    // editor decides. A pending article that has a note can only have come from a return,
+    // because approving clears it. In every other status the note is empty or no longer relevant.
+    editorNote: (article.status === STATUS.RETURNED || article.status === STATUS.PENDING) ? article.editorNote : '',
     updatedAt: article.updatedAt,
   }));
 }
