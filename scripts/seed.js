@@ -31,6 +31,9 @@ const User = require('../models/User');
 const Article = require('../models/Article');
 const ArticleViewStats = require('../models/ArticleViewStats');
 const DeviceArticleView = require('../models/DeviceArticleView');
+const { STATUS } = require('../services/articleWorkflow');
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 // How much work bcrypt does per hash. Each +1 doubles the time, which slows down
 // anyone trying to guess passwords from a stolen hash. 10 is the value the whole
@@ -45,6 +48,233 @@ const DEMO_USERS = [
   { username: 'reporter1', displayName: 'Dana Levi', role: 'reporter' },
   { username: 'reporter2', displayName: 'Omer Ben-David', role: 'reporter' },
 ];
+
+// Fictional headlines and summaries, 7 for each of the 8 categories in
+// Article.CATEGORIES. The article body is built from them by buildArticleBody().
+const SAMPLE_STORIES = {
+  Politics: [
+    ['City council approves new public transport budget', 'The plan adds night buses and two light-rail stops, funded over the next four years.'],
+    ['Parliament committee debates changes to the election law', 'Members disagree on how to count absentee votes; a final vote is expected next month.'],
+    ['First-time voters turn out in record numbers', 'Young voters led the rise in turnout, according to the central elections committee.'],
+    ['Government plans to cut paperwork for small businesses', 'Owners will be able to file most permits online starting next year.'],
+    ['Opposition calls for a review of housing policy', 'Rents rose faster than wages for the third year in a row.'],
+    ['New law requires public bodies to publish their budgets online', 'Every ministry and city must post its spending data in an open format.'],
+    ['Mayors meet to coordinate a regional water plan', 'Seven cities agree to share the cost of a new pipeline.'],
+  ],
+  Economy: [
+    ['Central bank keeps interest rate unchanged', 'Inflation slowed for a second month, but the bank says it is too early to cut.'],
+    ['Unemployment falls to its lowest level in five years', 'Hiring was strongest in technology, health care and construction.'],
+    ['Food prices rise ahead of the holiday season', 'Fruit and vegetables cost on average 6% more than a year ago.'],
+    ['Start-up funding recovers after a slow year', 'Local companies raised more in the last quarter than in the first half of the year.'],
+    ['New port terminal expected to shorten import times', 'Shipping companies say waiting times could fall by half.'],
+    ['Survey: more workers choose hybrid jobs', 'Two out of three office workers now spend at least one day a week at home.'],
+    ['Electricity prices to drop slightly next year', 'The regulator points to cheaper solar power and lower gas costs.'],
+  ],
+  World: [
+    ['Climate summit ends with new emissions targets', 'More than 100 countries agree to report their progress every year.'],
+    ['Neighbouring countries sign a cross-border rail agreement', 'Passenger trains could run between the two capitals within five years.'],
+    ['Aid groups warn of food shortages after floods', 'Heavy rains destroyed crops across a wide region.'],
+    ['Space station welcomes a new international crew', 'Four astronauts from three countries will stay for six months.'],
+    ['Global tourism returns to pre-pandemic levels', 'Airlines report full flights on most long-haul routes.'],
+    ['Ocean treaty enters into force', 'The agreement protects marine life in international waters.'],
+    ['World leaders discuss rules for artificial intelligence', 'The talks focus on safety testing and transparency.'],
+  ],
+  Technology: [
+    ['New smartphone battery promises two days of use', 'Engineers say the design charges fully in 20 minutes.'],
+    ['Schools add coding classes from first grade', 'The program teaches problem solving through simple games.'],
+    ["Cyber attack hits a regional hospital's booking system", 'Patient records were not affected, the hospital says.'],
+    ['Electric car sales double in a year', 'Lower prices and more charging stations are behind the jump.'],
+    ['City launches free Wi-Fi in public parks', 'The service covers twenty parks and will expand next year.'],
+    ['Study: most people reuse the same password', 'Experts recommend a password manager and two-step login.'],
+    ['Local start-up builds drones to inspect power lines', 'The drones can find damage before it causes power cuts.'],
+  ],
+  Science: [
+    ["Astronomers find a planet in its star's habitable zone", 'The planet is about one and a half times the size of Earth.'],
+    ['Researchers map the brain of a fruit fly in full detail', 'The map shows every one of its 140,000 nerve cells.'],
+    ['Ancient village uncovered during road works', 'Archaeologists date the site to about 7,000 years ago.'],
+    ['New material pulls drinking water from desert air', 'A prototype produced several litres a day.'],
+    ['Coral reefs show signs of recovery', 'Divers counted more young coral than in any year since monitoring began.'],
+    ['Scientists grow a tomato that needs less water', 'The plant kept its yield with a third less irrigation.'],
+    ['Rare comet visible to the naked eye this week', 'It is best seen just after sunset, low in the western sky.'],
+  ],
+  Health: [
+    ['Flu vaccine campaign starts in clinics', 'Vaccines are free for children, pregnant women and people over 65.'],
+    ['Study links short walks after meals to lower blood sugar', 'Ten minutes of walking was enough to see a difference.'],
+    ['Hospitals cut emergency room waiting times', 'A new system sends minor cases to nearby clinics.'],
+    ['Doctors warn about heat stroke as temperatures climb', 'Drink water often and avoid the sun at midday.'],
+    ['New app lets patients book appointments in minutes', 'Over a million people used it in its first month.'],
+    ['Researchers test a blood test for early cancer detection', 'Early results are promising, but more trials are needed.'],
+    ['Survey: teenagers get too little sleep', 'Most sleep fewer than the recommended eight hours a night.'],
+  ],
+  Sports: [
+    ['National team qualifies for the European championship', 'A late goal sealed a 2-1 win in the final qualifier.'],
+    ['City marathon breaks its participation record', 'More than 40,000 runners took part this year.'],
+    ['Basketball club signs a young star from the youth league', 'The 19-year-old guard averaged 25 points last season.'],
+    ["Women's football league gets a new TV deal", 'Every match will be shown live for the first time.'],
+    ['Tennis player wins her first major title', 'She won the final in three sets after losing the first.'],
+    ["Mountain stage added to next year's cycling tour", 'The race will finish in the mountains for the first time.'],
+    ['Swimmer sets a new national record', 'She broke a record that had stood for twelve years.'],
+  ],
+  Culture: [
+    ['Film festival opens with a record number of premieres', 'Sixty new films will be shown over ten days.'],
+    ['City museum reopens after a two-year renovation', 'The new wing doubles the space for modern art.'],
+    ['Bestselling novelist announces a new trilogy', 'The first book is due out next spring.'],
+    ['Street music festival returns to the old city', 'More than 200 musicians will play on 30 stages.'],
+    ['National theatre stages a modern version of a classic', 'The play is set in a present-day tech company.'],
+    ['Library launches late-night reading evenings', 'The main branch will stay open until midnight on Thursdays.'],
+    ['Photography exhibition shows everyday life in the city', 'The photos were taken by residents over one year.'],
+  ],
+};
+
+// How many never-published articles of each status to create.
+const UNPUBLISHED_ARTICLE_COUNTS = {
+  [STATUS.DRAFT]: 6,
+  [STATUS.PENDING]: 5,
+  [STATUS.RETURNED]: 4,
+};
+
+// Notes the editor left on returned articles.
+const RETURN_NOTES = [
+  'Please add a source for the numbers in the second paragraph.',
+  'The title is too long for the front page. Please shorten it to one line.',
+  'Add a quote from someone directly involved in the story.',
+  'Check the spelling of the names and choose a clearer main image.',
+];
+
+/**
+ * Picks a random moment between two dates.
+ *
+ * @param {Date} earliest - The earliest allowed moment.
+ * @param {Date} latest - The latest allowed moment.
+ * @returns {Date}
+ */
+function randomDateBetween(earliest, latest) {
+  const range = latest.getTime() - earliest.getTime();
+  return new Date(earliest.getTime() + Math.random() * range);
+}
+
+/**
+ * Returns the moment a number of days before now.
+ *
+ * @param {number} days - How many days back.
+ * @returns {Date}
+ */
+function daysAgo(days) {
+  return new Date(Date.now() - days * DAY_MS);
+}
+
+/**
+ * Builds the full text of a sample article: four paragraphs, separated by a blank
+ * line. The body is plain text; the article page decides how to show paragraphs.
+ *
+ * @param {string} title - The article title.
+ * @param {string} summary - The article summary, used as the opening paragraph.
+ * @param {string} category - The article category.
+ * @returns {string}
+ */
+function buildArticleBody(title, summary, category) {
+  const paragraphs = [
+    summary,
+    `"${title}" is one of the most discussed ${category.toLowerCase()} stories this week. ` +
+      'Our reporters spoke with the people directly involved, and with independent experts, ' +
+      'to understand what changed and why it matters.',
+    'Supporters say the step is overdue and will make a real difference in daily life. ' +
+      'Critics agree the problem is real, but question the timing and the cost, ' +
+      'and ask for clear ways to measure the results.',
+    'What happens next depends on decisions expected in the coming weeks. ' +
+      'We will keep following the story and update this article as new details become available.',
+  ];
+  return paragraphs.join('\n\n');
+}
+
+/**
+ * Builds the content object { title, summary, body, imageUrl, category } for
+ * sample article number articleNumber.
+ *
+ * Numbers go round the categories in order (0 Politics, 1 Economy, ... 8 Politics
+ * again), so every category gets a similar share, and each number in a category
+ * gets the next story, so titles don't repeat until all 56 are used.
+ *
+ * @param {number} articleNumber - 0, 1, 2... one per article the seed creates.
+ * @returns {{title: string, summary: string, body: string, imageUrl: string, category: string}}
+ */
+function buildArticleContent(articleNumber) {
+  const categories = Article.CATEGORIES;
+  const category = categories[articleNumber % categories.length];
+  const stories = SAMPLE_STORIES[category];
+  const [title, summary] = stories[Math.floor(articleNumber / categories.length) % stories.length];
+
+  return {
+    title: title,
+    summary: summary,
+    body: buildArticleBody(title, summary, category),
+    // A free placeholder photo service. "seed" makes each article always get the
+    // same photo. Images need internet; the site shows a fallback image without it.
+    imageUrl: `https://picsum.photos/seed/web-daily-${articleNumber}/800/450`,
+    category: category,
+  };
+}
+
+/**
+ * Builds (does not save) one article that was never published: a draft, an
+ * article waiting for the editor, or one returned with a note.
+ *
+ * @param {number} articleNumber - Which sample story to use.
+ * @param {string} status - STATUS.DRAFT, STATUS.PENDING or STATUS.RETURNED.
+ * @param {Object} reporter - The User who owns the article.
+ * @returns {Object} A plain object ready for Article.insertMany().
+ */
+function buildUnpublishedArticle(articleNumber, status, reporter) {
+  const draft = buildArticleContent(articleNumber);
+
+  // Every third draft is left half-written, the way autosave stores them:
+  // only a title and an opening paragraph, no summary, image or category yet.
+  // (Every third, not every second: reporters also alternate by even/odd number,
+  // so "every second" would give all the half-written drafts to the same reporter.)
+  if (status === STATUS.DRAFT && articleNumber % 3 === 0) {
+    draft.summary = '';
+    draft.body = draft.body.split('\n\n')[0];
+    draft.imageUrl = '';
+    draft.category = '';
+  }
+
+  const createdAt = randomDateBetween(daysAgo(14), daysAgo(1));
+  return {
+    reporter: reporter._id,
+    status: status,
+    draft: draft,
+    published: null,
+    editorNote: status === STATUS.RETURNED ? RETURN_NOTES[articleNumber % RETURN_NOTES.length] : '',
+    createdAt: createdAt,
+    updatedAt: randomDateBetween(createdAt, new Date()),
+  };
+}
+
+/**
+ * Creates the articles that were never published, in the numbers given by
+ * UNPUBLISHED_ARTICLE_COUNTS, shared between the reporters in turn.
+ *
+ * @param {Object[]} reporters - The demo reporters.
+ * @param {number} firstArticleNumber - The sample story number to start from.
+ * @returns {Promise<number>} How many articles were created.
+ */
+async function createUnpublishedArticles(reporters, firstArticleNumber) {
+  const articles = [];
+  let articleNumber = firstArticleNumber;
+
+  for (const [status, count] of Object.entries(UNPUBLISHED_ARTICLE_COUNTS)) {
+    for (let i = 0; i < count; i++) {
+      const reporter = reporters[articleNumber % reporters.length];
+      articles.push(buildUnpublishedArticle(articleNumber, status, reporter));
+      articleNumber++;
+    }
+  }
+
+  // One insertMany is one trip to the database for all the articles, instead of
+  // one trip per article. It still checks every article against the schema.
+  await Article.insertMany(articles);
+  return articles.length;
+}
 
 /**
  * Deletes every document in every collection of the connected database.
@@ -142,6 +372,9 @@ async function runSeed() {
 
   const users = await createDemoUsers(process.env.SEED_DEMO_PASSWORD);
   logger.info(`Created 1 editor and ${users.reporters.length} reporters`);
+
+  const unpublishedCount = await createUnpublishedArticles(users.reporters, 0);
+  logger.info(`Created ${unpublishedCount} articles that were never published (draft, pending, returned)`);
 
   logger.info('Seed finished');
 }
