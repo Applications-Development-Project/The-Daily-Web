@@ -326,6 +326,14 @@ async function searchComments(request, response) {
   const page = readPageNumber(request.query.page);
 
   // An empty filter {} matches every comment. With a search, $or matches either field.
+  // We build the RegExp ourselves from a checked string, so the filter can only ever be
+  // "contains this text": a value like ?search[$ne]=x never becomes a MongoDB operator
+  // (Express 5's default query parser doesn't turn [..] into objects, and
+  // readSearchText refuses anything that isn't a string anyway).
+  // Why a RegExp and not a MongoDB text index: a text index matches whole words only,
+  // so "edit" would not find "edited", and the editor expects "contains" like the
+  // users search. The cost is that a "contains" search can't use an index and reads
+  // every comment; that is fast enough for the thousands of comments in this project.
   let filter = {};
   if (searchText !== '') {
     const searchPattern = new RegExp(escapeRegExp(searchText), 'i');
@@ -335,6 +343,12 @@ async function searchComments(request, response) {
   // countDocuments and find run at the same time, so the page waits for one round
   // trip instead of two. _id breaks ties between comments from the same millisecond,
   // so paging never shows a comment twice or skips one.
+  // skip() is simple page numbering: page 3 skips the first 40 comments. MongoDB still
+  // walks past the skipped ones, but with 20 per page an editor never goes deep enough
+  // for that to matter.
+  // select() loads only the fields toModerationCommentResponse uses, so deviceId never
+  // even leaves the database. lean() returns plain objects instead of full Mongoose
+  // documents, which is faster because we only read them.
   const [totalComments, comments] = await Promise.all([
     Comment.countDocuments(filter),
     Comment.find(filter)
@@ -373,10 +387,21 @@ async function searchComments(request, response) {
  * @throws {Error} 400 for bad text or id, 404 if the comment doesn't exist.
  */
 async function updateComment(request, response) {
+  // In Express 5 request.body is undefined when the request has no body.
   const body = request.body || {};
   const text = readCommentText(body.text);
-  const comment = await findCommentById(request.params.id);
 
+  // Why findById + save() and not findByIdAndUpdate():
+  // - findByIdAndUpdate skips the model's validators (maxlength, required) unless we
+  //   remember to pass { runValidators: true }; save() always runs them.
+  // - Loading the comment first lets findCommentById answer a clear 404 when it
+  //   doesn't exist, the same way the delete route does.
+  // - Only the one field we assign is changed. Nothing from the request body is passed
+  //   to the database as it is, so an extra field like authorName or deviceId in the
+  //   body is simply ignored.
+  // The cost is two database calls instead of one, which doesn't matter for an
+  // editor's occasional edit.
+  const comment = await findCommentById(request.params.id);
   comment.text = text;
   await comment.save();
 
@@ -395,6 +420,10 @@ async function updateComment(request, response) {
  * @throws {Error} 400 if the id is malformed, 404 if the comment doesn't exist.
  */
 async function deleteComment(request, response) {
+  // We load the comment first (instead of a single findByIdAndDelete) so that edit and
+  // delete share findCommentById: the same 400 for a bad id and 404 for a missing one.
+  // Calling deleteOne() on the loaded document deletes exactly that one comment by its
+  // _id, and we still have its article id for the log line afterwards.
   const comment = await findCommentById(request.params.id);
   await comment.deleteOne();
 
