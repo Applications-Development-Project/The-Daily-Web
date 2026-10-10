@@ -1,0 +1,51 @@
+<%#
+  views/public/error.ejs
+
+  The one error page for the whole site, used for every error on a normal page
+  (API requests get JSON instead): 404 for an unknown URL or an article that isn't
+  live, 401/403 for pages someone may not open, 400 for bad input, 500 when
+  something breaks on the server. There is no separate 404 view.
+
+  Locals (both required):
+    statusCode - the HTTP status, for example 404
+    message    - a short sentence a reader can understand, for example "Article not found"
+
+  How a controller renders it:
+    res.status(404).render('public/error', { statusCode: 404, message: 'Article not found' })
+  Most errors don't render it directly: they call next(error), and
+  middleware/errorHandler.js renders this page with the right status.
+
+  Both values are printed with the escaping tag (equals sign), so even if a message
+  contained HTML it would be shown as text, never run.
+
+  TEMP until the shared partials (views/partials/head, header, footer) are merged:
+  this page is a complete HTML document on its own. When they exist, replace the
+  head, header and footer below with includes, so the error page looks like the
+  rest of the site.
+
+  Rendered by: middleware/errorHandler.js, and controllers for "not found" cases
+  (for example SH's article page).
+  Owner: OS.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= statusCode %> - The Web Daily</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <header>
+    <a href="/">The Web Daily</a>
+  </header>
+
+  <main class="page-container">
+    <section class="empty-state" aria-labelledby="error-title">
+      <h1 id="error-title">Error <%= statusCode %></h1>
+      <p><%= message %></p>
+      <p><a class="btn btn-primary" href="/">Back to the home page</a></p>
+    </section>
+  </main>
+</body>
+</html>
