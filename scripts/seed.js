@@ -31,6 +31,7 @@ const User = require('../models/User');
 const Article = require('../models/Article');
 const ArticleViewStats = require('../models/ArticleViewStats');
 const DeviceArticleView = require('../models/DeviceArticleView');
+const Comment = require('../models/Comment');
 const { STATUS } = require('../services/articleWorkflow');
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -428,6 +429,7 @@ async function createAllIndexes() {
   await Article.createIndexes();
   await ArticleViewStats.createIndexes();
   await DeviceArticleView.createIndexes();
+  await Comment.createIndexes();
 }
 
 /**
