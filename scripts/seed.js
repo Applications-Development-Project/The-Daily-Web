@@ -25,7 +25,7 @@ require('dotenv').config({ quiet: true });
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-const { connectToDatabase } = require('../config/database');
+const { connectToDatabase, disconnectFromDatabase } = require('../config/database');
 const logger = require('../services/logger');
 const User = require('../models/User');
 const Article = require('../models/Article');
@@ -475,19 +475,6 @@ function printDemoLogins() {
 }
 
 /**
- * Closes the database connection so the script can end.
- *
- * @returns {Promise<void>}
- */
-async function disconnectFromDatabase() {
-  // TEMP until OS changes config/database.js: its "disconnected" listener logs
-  // "ERROR Lost connection to MongoDB" even when we disconnect on purpose, which
-  // would make every successful seed look like it failed.
-  mongoose.connection.removeAllListeners('disconnected');
-  await mongoose.disconnect();
-}
-
-/**
  * Runs the whole seed: check settings, connect, clear, create indexes.
  *
  * @returns {Promise<void>}
@@ -522,6 +509,8 @@ async function runSeed() {
 
 // We set process.exitCode instead of calling process.exit(), so the "finally"
 // step still runs and closes the database connection before Node exits.
+// disconnectFromDatabase (config/database.js) closes it without logging a false
+// "Lost connection" error.
 runSeed()
   .catch((error) => {
     logger.error('Seed failed', error);
