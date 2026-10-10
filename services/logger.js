@@ -7,6 +7,12 @@
  * Because everyone goes through these two functions, we can change where logs go
  * without touching any caller.
  *
+ * Requirement covered: "keep logs of errors and significant operational events".
+ * Events logged today: server start; database connected and connection lost; login
+ * success, login failure and logout; users created, updated or deleted; new comments;
+ * the comment limit being reached; every 4xx error as one line (errorHandler) and
+ * every 500 with its full stack trace.
+ *
  * Phase 0 version: writes to the console only. In phase 2 OS adds log files
  * (logs/app.log and logs/error.log). The function names and parameters stay the
  * same, so no caller has to change.
@@ -47,6 +53,8 @@ function logInfo(message) {
  * @returns {void}
  */
 function logError(message, error) {
+  // console.error writes to the error stream (stderr) instead of normal output, so
+  // errors can be watched or saved separately from ordinary events.
   console.error(formatLogLine('ERROR', message));
   if (error && error.stack) {
     console.error(error.stack);
@@ -56,6 +64,9 @@ function logError(message, error) {
 }
 
 // Exported as logger.info and logger.error, the names fixed in "Shared contracts".
+// Inside this file the functions have verb-first names (logInfo, logError), as the
+// naming convention asks. It also means logError's parameter can be called "error"
+// without hiding a function that is itself called "error".
 module.exports = {
   info: logInfo,
   error: logError,
