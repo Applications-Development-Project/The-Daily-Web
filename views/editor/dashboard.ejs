@@ -1,0 +1,78 @@
+<%#
+  views/editor/dashboard.ejs
+
+  The editor dashboard: every article in the system, with a status filter, a title
+  search and pages of 20. Each row links to the article's review page.
+
+  The table body starts empty. public/js/editorDashboard.js fills it from
+  GET /api/editor/articles and refills it after every filter, search or page change,
+  without reloading the page (Ajax). The element ids below are what that script uses.
+
+  Rendered by: controllers/editorController.js (showEditorDashboard), for GET /editor.
+  Locals: title (the page title), statusOptions ([{ value, label }] for the filter).
+  Includes: the shared head, header and footer (views/partials) and the editor nav.
+  Owner: SM.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'dashboard' }) %>
+
+  <main class="main-content">
+    <h2>All articles</h2>
+
+    <%# role="search" tells screen readers this form filters the list below. %>
+    <form id="article-filters" class="card" role="search">
+      <label for="status-filter">Status</label>
+      <select id="status-filter" name="status" class="form-field">
+        <option value="">All statuses</option>
+        <% statusOptions.forEach(function (option) { %>
+          <option value="<%= option.value %>"><%= option.label %></option>
+        <% }); %>
+      </select>
+
+      <label for="title-search">Search by title</label>
+      <input type="search" id="title-search" name="search" class="form-field"
+        maxlength="200" placeholder="Part of a title..." autocomplete="off">
+    </form>
+
+    <%#
+      Loading, "no articles" and error messages appear here.
+      aria-live="polite" makes screen readers announce the new text when it changes.
+    %>
+    <p id="article-list-message" class="loading" aria-live="polite">Loading articles...</p>
+
+    <%# On a narrow screen the table scrolls sideways inside this box, not the whole page. %>
+    <div style="overflow-x: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Title</th>
+            <th scope="col">Reporter</th>
+            <th scope="col">Status</th>
+            <th scope="col">Live</th>
+            <th scope="col">Last update</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="article-rows"></tbody>
+      </table>
+    </div>
+
+    <nav id="pagination" aria-label="Pages of articles">
+      <button type="button" id="previous-page" class="btn" disabled>Previous</button>
+      <span id="page-info"></span>
+      <button type="button" id="next-page" class="btn" disabled>Next</button>
+    </nav>
+
+    <noscript>
+      <p class="form-error">The article list needs JavaScript. Please turn it on.</p>
+    </noscript>
+  </main>
+
+  <%- include('../partials/footer') %>
+</body>
+</html>
