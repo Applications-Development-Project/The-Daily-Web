@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tech Giants Release New AI Framework - The Web Daily</title>
+    <link rel="stylesheet" href="public/css/main.css">
+</head>
+<body class="page-container">
+
+    <header class="site-header">
+        <h1>The Web Daily</h1>
+        <nav>
+            <span>Welcome, Guest</span>
+            <a href="/login" class="btn btn-primary">Log in</a>
+        </nav>
+    </header>
+
+    <div class="main-content-wrapper">
+        <main class="main-content">
+            
+            <article class="card">
+                <span class="status-badge status-published">Technology</span>
+                <h1 style="margin: var(--spacing-md) 0;">Tech Giants Release New AI Framework</h1>
+                <p style="color: #666; margin-bottom: var(--spacing-lg);">
+                    By John Doe | Published: <time>10 Oct 2026, 11:00</time>
+                </p>
+                
+                <img src="https://via.placeholder.com/800x400" alt="AI abstract representation" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-lg);">
+                
+                <div class="article-body">
+                    <p>This is the full text of the article. In the final version, this content will be injected by the server using EJS so search engines can read it immediately.</p>
+                    <p>It can span multiple paragraphs and contains the core value of the page.</p>
+                </div>
+            </article>
+
+            <!-- Comments Section (Using OS's required IDs and markup) -->
+            <section id="comments" data-article-id="1" class="card">
+                <h3>Comments</h3>
+                
+                <ul id="comment-list">
+                    <!-- Example of OS's requested structure for an existing comment -->
+                    <li class="comment">
+                        <p class="comment-meta">
+                            <span class="comment-author">Jane Reader</span>
+                            <time class="comment-date" datetime="2026-10-10T13:51:00.000Z">10 Oct 2026, 13:51</time>
+                        </p>
+                        <p class="comment-text">This framework looks amazing! Can't wait to test it out.</p>
+                    </li>
+                    
+                    <!-- If empty, this would be: <li class="empty-state">No comments yet.</li> -->
+                </ul>
+
+                <div id="comment-error" class="form-error"></div>
+
+                <form id="comment-form">
+                    <input type="text" name="authorName" class="form-field" placeholder="Your Name" required maxlength="50">
+                    <textarea name="text" class="form-field" placeholder="Write a comment..." rows="4" required maxlength="1000"></textarea>
+                    <button type="submit" class="btn btn-primary">Post Comment</button>
+                </form>
+            </section>
+
+        </main>
+
+        <aside class="sidebar">
+            <div id="weather-widget" class="card">
+                <h3>Weather</h3>
+                <div id="weather-content">
+                    <div class="weather-info">
+                        <strong>Modiin</strong><br>
+                        24°C, clear sky (Mock Data)
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 The Web Daily. All rights reserved.</p>
+    </footer>
+
+    <!-- OS's requested scripts -->
+    <script src="/js/shared/apiClient.js"></script>
+    <script src="/js/articleComments.js"></script>
+</body>
+</html>

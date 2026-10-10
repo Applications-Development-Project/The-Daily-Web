@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Web Daily - Feed</title>
+    <!-- Linking the shared CSS -->
+    <link rel="stylesheet" href="public/css/main.css">
+</head>
+<body class="page-container">
+
+    <header class="site-header">
+        <h1>The Web Daily</h1>
+        <nav>
+            <span>Welcome, Guest</span>
+            <a href="/login" class="btn btn-primary">Log in</a>
+        </nav>
+    </header>
+
+    <div class="main-content-wrapper">
+        <main class="main-content">
+            <h2>Latest News</h2>
+            
+            <!-- Filters & Search (Static for now) -->
+            <div class="card">
+                <input type="text" class="form-field" placeholder="Search articles...">
+                <select class="form-field">
+                    <option>All Categories</option>
+                    <option>Technology</option>
+                    <option>Politics</option>
+                </select>
+            </div>
+
+            <!-- Feed Articles Placeholder -->
+            <article class="card">
+                <span class="status-badge status-published">Technology</span>
+                <h3>Tech Giants Release New AI Framework</h3>
+                <p>A brief summary of the article goes here. It provides a quick overview of what the reader can expect.</p>
+                <small>By John Doe | Published: Oct 10, 2026</small>
+                <br><br>
+                <a href="/articles/1" class="btn btn-primary">Read More</a>
+            </article>
+
+            <article class="card">
+                <span class="status-badge status-published">Politics</span>
+                <h3>Local Elections Show Surprising Turnout</h3>
+                <p>Another summary text showing how the feed cards will look when stacked using the shared card class.</p>
+                <small>By Jane Smith | Published: Oct 09, 2026</small>
+                <br><br>
+                <a href="/articles/2" class="btn btn-primary">Read More</a>
+            </article>
+        </main>
+
+        <aside class="sidebar">
+            <div id="weather-widget" class="card">
+                <h3>Weather</h3>
+                <div id="weather-content">
+                    <div class="weather-info">
+                        <strong>Modiin</strong><br>
+                        24°C, clear sky (Mock Data)
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 The Web Daily. All rights reserved.</p>
+    </footer>
+
+</body>
+</html>
