@@ -12,7 +12,7 @@ const { getWeather } = require('../services/weatherService');
  * GET /api/weather
  * Returns the current weather, utilizing the 10-minute cache from weatherService.
  */
-async function getWeatherData(req, res, next) {
+async function getCurrentWeather(req, res, next) {
     try {
         const weather = await getWeather();
         
@@ -24,4 +24,4 @@ async function getWeatherData(req, res, next) {
     }
 }
 
-module.exports = { getWeatherData };
+module.exports = { getCurrentWeather };
