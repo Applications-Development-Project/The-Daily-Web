@@ -7,9 +7,13 @@
   side by side with exactly the same layout.
 
   Locals:
-    heading - the box title, for example "Submitted content".
-    content - { title, summary, category, imageUrl, paragraphs } prepared by
-              toContentView() in controllers/editorController.js.
+    heading       - the box title, for example "Submitted changes".
+    content       - { title, summary, category, imageUrl, paragraphs } prepared by
+                    toContentView() in controllers/editorController.js.
+    changedFields - optional: names of the fields that differ between the two
+                    versions, for example ['title', 'body']. Those fields get a
+                    "Changed" marker. The marker is a word, not only a colour, so
+                    it is also clear to people who don't see colours well.
 
   Everything is printed with the escaping tag (equals sign), so text a reporter typed
   can never become HTML or script on the editor's page.
@@ -17,19 +21,28 @@
   Included by: views/editor/articleReview.ejs.
   Owner: SM.
 %>
+<%
+  // locals.changedFields: reading a local that wasn't passed would crash the page.
+  const changedFields = locals.changedFields || [];
+
+  // Returns the field's heading, with the marker when the field changed.
+  function fieldHeading(fieldName, label) {
+    return changedFields.includes(fieldName) ? label + ' (changed)' : label;
+  }
+%>
 <section class="card">
   <h3><%= heading %></h3>
 
-  <h4>Title</h4>
+  <h4><%= fieldHeading('title', 'Title') %></h4>
   <p><%= content.title || '(empty)' %></p>
 
-  <h4>Summary</h4>
+  <h4><%= fieldHeading('summary', 'Summary') %></h4>
   <p><%= content.summary || '(empty)' %></p>
 
-  <h4>Category</h4>
+  <h4><%= fieldHeading('category', 'Category') %></h4>
   <p><%= content.category || '(not chosen)' %></p>
 
-  <h4>Main image</h4>
+  <h4><%= fieldHeading('imageUrl', 'Main image') %></h4>
   <% if (content.imageUrl) { %>
     <%# loading="lazy": the browser fetches the image only when it scrolls into view. %>
     <img src="<%= content.imageUrl %>" alt="Main image of the article" loading="lazy" style="max-width: 100%; height: auto;">
@@ -38,7 +51,7 @@
     <p>(no image)</p>
   <% } %>
 
-  <h4>Body</h4>
+  <h4><%= fieldHeading('body', 'Body') %></h4>
   <% if (content.paragraphs.length === 0) { %>
     <p>(empty)</p>
   <% } %>

@@ -2,8 +2,15 @@
   views/editor/articleReview.ejs
 
   The editor's review page for one article: who wrote it, its status, whether it is
-  live, the editor's note if it was returned, the submitted content and the
-  publish history (every approval, with its date and editor).
+  live, the editor's note if it was returned, the content and the publish history
+  (every approval, with its date and editor).
+
+  The content part depends on the article:
+  - never published: the submitted content;
+  - live with an update in progress: "Currently live" and "Submitted changes" side by
+    side, with the changed fields marked (requirements: the editor must understand
+    what is published now and what new content awaits approval);
+  - live with no update: the live version only.
 
   The whole page is rendered on the server; no script is needed to read it.
 
@@ -41,7 +48,28 @@
         </section>
       <% } %>
 
-      <%- include('partials/articleContent', { heading: 'Submitted content', content: review.draft }) %>
+      <% if (!review.isLive) { %>
+        <%- include('partials/articleContent', { heading: 'Submitted content', content: review.draft }) %>
+
+      <% } else if (review.changedFields.length === 0) { %>
+        <%- include('partials/articleContent', { heading: 'Live version (no changes in progress)', content: review.published }) %>
+
+      <% } else { %>
+        <p class="card"><strong>Changed in this update:</strong> <%= review.changedFieldLabels.join(', ') %></p>
+        <%#
+          TEMP until SH adds a class for this to main.css: two columns side by side.
+          flex-wrap plus a minimum width of 18rem per column means that on a narrow
+          screen the columns stack instead of squeezing (requirements: responsive).
+        %>
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+          <div style="flex: 1 1 18rem; min-width: 0;">
+            <%- include('partials/articleContent', { heading: 'Currently live', content: review.published, changedFields: review.changedFields }) %>
+          </div>
+          <div style="flex: 1 1 18rem; min-width: 0;">
+            <%- include('partials/articleContent', { heading: 'Submitted changes', content: review.draft, changedFields: review.changedFields }) %>
+          </div>
+        </div>
+      <% } %>
 
       <section class="card">
         <h3>Publish history</h3>
