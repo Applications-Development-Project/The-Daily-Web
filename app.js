@@ -10,7 +10,15 @@
  * Keeping the two apart means the app can be loaded without opening a port.
  *
  * Express runs app.use() middleware in the order it is written in this file,
- * so the order below matters.
+ * so the order below matters:
+ *   1. body parsers       (req.body must exist before any controller reads it)
+ *   2. static files       (CSS, JS and images are answered here, before the session)
+ *   3. session            (req.session, read by everything after it)
+ *   4. device id          (req.deviceId, for guests too)
+ *   5. currentUser        (needs the session; refreshes the role before any permission check)
+ *   6. the routers        (page routers at "/", API routers at "/api")
+ *   7. the 404 handler    (reached only if no router answered)
+ *   8. errorHandler       (last, so it catches errors from everything above)
  *
  * Called by: server.js.
  * Owner: OS. Shared file: after phase 0, change it only in a small, separate pull request.
@@ -65,7 +73,8 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Everything below runs only for pages and API calls. Static files were already
-// answered above, so loading a stylesheet never touches the session store.
+// answered above, so loading a stylesheet never touches the session store. With the
+// session first, every image and script on every page would cost a MongoDB lookup.
 
 // Sessions: fills req.session from the session cookie (the logged-in user lives in
 // req.session.user). Must come before anything that reads req.session.
