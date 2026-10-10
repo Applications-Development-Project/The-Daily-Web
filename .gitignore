@@ -1,12 +1,18 @@
 # Files Git must never track.
 # Owner: OS. Shared file: change it only in a small, separate pull request.
 
-# Installed packages. Anyone can recreate them with "npm install" from package.json.
+# Installed packages. Anyone can recreate them with "npm install" from package.json
+# (package-lock.json pins the exact versions). Some packages, like bcrypt, contain
+# code built for one operating system, so a copy from a Windows laptop wouldn't run
+# on a Mac anyway.
 node_modules/
 
 # Local settings and secrets (database URI, session secret, API key, demo password).
-# Only .env.example, with empty values, is committed.
+# Only .env.example, with empty values, is committed. .env was in this file from the
+# very first commit, so no secret has ever been in the Git history. The code reads
+# every secret from process.env, never from a value typed in a source file.
 .env
 
-# Log files written by services/logger.js while the server runs.
+# Log files written by services/logger.js while the server runs. They are output of
+# the running program, not source code, and they would differ on every computer.
 logs/
