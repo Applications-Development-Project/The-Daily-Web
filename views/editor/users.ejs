@@ -1,0 +1,107 @@
+<%#
+  views/editor/users.ejs
+
+  The editor's user management page: search the users, add a reporter or editor, edit a
+  user's display name, role or password in the table, and delete a user. The page is
+  sent as an empty frame; public/js/userManagement.js loads the users from the Users API
+  and does every change with Ajax, so the page never reloads.
+
+  Locals: currentUser (set for every view by middleware/setCurrentUser.js). Its id goes
+  into data-current-user-id, so the script can disable the editor's own Delete button.
+  That is only a convenience: the server refuses to delete or demote your own account
+  in any case (controllers/userController.js).
+
+  TEMP until the shared partials (views/partials/head, header, footer) are merged: this
+  page is a complete HTML document with its own small header and logout form. When the
+  partials exist, replace the head and header below with includes.
+
+  Rendered by: controllers/userController.js (showUserManagementPage), for GET /editor/users.
+  Includes: views/editor/partials/editorNav.ejs (SM).
+  Owner: OS.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Users - The Web Daily</title>
+  <link rel="stylesheet" href="/css/main.css">
+</head>
+<body>
+  <header class="site-header">
+    <a href="/">The Web Daily</a>
+    <span><%= currentUser.displayName %></span>
+    <form method="post" action="/logout">
+      <button class="btn" type="submit">Log out</button>
+    </form>
+  </header>
+
+  <%- include('partials/editorNav', { activePage: 'users' }) %>
+
+  <main class="page-container" id="user-management" data-current-user-id="<%= currentUser.id %>">
+    <h1>Users</h1>
+
+    <section class="card" aria-labelledby="add-user-title">
+      <h2 id="add-user-title">Add a user</h2>
+      <form id="add-user-form">
+        <div class="form-field">
+          <label for="new-username">Username</label>
+          <input id="new-username" name="username" type="text" autocomplete="off" minlength="3" maxlength="30" required>
+        </div>
+        <div class="form-field">
+          <label for="new-display-name">Display name</label>
+          <input id="new-display-name" name="displayName" type="text" maxlength="50" required>
+        </div>
+        <div class="form-field">
+          <label for="new-role">Role</label>
+          <select id="new-role" name="role">
+            <option value="reporter">Reporter</option>
+            <option value="editor">Editor</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="new-password">Password (8 characters or more)</label>
+          <%# autocomplete="new-password" stops the browser from filling in the editor's own password. %>
+          <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" required>
+        </div>
+        <p id="add-user-message" role="status" hidden></p>
+        <button class="btn btn-primary" type="submit">Add user</button>
+      </form>
+    </section>
+
+    <section aria-labelledby="user-list-title">
+      <h2 id="user-list-title">All users</h2>
+
+      <form id="user-search-form" role="search">
+        <label for="user-search">Search by username or display name</label>
+        <input id="user-search" name="search" type="search" maxlength="100">
+      </form>
+
+      <p id="user-list-error" class="form-error" role="alert" hidden></p>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Username</th>
+            <th scope="col">Display name</th>
+            <th scope="col">Role</th>
+            <th scope="col">Created</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="user-table-body"></tbody>
+      </table>
+      <p id="user-list-status" class="loading">Loading users...</p>
+
+      <nav aria-label="User list pages">
+        <button id="previous-page" class="btn" type="button" disabled>Previous</button>
+        <span id="page-info"></span>
+        <button id="next-page" class="btn" type="button" disabled>Next</button>
+      </nav>
+    </section>
+  </main>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/userManagement.js"></script>
+</body>
+</html>
