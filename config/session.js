@@ -27,6 +27,34 @@ const mongoose = require('mongoose');
 // How long a login lasts without logging in again: 7 days, in milliseconds.
 const SESSION_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 
+// Mongoose's readyState value meaning "connected".
+const MONGOOSE_CONNECTED = 1;
+
+/**
+ * Waits until Mongoose is connected, then gives back the MongoDB driver client
+ * inside it, which is what connect-mongo needs. This lets the session store reuse
+ * Mongoose's connection instead of opening a second one.
+ *
+ * Why we need to wait: app.js (and so this file) is loaded before server.js connects
+ * to the database. If we asked for the client right away, it wouldn't exist yet.
+ * (Mongoose's own asPromise() doesn't help here: before connect() has been called it
+ * resolves immediately, with no client.)
+ *
+ * @returns {Promise<import('mongodb').MongoClient>} Resolves once Mongoose is connected.
+ */
+function waitForDatabaseClient() {
+  return new Promise((resolve) => {
+    if (mongoose.connection.readyState === MONGOOSE_CONNECTED) {
+      resolve(mongoose.connection.getClient());
+      return;
+    }
+    // "connected" fires when config/database.js finishes connecting.
+    mongoose.connection.once('connected', () => {
+      resolve(mongoose.connection.getClient());
+    });
+  });
+}
+
 /**
  * Builds the session middleware for app.js.
  *
@@ -40,16 +68,12 @@ function createSessionMiddleware() {
     throw new Error('SESSION_SECRET is not set. Copy .env.example to .env and fill it in.');
   }
 
-  // Reuse Mongoose's connection instead of opening a second one. asPromise() waits
-  // until server.js has connected, then gives us the connection; getClient() is the
-  // MongoDB driver client inside it, which is what connect-mongo needs.
-  const clientPromise = mongoose.connection.asPromise().then((connection) => connection.getClient());
-
   return session({
     // Signs the session id cookie. Without the secret nobody can forge a valid cookie.
     secret: sessionSecret,
 
-    store: MongoStore.create({ clientPromise }),
+    // Sessions are saved in the "sessions" collection, through Mongoose's connection.
+    store: MongoStore.create({ clientPromise: waitForDatabaseClient() }),
 
     // Don't save the session again on every request if nothing in it changed.
     resave: false,
