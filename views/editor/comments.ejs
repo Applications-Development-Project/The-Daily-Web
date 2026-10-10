@@ -1,0 +1,81 @@
+<%#
+  views/editor/comments.ejs
+
+  The editor's comment moderation page: every comment on the site, newest first, with
+  the article it was posted on, a search box (comment text or author name) and pages of
+  20. Each row can be edited in place or deleted after a confirmation.
+
+  The page is sent as an empty frame: the table body starts empty, and
+  public/js/commentModeration.js fills it from GET /api/comments and does every edit
+  and delete with Ajax, so the page never reloads. Building the rows in one place (the
+  script) means the first page and every later page look exactly the same.
+  The element ids below are what that script uses.
+
+  Rendered by: controllers/commentController.js (showCommentModerationPage), for
+  GET /editor/comments. Only editors get here: the route uses requireRole('editor').
+  Locals: title (the page title); currentUser comes from middleware/setCurrentUser.js
+  and is read by the shared header.
+  Includes: the shared head, header and footer (views/partials) and the editor nav (SM).
+  Owner: OS.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'comments' }) %>
+
+  <main class="main-content" id="comment-moderation">
+    <h2>Comments</h2>
+
+    <%#
+      role="search" tells screen readers this form filters the list below.
+      The script searches while the editor types; it also stops Enter from submitting
+      the form, which would reload the page.
+    %>
+    <form id="comment-search-form" class="card" role="search">
+      <label for="comment-search">Search comments or author names</label>
+      <%# maxlength matches the server's search limit (100 characters). %>
+      <input type="search" id="comment-search" name="search" class="form-field"
+        maxlength="100" placeholder="Part of a comment or a name..." autocomplete="off">
+    </form>
+
+    <%#
+      Loading and "no comments" messages appear here.
+      aria-live="polite" makes screen readers announce the new text when it changes.
+    %>
+    <p id="comment-list-status" class="loading" aria-live="polite">Loading comments...</p>
+    <%# Errors from the server, for example an edit with empty text. role="alert" is announced at once. %>
+    <p id="comment-list-error" class="form-error" role="alert" hidden></p>
+
+    <%# On a narrow screen the table scrolls sideways inside this box, not the whole page. %>
+    <div style="overflow-x: auto;">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Comment</th>
+            <th scope="col">Author</th>
+            <th scope="col">Article</th>
+            <th scope="col">Posted</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="comment-rows"></tbody>
+      </table>
+    </div>
+
+    <nav id="pagination" aria-label="Pages of comments">
+      <button type="button" id="previous-page" class="btn" disabled>Previous</button>
+      <span id="page-info"></span>
+      <button type="button" id="next-page" class="btn" disabled>Next</button>
+    </nav>
+
+    <noscript>
+      <p class="form-error">Comment moderation needs JavaScript. Please turn it on.</p>
+    </noscript>
+  </main>
+
+  <%- include('../partials/footer') %>
+</body>
+</html>

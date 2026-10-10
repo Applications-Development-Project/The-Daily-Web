@@ -6,13 +6,14 @@
  *   (guests are limited to 3 per minute by middleware/commentRateLimiter.js, which runs
  *   before addComment).
  * - For the editor: the comment moderation page and API (search, edit, delete).
- *   The API works; the page is still a PLACEHOLDER answering 501.
+ *   The page is views/editor/comments.ejs; public/js/commentModeration.js runs it.
  *
  * Every comment sent to the browser has the shape { id, authorName, text, createdAt }.
  * deviceId is never sent: it identifies a reader's browser and is only for the server.
  *
  * Used by: routes/pageRoutes/commentPageRoutes.js, routes/apiRoutes/commentApiRoutes.js.
- * Related: models/Comment.js, models/Article.js, public/js/articleComments.js.
+ * Related: models/Comment.js, models/Article.js, public/js/articleComments.js,
+ * views/editor/comments.ejs, public/js/commentModeration.js.
  * Owner: OS.
  */
 
@@ -295,14 +296,20 @@ async function addComment(request, response) {
 }
 
 /**
- * GET /editor/comments - the comment moderation page. PLACEHOLDER.
+ * GET /editor/comments - the comment moderation page (editor only).
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
+ * It sends only the page frame, with no comments in it. The browser script
+ * (public/js/commentModeration.js) loads them from GET /api/comments, so the rows are
+ * built in one place only and the first page works exactly like every later page.
+ * This page doesn't need to be found by search engines (it is behind a login), so
+ * unlike the article page there is no reason to render the list on the server.
+ *
+ * @param {import('express').Request} request - The page request (editor only).
+ * @param {import('express').Response} response - Renders views/editor/comments.ejs.
  * @returns {void}
  */
 function showCommentModerationPage(request, response) {
-  response.status(501).render('public/error', { statusCode: 501, message: 'Comment moderation is not built yet.' });
+  response.render('editor/comments', { title: 'Comments - The Web Daily' });
 }
 
 /**
