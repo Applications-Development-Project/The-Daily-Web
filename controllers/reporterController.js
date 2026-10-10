@@ -1,29 +1,55 @@
 /**
  * controllers/reporterController.js
  *
- * The reporter's side of the site: the dashboard page and the JSON API behind it.
- * OS created this file in phase 0 as a PLACEHOLDER so every route existed from day one;
- * EZ replaced the function bodies one by one, so every function below is real now. The
- * function names and module.exports stayed the same, because the route files call them.
+ * The reporter's side of the site: the dashboard page, the article editor page, and the
+ * JSON API behind them (list, create, autosave, submit). A reporter writes an article, it is
+ * saved all the time without a Save button, and when it is finished the reporter sends it to
+ * the editor, who approves it or returns it with a note (SM's editorController.js).
  *
- * What it does:
- * - showReporterDashboard (GET /reporter) and listMyArticles (GET /api/reporter/articles),
- *   both built on findReporterArticles.
- * - showArticleEditor (GET /reporter/articles/:id/edit): the editor page, filled from the draft.
- * - createArticle (POST /api/reporter/articles): a new, empty article in "In preparation".
- * - autosaveDraft (PATCH /api/reporter/articles/:id/draft): saves the whole draft.
- * - submitArticleForApproval (POST /api/reporter/articles/:id/submit): sends the article to
- *   the editor. The status change is checked with canTransition from services/articleWorkflow.js.
+ * History: OS created this file in phase 0 with a placeholder for every route, so every URL
+ * existed from day one. EZ replaced them one by one; nothing in this file is a placeholder any
+ * more. The function names and module.exports stayed the same, because the route files call them.
+ *
+ * What each exported function does, and how it can answer (the errors are all 4xx; a 500 is
+ * only a real server failure):
+ * - showReporterDashboard  GET /reporter: the page with the reporter's own articles.
+ * - showArticleEditor      GET /reporter/articles/:id/edit: the editor page, filled from the
+ *                          draft. 400 bad id, 403 not yours, 404 missing, 409 pending.
+ * - listMyArticles         GET /api/reporter/articles: the same list as JSON.
+ * - createArticle          POST /api/reporter/articles: a new, empty article. 201 with its id.
+ * - autosaveDraft          PATCH /api/reporter/articles/:id/draft: replaces the whole draft.
+ *                          200 with the save time; 400 (bad id or body), 403, 404, 409 pending.
+ * - submitArticleForApproval  POST /api/reporter/articles/:id/submit: sends it to the editor.
+ *                          200; 400 (bad id, or required fields missing), 403, 404, 409 (status
+ *                          does not allow it, or a live article has no changes).
+ * The helpers below them do one small job each: findReporterArticles, findOwnedArticle,
+ * readDraftFromRequestBody, isEmptyOrHttpUrl, findMissingRequiredFields,
+ * hasNoChangesFromPublished and createHttpError.
  *
  * Rules that apply to every function here:
  * - Only reporters get in: the route files use requireRole('reporter'), so the role is
  *   checked on the server from the session.
  * - The reporter's id always comes from request.session.user, never from the URL, the
- *   query or the body, so a reporter can't act as someone else.
+ *   query or the body, so a reporter can't act as someone else. The status and the owner are
+ *   never read from the body either: the server decides them.
  * - Ownership ("is this MY article?") is checked here in the controller, not in
  *   canTransition, because it needs the article from the database. The list asks only for
  *   articles whose reporter is the logged-in user. Every function that works on one article
  *   (by :id: the edit page, autosave and submit) starts with findOwnedArticle.
+ * - Two copies of the content: `draft` is the reporter's working copy, `published` is what
+ *   readers see. These functions change only `draft` and `status` (createArticle also sets
+ *   `published` to null for a brand-new article). An existing `published` copy is changed only
+ *   by the editor's approve (SM), so readers keep seeing the last approved version while a
+ *   reporter edits or waits for approval.
+ * - A reporter can change an article only in the statuses "In preparation", "Returned" and
+ *   "Published". A "pending" article is read-only while the editor reviews it. The first
+ *   autosave of a published article moves its working copy back to "In preparation"
+ *   (published -> draft, allowed by canTransition).
+ * - Every status change goes through canTransition (services/articleWorkflow.js), so the
+ *   rules are written once. The editor's note is kept when a returned article is resubmitted
+ *   and is cleared only by the editor's approve.
+ * - Everything the browser sends is checked here again: text fields must be strings (a JSON
+ *   body could hold MongoDB operators), lengths, a known category, an http(s) image address.
  * - No try/catch: this project uses Express 5, where an error thrown (or a rejected
  *   promise) in an async function goes to errorHandler by itself. A database failure
  *   therefore becomes a clean error response, not a crashed server.
@@ -31,6 +57,15 @@
  * Article content (the contract with SM's editor page): an article's draft has the
  * fields title, summary, category, imageUrl and body. The dashboard shows only the
  * first three, so it never loads the body.
+ *
+ * Known limits (accepted, listed for the defense):
+ * - Autosave and submit load the article, check it, and then save, so two requests at the
+ *   same instant could interleave. The editor page prevents this (one request at a time, fields
+ *   disabled while submitting) and the plan excludes concurrent editing of one article.
+ * - The reporter's list is not paged: one reporter writes far fewer articles than the site holds.
+ * - A submit without changes (a live article) is refused, but the editor page has already saved
+ *   the unchanged text first, so that article shows "In preparation" until it is changed or
+ *   submitted. The live text is never touched.
  *
  * Used by: routes/pageRoutes/reporterPageRoutes.js, routes/apiRoutes/reporterApiRoutes.js.
  * Related: models/Article.js, services/articleWorkflow.js (STATUS, STATUS_LABELS),
