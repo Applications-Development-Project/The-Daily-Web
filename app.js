@@ -2,8 +2,9 @@
  * app.js
  *
  * Builds and configures the Express application: how request bodies are read,
- * where static files and EJS views live, the 404 handler and the error handler,
- * and (in later steps) sessions, the device cookie and every router.
+ * where static files and EJS views live, sessions, the device cookie, the current
+ * user for views, the 404 handler and the error handler, and (in a later step)
+ * every router.
  * It does NOT start listening; server.js does that after the database is connected.
  * Keeping the two apart means the app can be loaded without opening a port.
  *
@@ -16,6 +17,9 @@
 
 const path = require('path');
 const express = require('express');
+const { createSessionMiddleware } = require('./config/session');
+const assignDeviceId = require('./middleware/assignDeviceId');
+const setCurrentUser = require('./middleware/setCurrentUser');
 const handleNotFound = require('./middleware/notFoundHandler');
 const handleError = require('./middleware/errorHandler');
 
@@ -37,6 +41,20 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 // Static files: a request for /css/main.css is answered with public/css/main.css,
 // without reaching any router.
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Everything below runs only for pages and API calls. Static files were already
+// answered above, so loading a stylesheet never touches the session store.
+
+// Sessions: fills req.session from the session cookie (the logged-in user lives in
+// req.session.user). Must come before anything that reads req.session.
+app.use(createSessionMiddleware());
+
+// Every request gets req.deviceId (guests included), for the comment limit and
+// the viewed / not-viewed filter.
+app.use(assignDeviceId);
+
+// Every view gets currentUser (or null), for the header's login state.
+app.use(setCurrentUser);
 
 // The last two must stay at the end, after every router:
 // 1. No route matched: turn the request into a 404 error.
