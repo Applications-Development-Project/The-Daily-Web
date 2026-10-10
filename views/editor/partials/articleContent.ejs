@@ -16,7 +16,13 @@
                     it is also clear to people who don't see colours well.
 
   Everything is printed with the escaping tag (equals sign), so text a reporter typed
-  can never become HTML or script on the editor's page.
+  can never become HTML or script on the editor's page. That includes the image
+  address inside src="...": escaping keeps it inside the attribute, and browsers never
+  run script from an image address. Checking that it is an http(s) address is the job
+  of the save step (the reporter's autosave and the editor's edit).
+
+  The body is plain text (paragraphs separated by a blank line), not HTML, so each
+  paragraph is printed as text in its own p element.
 
   Included by: views/editor/articleReview.ejs.
   Owner: SM.

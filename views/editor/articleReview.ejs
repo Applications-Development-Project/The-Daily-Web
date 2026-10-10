@@ -14,6 +14,12 @@
 
   The whole page is rendered on the server; no script is needed to read it.
 
+  Security: only an editor ever receives this page (requireRole('editor') in
+  routes/pageRoutes/editorPageRoutes.js). Everything a reporter typed (title, summary,
+  body, note) is printed with the escaping tag (equals sign), so it is shown as text and
+  can't run as script on the editor's page. The tag with a minus sign (no escaping) is
+  used only to include our own templates (head, header, nav, partials).
+
   When the workflow allows a decision (only for an article awaiting approval), the
   page also shows "Approve and publish" and "Return for corrections" with a required
   note. The small script at the bottom sends them to the editor API with apiClient.
@@ -47,6 +53,7 @@
         </p>
       </header>
 
+      <%# The note the editor wrote when returning it; the reporter sees the same note on their dashboard. %>
       <% if (review.editorNote) { %>
         <section class="card">
           <h3>Note to the reporter</h3>
@@ -91,6 +98,11 @@
             <button type="button" id="approve-button" class="btn btn-primary">Approve and publish</button>
           <% } %>
 
+          <%#
+            required and maxlength="2000" give a quick answer in the browser; the server
+            checks the same rules again (an empty note gets 400), because a request can
+            be sent without this page.
+          %>
           <% if (review.canReturn) { %>
             <form id="return-form">
               <label for="return-note">Note to the reporter: what needs to be fixed? (required)</label>
@@ -109,6 +121,7 @@
         <% if (review.publishHistory.length === 0) { %>
           <p class="empty-state">Never published.</p>
         <% } else { %>
+          <%# reversed: the list is newest first, so the numbers count down and the first approval keeps number 1. %>
           <ol reversed>
             <% review.publishHistory.forEach(function (publishEvent) { %>
               <li>Published <%= publishEvent.publishedAt %> by <%= publishEvent.editorName %></li>
@@ -127,6 +140,16 @@
      * Sends the editor's decision (approve, or return with a note) to the editor API.
      * On success the page reloads, so the status, the buttons and the publish history
      * come fresh from the server. Text from the server is shown with textContent.
+     *
+     * Why a reload here and not for search or paging: the requirements ask for no full
+     * reload in interactive areas like search, filtering, paging and comments. After a
+     * decision, the whole page changes (status, buttons, history), and all of it is
+     * rendered on the server, so reloading shows the true new state without repeating
+     * the page's rendering in JavaScript.
+     *
+     * The server makes every real check (editor role, pending status, the note); these
+     * functions only send the request and show the answer, including 409 when someone
+     * already decided and 401 when the session ended.
      */
 
     /**
