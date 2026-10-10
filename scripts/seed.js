@@ -133,6 +133,17 @@ const UNPUBLISHED_ARTICLE_COUNTS = {
   [STATUS.RETURNED]: 4,
 };
 
+// Live articles (published is not null), grouped by the status of their working
+// copy. "status" describes the draft, not whether readers can see the article
+// ("Article status rules"), so a live article can also be in draft, pending or returned
+// while the reporter works on an update and readers keep seeing the approved version.
+const LIVE_ARTICLE_COUNTS = {
+  [STATUS.PUBLISHED]: 25, // no update in progress: draft is the same as published
+  [STATUS.DRAFT]: 4, // the reporter is editing an update
+  [STATUS.PENDING]: 3, // an update is waiting for the editor
+  [STATUS.RETURNED]: 3, // the update was returned to the reporter with a note
+};
+
 // Notes the editor left on returned articles.
 const RETURN_NOTES = [
   'Please add a source for the numbers in the second paragraph.',
@@ -277,6 +288,117 @@ async function createUnpublishedArticles(reporters, firstArticleNumber) {
 }
 
 /**
+ * Builds the list of approvals of one live article: the first publish and then
+ * each update, oldest first, each 1 to 4 days after the previous one.
+ * The first publish is 20 to 30 days ago, so even 4 publishes end at least
+ * 8 days ago, never in the future, and all fall inside the analytics chart's
+ * default 30-day window.
+ *
+ * @param {number} publishCount - How many times the article was approved (1 to 4).
+ * @param {Object} editor - The User who approved it.
+ * @returns {{publishedAt: Date, editor: mongoose.Types.ObjectId}[]}
+ */
+function buildPublishHistory(publishCount, editor) {
+  const publishHistory = [];
+  let publishedAt = randomDateBetween(daysAgo(30), daysAgo(20));
+
+  for (let i = 0; i < publishCount; i++) {
+    if (i > 0) {
+      const previous = publishedAt.getTime();
+      publishedAt = randomDateBetween(new Date(previous + DAY_MS), new Date(previous + 4 * DAY_MS));
+    }
+    publishHistory.push({ publishedAt: publishedAt, editor: editor._id });
+  }
+  return publishHistory;
+}
+
+/**
+ * Builds the reporter's next version of a live article: a new title and an extra
+ * paragraph, so the editor's review page has visible differences to show.
+ *
+ * @param {Object} publishedContent - The content readers see now.
+ * @returns {Object} A new content object; publishedContent is not changed.
+ */
+function buildUpdatedDraft(publishedContent) {
+  // { ...publishedContent } copies the fields into a NEW object. Changing the copy
+  // must not change the published version readers see.
+  const draft = { ...publishedContent };
+  draft.title = `Update: ${publishedContent.title}`;
+  draft.body = publishedContent.body +
+    '\n\nNew: the reporter is adding the latest developments to this story.';
+  return draft;
+}
+
+/**
+ * Builds (does not save) one live article, with its publish history and, for
+ * every status except published, an update in progress in its draft.
+ *
+ * @param {number} articleNumber - Which sample story to use.
+ * @param {string} status - The status of the working copy (see LIVE_ARTICLE_COUNTS).
+ * @param {Object} reporter - The User who owns the article.
+ * @param {Object} editor - The User who approved it.
+ * @returns {Object} A plain object ready for Article.insertMany().
+ */
+function buildLiveArticle(articleNumber, status, reporter, editor) {
+  // About every fourth live article was updated after publishing: published 2 to 4
+  // times in total. The rest were published once.
+  const publishCount = articleNumber % 4 === 0 ? 2 + (articleNumber % 3) : 1;
+  const publishHistory = buildPublishHistory(publishCount, editor);
+  const firstPublishedAt = publishHistory[0].publishedAt;
+  const lastPublishedAt = publishHistory[publishHistory.length - 1].publishedAt;
+
+  // Each approved update added a short dated paragraph to the live text.
+  const published = buildArticleContent(articleNumber);
+  for (const publishEvent of publishHistory.slice(1)) {
+    const date = publishEvent.publishedAt.toISOString().slice(0, 10);
+    published.body += `\n\nUpdated ${date}: new details were added to this story.`;
+  }
+
+  // With no update in progress, the working copy equals what readers see.
+  const draft = status === STATUS.PUBLISHED ? { ...published } : buildUpdatedDraft(published);
+
+  return {
+    reporter: reporter._id,
+    status: status,
+    draft: draft,
+    published: published,
+    editorNote: status === STATUS.RETURNED ? RETURN_NOTES[articleNumber % RETURN_NOTES.length] : '',
+    firstPublishedAt: firstPublishedAt,
+    lastPublishedAt: lastPublishedAt,
+    publishHistory: publishHistory,
+    // Written up to 2 days before it first went live; last changed at its last
+    // approval, or later if the reporter has been working on an update since.
+    createdAt: new Date(firstPublishedAt.getTime() - Math.random() * 2 * DAY_MS),
+    updatedAt: status === STATUS.PUBLISHED ? lastPublishedAt : randomDateBetween(lastPublishedAt, new Date()),
+  };
+}
+
+/**
+ * Creates the live articles, in the numbers given by LIVE_ARTICLE_COUNTS,
+ * shared between the reporters in turn.
+ *
+ * @param {Object[]} reporters - The demo reporters.
+ * @param {Object} editor - The demo editor, recorded as the approver.
+ * @param {number} firstArticleNumber - The sample story number to start from.
+ * @returns {Promise<number>} How many articles were created.
+ */
+async function createLiveArticles(reporters, editor, firstArticleNumber) {
+  const articles = [];
+  let articleNumber = firstArticleNumber;
+
+  for (const [status, count] of Object.entries(LIVE_ARTICLE_COUNTS)) {
+    for (let i = 0; i < count; i++) {
+      const reporter = reporters[articleNumber % reporters.length];
+      articles.push(buildLiveArticle(articleNumber, status, reporter, editor));
+      articleNumber++;
+    }
+  }
+
+  await Article.insertMany(articles);
+  return articles.length;
+}
+
+/**
  * Deletes every document in every collection of the connected database.
  *
  * We loop over the collections that actually exist instead of listing our models,
@@ -375,6 +497,10 @@ async function runSeed() {
 
   const unpublishedCount = await createUnpublishedArticles(users.reporters, 0);
   logger.info(`Created ${unpublishedCount} articles that were never published (draft, pending, returned)`);
+
+  // Continue the story numbers after the unpublished articles, so no title repeats.
+  const liveCount = await createLiveArticles(users.reporters, users.editor, unpublishedCount);
+  logger.info(`Created ${liveCount} live articles`);
 
   logger.info('Seed finished');
 }
