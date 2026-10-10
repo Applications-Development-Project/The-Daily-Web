@@ -18,7 +18,7 @@
  */
 
 const Article = require('../models/Article');
-const { STATUS, STATUS_LABELS } = require('../services/articleWorkflow');
+const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWorkflow');
 
 // An article id from the URL must be exactly 24 hexadecimal characters. We check the
 // shape ourselves ("Checking ids from the URL" in the plan) because
@@ -30,6 +30,14 @@ const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
 // article is allowed by the requirements; the new version goes through approval again).
 // "pending" is missing on purpose: while the editor reviews it, it is read-only.
 const EDITABLE_STATUSES = [STATUS.DRAFT, STATUS.RETURNED, STATUS.PUBLISHED];
+
+// The five fields of a draft (the "content object" in the plan), in the order the form shows them.
+const DRAFT_FIELDS = ['title', 'summary', 'category', 'imageUrl', 'body'];
+
+// Maximum lengths, the same numbers as the limits in models/Article.js. The controller
+// checks first so the reporter gets a clear 400 message; the model's own limits stay as a
+// second safety net for any other way of saving.
+const DRAFT_MAX_LENGTHS = { title: 200, summary: 500, imageUrl: 2000, body: 50000 };
 
 /**
  * Creates an Error that errorHandler turns into a clean answer with this HTTP status
@@ -44,6 +52,75 @@ function createHttpError(statusCode, message) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+/**
+ * Checks that a text is empty or a web address starting with http:// or https://.
+ * Images are stored as links, and a link such as "javascript:alert(1)" must never be
+ * saved, because the public page will later use it as an image address.
+ * The URL class does the parsing for us: it throws on text that is not an address at all,
+ * and tells us the protocol (the part before "//") of the ones that are.
+ *
+ * @param {string} imageUrl - The text to check.
+ * @returns {boolean} true if it is empty or a valid http(s) address.
+ */
+function isEmptyOrHttpUrl(imageUrl) {
+  if (imageUrl === '') {
+    return true;
+  }
+  try {
+    const protocol = new URL(imageUrl).protocol;
+    return protocol === 'http:' || protocol === 'https:';
+  } catch (parseError) {
+    return false;
+  }
+}
+
+/**
+ * Reads the five draft fields out of a request body and checks every one of them.
+ * It returns a NEW object that contains only the five known fields, so anything else the
+ * browser sent (a "status", a "reporter", a "published") is dropped here and can never
+ * reach the database.
+ *
+ * Why every field must be a string: a JSON body can hold objects, for example
+ * { "title": { "$ne": "" } }. Passing such a value on would let the sender inject
+ * MongoDB operators (a NoSQL injection). Checking typeof removes that whole risk.
+ * We do NOT trim the text: this runs on every autosave while the reporter is typing, and
+ * trimming would delete the space they just typed at the end of a word.
+ *
+ * @param {Object} [requestBody] - request.body. Express 5 leaves it undefined when the
+ *   request has no body, so the caller passes request.body || {}.
+ * @returns {{title: string, summary: string, category: string, imageUrl: string, body: string}}
+ *   The checked draft.
+ * @throws {Error} With statusCode 400 and a message that names the problem field.
+ */
+function readDraftFromRequestBody(requestBody) {
+  const draft = {};
+
+  DRAFT_FIELDS.forEach(function (fieldName) {
+    const value = requestBody[fieldName];
+    if (typeof value !== 'string') {
+      throw createHttpError(400, `The field "${fieldName}" must be text.`);
+    }
+    // Only fields that have a limit are in DRAFT_MAX_LENGTHS (category is checked below).
+    const maxLength = DRAFT_MAX_LENGTHS[fieldName];
+    if (maxLength !== undefined && value.length > maxLength) {
+      throw createHttpError(400, `The field "${fieldName}" can be at most ${maxLength} characters.`);
+    }
+    draft[fieldName] = value;
+  });
+
+  // Empty is allowed while writing; the server requires a real category only when the
+  // article is submitted for approval (a later commit).
+  if (draft.category !== '' && !Article.CATEGORIES.includes(draft.category)) {
+    throw createHttpError(400, 'The field "category" must be empty or one of the known categories.');
+  }
+
+  if (!isEmptyOrHttpUrl(draft.imageUrl)) {
+    throw createHttpError(400, 'The field "imageUrl" must be empty or a web address starting with http:// or https://.');
+  }
+
+  return draft;
 }
 
 /**
@@ -260,14 +337,76 @@ async function createArticle(request, response) {
 }
 
 /**
- * PATCH /api/reporter/articles/:id/draft - autosave the draft. PLACEHOLDER.
+ * PATCH /api/reporter/articles/:id/draft - autosave: replaces the article's whole draft
+ * with the five fields in the request body. The browser calls it a couple of seconds
+ * after the reporter stops typing (public/js/reporterEditor.js, a later commit).
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * Requirements served (in our own words):
+ *   - Continuity: the reporter's work is saved all the time without pressing "Save", and
+ *     closing the browser, refreshing, or switching computers loses nothing, because
+ *     the text lives in the database, not in the browser.
+ *   - Editing a published article: the readers keep seeing the last approved version;
+ *     the reporter's changes must not appear on the public site while they work, nor
+ *     after they are sent for approval, only after an editor approves them.
+ *
+ * How the second requirement works: every article has TWO copies of its content.
+ * `published` is what readers see (the public pages read only this). `draft` is the
+ * working copy. This function writes only to `draft`, so whatever the reporter types,
+ * `published` stays exactly as the editor approved it. When an editor approves, the
+ * draft is copied into `published` (SM's code), and only then do readers see the change.
+ *
+ * Steps, in this order (each step can stop the request with an error):
+ *   1. findOwnedArticle: 400 bad id, 404 no such article, 403 not this reporter's article.
+ *   2. The status must be draft, returned or published, otherwise 409 (a pending article
+ *      is waiting for the editor and is read-only).
+ *   3. Validate the body: 400 for anything wrong (readDraftFromRequestBody).
+ *   4. If the article is published, move the working copy back to "draft": the new
+ *      version has to go through approval again. canTransition checks that this change is
+ *      allowed; `published` is never touched.
+ *   5. Save the draft and answer with the save time.
+ *
+ * The reporter and the status are NEVER read from the request body: the owner comes from
+ * the session and the status change is decided here, so the browser can't pick either.
+ * No try/catch: in Express 5 an error thrown here reaches errorHandler by itself.
+ *
+ * @param {import('express').Request} request - request.params.id is the article id,
+ *   request.body the five draft fields, request.session.user the reporter.
+ * @param {import('express').Response} response - Answers 200 { success: true, data: { savedAt } }.
+ * @returns {Promise<void>}
+ * @throws {Error} With statusCode 400, 403, 404 or 409 (see the steps above).
  */
-function autosaveDraft(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function autosaveDraft(request, response) {
+  const article = await findOwnedArticle(request.params.id, request.session.user.id);
+
+  if (!EDITABLE_STATUSES.includes(article.status)) {
+    throw createHttpError(409, 'This article is waiting for the editor and cannot be edited right now.');
+  }
+
+  // Express 5 leaves request.body undefined when the request has no body at all, and
+  // reading a field of undefined would crash. "|| {}" turns that into a clean 400.
+  const draft = readDraftFromRequestBody(request.body || {});
+
+  // First edit of a live article: the new version becomes "In preparation" again. The
+  // transition table is the one place that says this change is allowed, so we ask it
+  // instead of writing our own rule. Only `status` changes here; `published` is not touched.
+  if (article.status === STATUS.PUBLISHED) {
+    if (!canTransition(STATUS.PUBLISHED, STATUS.DRAFT, 'reporter')) {
+      throw createHttpError(409, 'This article cannot be edited right now.');
+    }
+    article.status = STATUS.DRAFT;
+  }
+
+  // Replacing the whole draft (not field by field) keeps the saved copy equal to what
+  // is on the reporter's screen, even if a request is repeated. save() writes only the
+  // fields that changed (draft and, maybe, status), so `published` is never sent to the
+  // database. It also refreshes the article's updatedAt time.
+  article.draft = draft;
+  await article.save();
+
+  // The time the server confirmed the save, for the "Saved at 14:32" message. We use the
+  // current time and not article.updatedAt: if the text hadn't changed, save() writes
+  // nothing and updatedAt would stay old, but the draft is still correctly saved now.
+  response.json({ success: true, data: { savedAt: new Date().toISOString() } });
 }
 
 /**
