@@ -24,13 +24,16 @@
  *   6. A half-typed image address can't block the saving of the rest of the draft.
  *   7. The "Submit for approval" button: it first saves the latest text, and only if that
  *      worked asks the server to send the article to the editor (see submitForApproval).
- * Still missing (phase 2 in the plan): a clearer message when the login session has ended.
+ *   8. A login session that ends while editing (the server answers 401): a clear notice with
+ *      a link to log in again in a NEW tab, the text stays on screen, and no retry loop
+ *      (see handleSessionExpired). The plan's phase 2 item "a clear message if the session
+ *      expired during editing, and keep the unsaved text on screen" is this one.
  *
  * Used by: views/reporter/articleEditor.ejs (loaded at the end of the page, after
  * /js/shared/apiClient.js, because this file calls apiClient).
  * Related: controllers/reporterController.js (autosaveDraft and submitArticleForApproval,
  * which validate everything again on the server), the ids "article-form", "save-status",
- * "submit-article-button" and "submit-error" in articleEditor.ejs.
+ * "submit-article-button", "submit-error" and "session-expired-notice" in articleEditor.ejs.
  * Owner: EZ.
  *
  * This is a plain browser script (no modules), so top-level names are shared with
@@ -50,6 +53,11 @@ const RETRY_DELAY_MS = 5000;
 // The five fields of a draft. Each one is a form control whose "name" attribute is the
 // same word (the names fixed in "Shared contracts", the same ones the server expects).
 const DRAFT_FIELD_NAMES = ['title', 'summary', 'category', 'imageUrl', 'body'];
+
+// What the reporter reads when the login session has ended (the server answered 401).
+const SESSION_ENDED_STATUS = 'Not saved: your login session has ended.';
+const SESSION_ENDED_SUBMIT_MESSAGE = 'Your login session has ended, so the article was not submitted. '
+  + 'Log in again in a new tab (your text stays on this page), then click "Submit for approval" again.';
 
 /**
  * Turns the save time sent by the server into "14:32" for the status line.
@@ -144,6 +152,10 @@ function setUpReporterEditor() {
   const submitButton = document.getElementById('submit-article-button');
   const submitError = document.getElementById('submit-error');
 
+  // The notice shown when the login session has ended (see handleSessionExpired). Optional
+  // in the same way: without it the status line still tells the reporter.
+  const sessionExpiredNotice = document.getElementById('session-expired-notice');
+
   // The last image address the server accepted. Starts as the address the server wrote into
   // the page (defaultValue is the HTML "value" attribute, not what the reporter typed since,
   // and the server only ever stores an empty or valid address). Used while the reporter is
@@ -169,6 +181,9 @@ function setUpReporterEditor() {
   // is true, autosave timers, follow-up saves and retries are switched off: only the submit
   // sequence may talk to the server (see submitForApproval).
   let isSubmitting = false;
+  // true after the server answered 401 (not logged in): the login session has ended. Cleared
+  // by the next save that works. Used to try one save when the reporter returns to this tab.
+  let isSessionExpired = false;
 
   /**
    * Shows a message in the status line. textContent, never innerHTML: the message can
@@ -180,6 +195,46 @@ function setUpReporterEditor() {
    */
   function showStatus(message) {
     saveStatus.textContent = message;
+  }
+
+  /**
+   * The server answered 401: the login session has ended (for example it expired, or the
+   * reporter logged out in another tab). Tells the reporter clearly, and does nothing else.
+   *
+   * What this deliberately does NOT do:
+   *   - It does not retry by itself. A 401 means the login is gone, so the same request would
+   *     fail again every time. A retry loop would only load the server and change nothing.
+   *   - It does not send the reporter to the login page. Leaving this page would destroy the
+   *     text that is not saved yet. The notice has a link that opens the login page in a NEW tab.
+   *   - It does not touch the form. Nothing the reporter typed is lost on screen.
+   *
+   * How it recovers: the login cookie is shared by all tabs of the browser, so after logging
+   * in again in the other tab this page is logged in too. The next save (the reporter types, comes
+   * back to this tab, or clicks "Submit for approval") works, and clearSessionExpired hides
+   * the notice. The article is saved under the same reporter, so ownership is unchanged. If the
+   * reporter logs in as a DIFFERENT user, the server answers 403 (not your article) and the
+   * status line says so.
+   *
+   * @returns {void}
+   */
+  function handleSessionExpired() {
+    isSessionExpired = true;
+    showStatus(SESSION_ENDED_STATUS);
+    if (sessionExpiredNotice) {
+      sessionExpiredNotice.hidden = false;
+    }
+  }
+
+  /**
+   * A save worked, so the login is valid again: hide the notice.
+   *
+   * @returns {void}
+   */
+  function clearSessionExpired() {
+    isSessionExpired = false;
+    if (sessionExpiredNotice) {
+      sessionExpiredNotice.hidden = true;
+    }
   }
 
   /**
@@ -302,6 +357,9 @@ function setUpReporterEditor() {
       // an invalid one), so the next replacement still uses an address the server accepted.
       lastSavedImageUrl = draft.imageUrl;
 
+      // A working save also proves the login is valid again (after logging in in another tab).
+      clearSessionExpired();
+
       // The time comes from the server, so it is the moment the draft was really saved.
       let message = 'Saved at ' + formatSavedTime(result.data.savedAt);
       if (imageUrlIsInvalid) {
@@ -311,13 +369,16 @@ function setUpReporterEditor() {
     } else {
       hasUnsavedChanges = true;
 
-      if (isTemporaryFailure(result)) {
+      if (result.status === 401) {
+        // The login session has ended. Not a temporary failure, so no automatic retry.
+        handleSessionExpired();
+      } else if (isTemporaryFailure(result)) {
         showStatus('Not saved, retrying');
       } else {
-        // The reason is shown because there are different causes: for example 401 (the
-        // session ended) or 409 (the article is not editable any more). Repeating the same
-        // request would fail the same way, so we don't retry; the next change the reporter
-        // makes starts a new attempt.
+        // The reason is shown because there are different causes: for example 403 (the
+        // article belongs to someone else) or 409 (the article is not editable any more).
+        // Repeating the same request would fail the same way, so we don't retry; the next
+        // change the reporter makes starts a new attempt.
         showStatus('Not saved: ' + result.error);
       }
     }
@@ -418,7 +479,10 @@ function setUpReporterEditor() {
     // Step 4: save the latest text once, and stop if it did not work.
     const saveResult = await saveDraft();
     if (!saveResult.success) {
-      stopSubmitting('The article was not submitted because the latest text could not be saved: ' + saveResult.error);
+      // For a 401, saveDraft has already shown the session notice (handleSessionExpired).
+      stopSubmitting(saveResult.status === 401
+        ? SESSION_ENDED_SUBMIT_MESSAGE
+        : 'The article was not submitted because the latest text could not be saved: ' + saveResult.error);
       return;
     }
 
@@ -427,6 +491,12 @@ function setUpReporterEditor() {
     showStatus('Submitting...');
     const submitResult = await apiClient.post(submitUrl, {});
     if (!submitResult.success) {
+      // The session can also end between the final save and this request (rare, but possible).
+      if (submitResult.status === 401) {
+        handleSessionExpired();
+        stopSubmitting(SESSION_ENDED_SUBMIT_MESSAGE);
+        return;
+      }
       // For example 400 "Please fill in these fields before submitting: summary." The text
       // stays in the form so the reporter can fix it and click again.
       stopSubmitting(submitResult.error);
@@ -498,9 +568,15 @@ function setUpReporterEditor() {
   // is the most dependable on phones (switching apps, closing a tab), and "pagehide" covers
   // closing and leaving the page on desktop browsers. If both fire, the second finds nothing
   // left to send (hasUnsavedChanges is false) and does nothing.
+  // When the tab is shown again after the login session ended, the reporter has probably just
+  // logged in again in another tab, so we try ONE save right away instead of waiting for the next
+  // keystroke. It is one attempt per return to the tab (a deliberate action by the reporter), not
+  // a timer, so it can't turn into a retry loop; if it still fails, the notice simply stays.
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'hidden') {
       saveWhenPageCloses();
+    } else if (isSessionExpired && !isSubmitting) {
+      requestSave();
     }
   });
   window.addEventListener('pagehide', saveWhenPageCloses);
