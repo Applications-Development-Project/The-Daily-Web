@@ -78,15 +78,19 @@ async function showFeedPage(request, response, next) {
  */
 async function listFeedArticles(request, response, next) {
     try {
-        const page = parseInt(request.query.page) || 1;
+        let page = 1;
+        
+        // Strict validation: check the raw value first
+        if (request.query.page !== undefined) {
+            page = Number(request.query.page);
+            if (!Number.isInteger(page) || page < 1) {
+                return response.status(400).json({ success: false, error: 'Page must be an integer of 1 or greater.' });
+            }
+        }
+        
         const limit = 20;
         const skip = (page - 1) * limit;
-
-        // 7. Validation: page number
-        if (page < 1) {
-            return response.status(400).json({ success: false, error: 'Page must be 1 or greater.' });
-        }
-
+        
         // 7. Validation: sort parameter
         if (request.query.sort && !VALID_SORTS.includes(request.query.sort)) {
             return response.status(400).json({ success: false, error: 'Unknown sort option.' });

@@ -10,18 +10,41 @@
             const response = await fetch('/api/weather');
             const result = await response.json();
             const contentDiv = document.getElementById('weather-content');
+            contentDiv.textContent = ''; // Clear loading text safely
             
             if (result.success) {
                 const w = result.data;
-                contentDiv.innerHTML = `
-                    <div class="weather-info">
-                        <img src="https://openweathermap.org/img/wn/${w.icon}.png" alt="${w.description}">
-                        <div>
-                            <strong>${w.city}</strong><br>
-                            ${w.temperature}°C, ${w.description}
-                        </div>
-                    </div>
-                `;
+                
+                // Create wrapper
+                const wrapper = document.createElement('div');
+                wrapper.className = 'weather-info';
+                wrapper.style.display = 'flex';
+                wrapper.style.alignItems = 'center';
+                wrapper.style.gap = '10px';
+                
+                // Create image
+                const img = document.createElement('img');
+                img.src = `https://openweathermap.org/img/wn/${w.icon}.png`;
+                img.alt = w.description;
+                
+                // Create text container
+                const textDiv = document.createElement('div');
+                
+                const cityStrong = document.createElement('strong');
+                cityStrong.textContent = w.city;
+                
+                const br = document.createElement('br');
+                const descText = document.createTextNode(`${w.temperature}°C, ${w.description}`);
+                
+                // Append everything safely
+                textDiv.appendChild(cityStrong);
+                textDiv.appendChild(br);
+                textDiv.appendChild(descText);
+                
+                wrapper.appendChild(img);
+                wrapper.appendChild(textDiv);
+                
+                contentDiv.appendChild(wrapper);
             } else {
                 contentDiv.textContent = 'Weather unavailable';
             }
@@ -29,6 +52,9 @@
             document.getElementById('weather-content').textContent = 'Weather unavailable';
         }
     }
+    
+    // Expose globally so feed.js can reuse it
+    window.loadWeather = loadWeather;
     document.addEventListener('DOMContentLoaded', loadWeather);
     </script>
 </aside>
