@@ -4,8 +4,8 @@
   The reporter's article editor: a form with the five fields of an article's draft
   (title, summary, category, image URL, body), filled from the draft stored on the
   server. There is deliberately NO Save button: the requirements say work must be saved
-  continuously, so a later commit adds public/js/reporterEditor.js, which sends the
-  form to the server a moment after the reporter stops typing.
+  continuously, so public/js/reporterEditor.js sends the form to the server a moment
+  after the reporter stops typing, and shows the result in the status line.
 
   Rendered by: controllers/reporterController.js (showArticleEditor), for
   GET /reporter/articles/:id/edit. Only the owner of an editable article ever gets here.
@@ -51,6 +51,12 @@
       <p class="form-error"><strong>Editor's note:</strong> <%= article.editorNote %></p>
     <% } %>
 
+    <%# The autosave script writes "Saving...", "Saved at 14:32" or an error here. role="status"
+        makes screen readers announce each change politely, which matters because there is no
+        Save button to tell a blind reporter that their work was saved. The sentence inside is
+        shown until the first save and is then replaced by the script (with textContent). %>
+    <p id="save-status" role="status">Your work is saved automatically.</p>
+
     <%# No action, method or submit button on purpose: this form is never submitted to the
         server in the normal way, because that would reload the whole page. The autosave
         script reads the fields and sends them with fetch. data-article-id tells that
@@ -94,5 +100,9 @@
   </main>
 
   <%- include('../partials/footer') %>
+
+  <%# Order matters: reporterEditor.js calls apiClient, so apiClient.js must load first. %>
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/reporterEditor.js"></script>
 </body>
 </html>
