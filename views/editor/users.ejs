@@ -68,18 +68,25 @@
 
       <p id="user-list-error" class="form-error" role="alert" hidden></p>
 
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th scope="col">Username</th>
-            <th scope="col">Display name</th>
-            <th scope="col">Role</th>
-            <th scope="col">Created</th>
-            <th scope="col">Actions</th>
-          </tr>
-        </thead>
-        <tbody id="user-table-body"></tbody>
-      </table>
+      <%#
+        On a narrow screen the table scrolls sideways inside this box, not the whole page
+        (requirements: responsive for computer, tablet and phone). table-scroll is the
+        shared class for this in public/css/main.css (SH).
+      %>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Username</th>
+              <th scope="col">Display name</th>
+              <th scope="col">Role</th>
+              <th scope="col">Created</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="user-table-body"></tbody>
+        </table>
+      </div>
       <p id="user-list-status" class="loading">Loading users...</p>
 
       <nav aria-label="User list pages">
