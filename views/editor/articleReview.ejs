@@ -51,6 +51,13 @@
           <%= review.isLive ? 'Live on the site' : 'Not published yet' %> &middot;
           Last change <%= review.updatedAt %>
         </p>
+        <%#
+          Only for an article readers can see: an article that was never published has
+          no views yet. encodeURIComponent keeps the id inside the query value, whatever it holds.
+        %>
+        <% if (review.isLive) { %>
+          <p><a href="/editor/analytics?article=<%= encodeURIComponent(review.id) %>">See its views over time (Impact Analytics)</a></p>
+        <% } %>
       </header>
 
       <%# The note the editor wrote when returning it; the reporter sees the same note on their dashboard. %>
