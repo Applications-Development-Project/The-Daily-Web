@@ -125,7 +125,9 @@
                     <%# Submit only for "In preparation" and "Returned for corrections" (this includes a
                         live article whose new version is in preparation). An article that is plain
                         "Published" has nothing new to submit; the reporter edits it first, which moves
-                        it back to "In preparation". The server checks all of this again.
+                        it back to "In preparation". The server checks all of this again, and also that a
+                        live article really differs from its published version: if not it answers 409
+                        "There are no changes to submit", which the script shows in this row.
                         public/js/reporterDashboard.js handles the click for every such button, using
                         data-article-id, and writes errors into the paragraph with class "submit-error". %>
                     <% if (article.status === STATUS.DRAFT || article.status === STATUS.RETURNED) { %>
