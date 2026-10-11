@@ -10,6 +10,7 @@
 const Article = require('../models/Article');
 const Comment = require('../models/Comment');
 const { recordView } = require('../services/viewTracker'); // Imported SM's service
+const logger = require('../services/logger');
 
 /**
  * GET /articles/:id
@@ -44,7 +45,7 @@ async function showArticlePage(request, response, next) {
         try {
             await recordView(article._id, request.deviceId);
         } catch (err) {
-            console.error('Failed to record article view:', err);
+            logger.error('Failed to record article view: ' + err.message);
         }
 
         response.render('public/article', {
