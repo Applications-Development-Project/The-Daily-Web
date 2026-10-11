@@ -11,7 +11,9 @@
  * Version 2 (OS, phase 2): the full demo data the requirements ask for: one editor,
  * several reporters and 500+ articles in every status and category, so search, the
  * filters and infinite scroll can be shown on a realistic amount of data; live articles
- * updated several times after publishing; guest comments on most live articles.
+ * updated several times after publishing; guest comments on most live articles; and
+ * hourly view statistics for the last 30 days, with a clear jump after every publish,
+ * for the Impact Analytics chart. It takes a few seconds (about 226,000 view counters).
  *
  * No password is written in this file or anywhere in the repo: every demo user
  * gets the password from SEED_DEMO_PASSWORD in your own .env, and the script
@@ -36,6 +38,10 @@ const ArticleViewStats = require('../models/ArticleViewStats');
 const DeviceArticleView = require('../models/DeviceArticleView');
 const Comment = require('../models/Comment');
 const { STATUS } = require('../services/articleWorkflow');
+// getHourStart is the same function recordView uses to round a real view down to its
+// hour (UTC), so seeded counters and counters from real visits use the same hourStart
+// values and add up in the same documents.
+const { getHourStart, DEFAULT_RANGE_DAYS } = require('../services/viewTracker');
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -211,6 +217,34 @@ const XSS_DEMO_COMMENT = {
 const SHARE_OF_ARTICLES_WITH_COMMENTS = 0.7;
 const MAX_COMMENTS_ON_A_NORMAL_ARTICLE = 6;
 const COMMENTS_ON_A_POPULAR_ARTICLE = 25;
+
+// View statistics: hourly counters (models/ArticleViewStats.js) for the analytics
+// chart's default range (DEFAULT_RANGE_DAYS in services/viewTracker.js, 30 days).
+// The counters are counted back from the moment the seed runs, so the chart shows
+// data right up to that moment, which is why the plan says to re-seed shortly before
+// the defense.
+const VIEW_STATS_DAYS = DEFAULT_RANGE_DAYS;
+
+// The shape of one article's views per hour (see expectedViewsInHour):
+// - an everyday level of 1 to 5 views an hour, and every 10th article 5 times that,
+//   so "sort by popularity" has clear winners;
+// - a jump after each publish that fades by half about every 12 hours, so the chart
+//   shows a clear change around every publish marker. An update gets a smaller jump
+//   than the first publish, but still easy to see.
+const MIN_BASE_VIEWS_PER_HOUR = 1;
+const MAX_BASE_VIEWS_PER_HOUR = 5;
+const POPULAR_ARTICLE_FACTOR = 5;
+const FIRST_PUBLISH_JUMP = 40;
+const UPDATE_JUMP = 25;
+const JUMP_HALF_LIFE_HOURS = 12;
+
+// Israel is 2 or 3 hours ahead of UTC; 3 is close enough for a day/night rhythm.
+const LOCAL_TIME_OFFSET_HOURS = 3;
+
+// The counters are saved in batches of this many documents. One insertMany per batch
+// keeps the number of trips to the database small, while no single request to MongoDB
+// gets too big.
+const VIEW_STATS_BATCH_SIZE = 10000;
 
 /**
  * Picks a random moment between two dates.
@@ -538,6 +572,111 @@ async function createComments() {
 }
 
 /**
+ * How many views an article gets on average in one hour.
+ *
+ * @param {Date} hourStart - The hour.
+ * @param {number} baseViews - The article's everyday views per hour.
+ * @param {Date[]} publishDates - When the editor approved it, oldest first.
+ * @returns {number} The expected number of views (not rounded).
+ */
+function expectedViewsInHour(hourStart, baseViews, publishDates) {
+  // Day and night: readers are awake from about 7:00 to 23:00 local time.
+  const localHour = (hourStart.getUTCHours() + LOCAL_TIME_OFFSET_HOURS) % 24;
+  const timeOfDayFactor = localHour >= 7 && localHour < 23 ? 1 : 0.3;
+
+  // Each publish so far adds a jump that halves every JUMP_HALF_LIFE_HOURS hours.
+  let jumpViews = 0;
+  publishDates.forEach((publishedAt, index) => {
+    const hoursSincePublish = (hourStart.getTime() - publishedAt.getTime()) / HOUR_MS;
+    if (hoursSincePublish < 0) {
+      return;
+    }
+    const jumpSize = index === 0 ? FIRST_PUBLISH_JUMP : UPDATE_JUMP;
+    jumpViews += jumpSize * Math.pow(0.5, hoursSincePublish / JUMP_HALF_LIFE_HOURS);
+  });
+
+  return (baseViews + jumpViews) * timeOfDayFactor;
+}
+
+/**
+ * Builds (does not save) the hourly counters of one live article, from the hour it was
+ * first published (or VIEW_STATS_DAYS ago, if that is later) up to the current hour.
+ * Hours with no views get no counter at all, exactly as with real visits: recordView
+ * only creates a counter when a view happens.
+ *
+ * @param {Object} article - A live article (needs _id, firstPublishedAt, publishHistory).
+ * @param {number} articleIndex - Its position in the list, to pick the popular ones.
+ * @returns {{counters: Object[], totalViews: number}} The counters and their sum.
+ */
+function buildViewCounters(article, articleIndex) {
+  const popularityFactor = articleIndex % 10 === 0 ? POPULAR_ARTICLE_FACTOR : 1;
+  const baseViews = popularityFactor *
+    (MIN_BASE_VIEWS_PER_HOUR + Math.random() * (MAX_BASE_VIEWS_PER_HOUR - MIN_BASE_VIEWS_PER_HOUR));
+  const publishDates = article.publishHistory.map((publishEvent) => publishEvent.publishedAt);
+
+  const firstHour = getHourStart(new Date(Math.max(article.firstPublishedAt.getTime(), daysAgo(VIEW_STATS_DAYS).getTime())));
+  const currentHour = getHourStart(new Date());
+
+  const counters = [];
+  let totalViews = 0;
+  for (let time = firstHour.getTime(); time <= currentHour.getTime(); time += HOUR_MS) {
+    const hourStart = new Date(time);
+    // Random noise of +-30%, so the line looks like real traffic, not a formula.
+    const noise = 0.7 + Math.random() * 0.6;
+    const views = Math.round(expectedViewsInHour(hourStart, baseViews, publishDates) * noise);
+    if (views > 0) {
+      counters.push({ article: article._id, hourStart: hourStart, views: views });
+      totalViews += views;
+    }
+  }
+  return { counters, totalViews };
+}
+
+/**
+ * Creates the hourly view counters of every live article for the last VIEW_STATS_DAYS
+ * days, and sets each article's totalViews to the sum of its counters, so "sort by
+ * popularity" in the feed agrees with what the analytics chart shows.
+ *
+ * DeviceArticleView ("which device saw which article") is not seeded: it only means
+ * something for real browsers, whose device ids we can't know in advance.
+ *
+ * @returns {Promise<number>} How many counters were created.
+ */
+async function createViewStats() {
+  const liveArticles = await Article.find({ published: { $ne: null } })
+    .select('_id firstPublishedAt publishHistory')
+    .lean();
+
+  let counters = [];
+  let counterCount = 0;
+  const totalViewsUpdates = [];
+
+  for (const [index, article] of liveArticles.entries()) {
+    const result = buildViewCounters(article, index);
+    counters = counters.concat(result.counters);
+    totalViewsUpdates.push({
+      updateOne: { filter: { _id: article._id }, update: { $set: { totalViews: result.totalViews } } },
+    });
+
+    // Save a full batch as soon as there is one, so the script never holds all
+    // the counters in memory at once.
+    if (counters.length >= VIEW_STATS_BATCH_SIZE) {
+      await ArticleViewStats.insertMany(counters);
+      counterCount += counters.length;
+      counters = [];
+    }
+  }
+  if (counters.length > 0) {
+    await ArticleViewStats.insertMany(counters);
+    counterCount += counters.length;
+  }
+
+  // bulkWrite sends all 440 totalViews updates to MongoDB in one request.
+  await Article.bulkWrite(totalViewsUpdates);
+  return counterCount;
+}
+
+/**
  * Deletes every document in every collection of the connected database.
  *
  * We loop over the collections that actually exist instead of listing our models,
@@ -647,6 +786,9 @@ async function runSeed() {
 
   const commentCount = await createComments();
   logger.info(`Created ${commentCount} comments on live articles`);
+
+  const viewCounterCount = await createViewStats();
+  logger.info(`Created ${viewCounterCount} hourly view counters for the last ${VIEW_STATS_DAYS} days`);
 
   logger.info(`Seed finished: ${unpublishedCount + liveCount} articles in total`);
   printDemoLogins();
