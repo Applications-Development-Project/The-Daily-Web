@@ -6,7 +6,8 @@
   server. There is deliberately NO Save button: the requirements say work must be saved
   continuously, so public/js/reporterEditor.js sends the form to the server a moment
   after the reporter stops typing, and shows the result in the status line. The page has
-  one button, "Submit for approval", which sends the finished article to the editor.
+  one button, "Submit for approval", which sends the finished article to the editor. A hidden
+  notice (session-expired-notice) tells the reporter if the login session ends while editing.
 
   Rendered by: controllers/reporterController.js (showArticleEditor), for
   GET /reporter/articles/:id/edit. Only the owner of an editable article ever gets here.
@@ -57,6 +58,19 @@
         Save button to tell a blind reporter that their work was saved. The sentence inside is
         shown until the first save and is then replaced by the script (with textContent). %>
     <p id="save-status" role="status">Your work is saved automatically.</p>
+
+    <%# Shown by reporterEditor.js only when the server answers 401, which means the login session
+        has ended (it expired, or the reporter logged out in another tab). It is written here as
+        normal HTML (hidden until needed) and not built in the script, so no text is ever turned
+        into HTML. The link opens the login page in a NEW tab (target="_blank"): going to the
+        login page in THIS tab would throw away the text that is not saved yet. rel="noopener" is
+        the standard safety setting for links that open a new tab. After logging in there, the
+        session cookie is shared by all tabs, so the next save from this page works. %>
+    <p id="session-expired-notice" class="form-error" role="alert" hidden>
+      <strong>Your login session has ended.</strong> Your text is still on this page, but it is
+      not saved. <a href="/login" target="_blank" rel="noopener">Log in again in a new tab</a>,
+      then come back here: your work is saved automatically, or click "Submit for approval".
+    </p>
 
     <%# No action, method or submit button on purpose: this form is never submitted to the
         server in the normal way, because that would reload the whole page. The autosave

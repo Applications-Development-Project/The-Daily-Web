@@ -107,7 +107,9 @@ function setUpSubmitButtons() {
  * Sends one article to the editor and reloads the page, or shows why it could not be sent.
  *
  * The server does all the checking (the article is yours, the required fields are filled
- * in, its status allows it). The page only shows the server's answer. Nothing needs to be
+ * in, its status allows it, and a live article really has changes). The page only shows the
+ * server's answer, for example "There are no changes to submit: the text is the same as the
+ * published version." in the row of that article. Nothing needs to be
  * saved first: the editor page saves continuously, so the draft in the database is already
  * the latest one, and the server checks that saved draft.
  *
