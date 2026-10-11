@@ -2,7 +2,7 @@
  * public/js/feed.js
  * 
  * Client-side logic for the news feed.
- * Handles infinite scrolling, search, filtering, and rendering articles.
+ * Handles infinite scrolling, search, filtering, and rendering articles safely.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,8 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const categoryFilter = document.getElementById('category-filter');
     const viewedFilter = document.getElementById('viewed-filter');
     const sortSelect = document.getElementById('sort-select');
+    const resetViewsBtn = document.getElementById('reset-views-btn'); // Item 8
 
-    let currentPage = 1;
+    // Item 9: Check if the server already rendered initial articles
+    const initialArticlesCount = feedList.querySelectorAll('article').length;
+    let currentPage = initialArticlesCount > 0 ? 2 : 1;
     let isLoading = false;
     let hasMore = true;
 
@@ -22,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     sentinel.style.textAlign = 'center';
     sentinel.style.padding = '1rem';
     sentinel.style.color = '#666';
-    sentinel.textContent = 'Loading more articles...';
+    sentinel.textContent = initialArticlesCount > 0 ? 'Loading more articles...' : '';
+    feedList.appendChild(sentinel);
 
     // Load articles from our API
     async function loadArticles(reset = false) {
@@ -32,7 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (reset) {
             currentPage = 1;
             hasMore = true;
-            feedList.innerHTML = ''; // Clear current feed
+            feedList.innerHTML = ''; // Clear current feed for new filters
+            feedList.appendChild(sentinel);
         }
 
         try {
@@ -49,16 +54,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (result.success) {
-                const articles = result.data;
+                const articles = result.data.articles;
+                hasMore = result.data.hasMore;
                 
-                if (articles.length === 0) {
-                    hasMore = false;
-                    if (reset) {
-                        feedList.innerHTML = '<p class="empty-state">No articles found matching your criteria.</p>';
-                    } else {
-                        sentinel.textContent = 'No more articles to show.';
-                        if (!feedList.contains(sentinel)) feedList.appendChild(sentinel);
-                    }
+                if (articles.length === 0 && reset) {
+                    sentinel.textContent = 'No articles found matching your criteria.';
                 } else {
                     // Render the fetched articles
                     articles.forEach(article => {
@@ -66,34 +66,64 @@ document.addEventListener('DOMContentLoaded', () => {
                         articleEl.className = 'card';
                         articleEl.style.marginBottom = 'var(--spacing-md)';
                         
-                        // Format the date
+                        // Category Badge
+                        const badge = document.createElement('span');
+                        badge.className = 'status-badge status-published';
+                        badge.textContent = article.category || 'News';
+                        articleEl.appendChild(badge);
+                        
+                        // Title and Link
+                        const titleH3 = document.createElement('h3');
+                        titleH3.style.margin = 'var(--spacing-sm) 0';
+                        const linkEl = document.createElement('a');
+                        linkEl.href = `/articles/${article.id}`;
+                        linkEl.style.textDecoration = 'none';
+                        linkEl.style.color = 'inherit';
+                        linkEl.textContent = article.title; 
+                        titleH3.appendChild(linkEl);
+                        articleEl.appendChild(titleH3);
+                        
+                        // Meta info
                         const dateStr = new Date(article.publishedAt).toLocaleString('en-GB', {
                             day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
                         });
+                        const metaP = document.createElement('p');
+                        metaP.style.fontSize = '0.9rem';
+                        metaP.style.color = '#666';
+                        metaP.style.marginBottom = 'var(--spacing-sm)';
+                        metaP.textContent = `By ${article.reporterName} | ${dateStr} | ${article.totalViews || 0} views`;
+                        articleEl.appendChild(metaP);
                         
-                        articleEl.innerHTML = `
-                            <span class="status-badge status-published">${article.category || 'News'}</span>
-                            <h3 style="margin: var(--spacing-sm) 0;">
-                                <a href="/article/${article._id}" style="text-decoration: none; color: inherit;">${article.title}</a>
-                            </h3>
-                            <p style="font-size: 0.9rem; color: #666; margin-bottom: var(--spacing-sm);">
-                                By ${article.authorName} | ${dateStr} | ${article.views || 0} views
-                            </p>
-                            <p>${article.summary}</p>
-                        `;
-                        feedList.appendChild(articleEl);
+                        // Image (if available)
+                        if (article.imageUrl) {
+                            const img = document.createElement('img');
+                            img.src = article.imageUrl;
+                            img.alt = article.title;
+                            img.style.width = '100%';
+                            img.style.borderRadius = '8px';
+                            img.style.marginBottom = 'var(--spacing-sm)';
+                            articleEl.appendChild(img);
+                        }
+
+                        // Summary
+                        const summaryP = document.createElement('p');
+                        summaryP.textContent = article.summary; 
+                        articleEl.appendChild(summaryP);
+                        
+                        // Insert before the sentinel
+                        feedList.insertBefore(articleEl, sentinel);
                     });
                     
                     currentPage++;
-                    sentinel.textContent = 'Loading more articles...';
-                    feedList.appendChild(sentinel); // Move sentinel to the new bottom
+                    sentinel.textContent = hasMore ? 'Loading more articles...' : 'No more articles to show.';
                 }
             } else {
                 console.error('Failed to load articles:', result.error);
-                if (reset) feedList.innerHTML = '<p class="empty-state form-error">Error loading articles.</p>';
+                sentinel.textContent = 'Error loading articles.';
             }
         } catch (error) {
             console.error('Error fetching articles:', error);
+            sentinel.textContent = 'Network error occurred.';
         } finally {
             isLoading = false;
         }
@@ -104,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (entries[0].isIntersecting) {
             loadArticles();
         }
-    }, { rootMargin: '100px' }); // Trigger slightly before it enters the viewport
+    }, { rootMargin: '100px' }); 
 
     // Add event listeners for filters (with debounce for the text search)
     let searchTimeout;
@@ -117,11 +147,46 @@ document.addEventListener('DOMContentLoaded', () => {
     viewedFilter.addEventListener('change', () => loadArticles(true));
     sortSelect.addEventListener('change', () => loadArticles(true));
 
-    // Initial setup
-    feedList.innerHTML = '';
-    feedList.appendChild(sentinel);
+    // Item 8: Reset Viewed Marks
+    if (resetViewsBtn) {
+        resetViewsBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/articles/viewed', { method: 'DELETE' });
+                if (response.ok) {
+                    loadArticles(true); // Reload the list without reloading the page
+                } else {
+                    console.error('Failed to reset views');
+                }
+            } catch (err) {
+                console.error('Network error resetting views:', err);
+            }
+        });
+    }
+
+    // Initialize Intersection Observer
     observer.observe(sentinel);
     
-    // Trigger the first load
-    loadArticles(true);
+    // Trigger the first load ONLY if there are no server-rendered articles
+    if (initialArticlesCount === 0) {
+        loadArticles(true);
+    }
+
+    // Item 10: Weather Widget Logic
+    const weatherContainer = document.getElementById('weather-widget-content');
+    if (weatherContainer) {
+        // Refresh every 15 minutes (900,000 milliseconds)
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/weather'); // Assumes this endpoint serves the weather HTML
+                if (res.ok) {
+                    const html = await res.text();
+                    weatherContainer.innerHTML = html;
+                } else {
+                    weatherContainer.textContent = 'Weather unavailable';
+                }
+            } catch (e) {
+                weatherContainer.textContent = 'Weather unavailable';
+            }
+        }, 15 * 60 * 1000);
+    }
 });

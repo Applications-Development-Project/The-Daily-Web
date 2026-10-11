@@ -9,23 +9,15 @@
 
 const Article = require('../models/Article');
 const Comment = require('../models/Comment');
-
-// TODO: Import SM's recordView function once his view service is merged.
-// const { recordView } = require('../services/viewService'); 
+const { recordView } = require('../services/viewTracker'); // Imported SM's service
 
 /**
- * GET /articles/:id - the full article page.
- *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @param {import('express').NextFunction} next
- * @returns {Promise<void>}
+ * GET /articles/:id
  */
 async function showArticlePage(request, response, next) {
     try {
         const articleId = request.params.id;
 
-        // 1. Validate the ID format to prevent database casting errors
         if (!articleId.match(/^[0-9a-fA-F]{24}$/)) {
             return response.status(404).render('public/error', { 
                 statusCode: 404, 
@@ -33,8 +25,8 @@ async function showArticlePage(request, response, next) {
             });
         }
 
-        // 2. Fetch the article (must be live/published)
-        const article = await Article.findOne({ _id: articleId, status: 'published' });
+        const article = await Article.findOne({ _id: articleId, published: { $ne: null } })
+            .populate('reporter', 'displayName');
 
         if (!article) {
             return response.status(404).render('public/error', { 
@@ -43,23 +35,22 @@ async function showArticlePage(request, response, next) {
             });
         }
 
-        // 3. Fetch the first comments (e.g., earliest 10 comments)
-        const comments = await Comment.find({ articleId: article._id })
-            .sort({ createdAt: 1 })
+        // Fixed: Sorting by newest first (-1)
+        const comments = await Comment.find({ article: article._id })
+            .sort({ createdAt: -1 })
             .limit(10);
 
-        // 4. Record the view using SM's logic (commented out until his module is ready)
+        // Fixed: Calling the actual view tracker
         try {
-            // await recordView(article._id, request.deviceId);
+            await recordView(article._id, request.deviceId);
         } catch (err) {
             console.error('Failed to record article view:', err);
         }
 
-        // 5. Render the page with the dynamic data
         response.render('public/article', {
-            title: `${article.title} - The Web Daily`,
+            title: `${article.published.title} - The Web Daily`,
             article: article,
-            comments: comments // Passing comments to the view
+            comments: comments
         });
 
     } catch (error) {

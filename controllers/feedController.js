@@ -7,20 +7,61 @@
  */
 
 const Article = require('../models/Article');
+const DeviceArticleView = require('../models/DeviceArticleView'); // Imported SM's model
+
+// Define valid categories for API validation
+const VALID_CATEGORIES = ['News', 'Economy', 'Technology', 'Sports', 'Entertainment', 'Health', 'Politics', 'Culture'];
+const VALID_SORTS = ['newest', 'popular'];
+
+/**
+ * Escapes special characters in a string for use in a RegExp.
+ * Prevents regex injection attacks.
+ * 
+ * @param {string} text 
+ * @returns {string}
+ */
+function escapeRegExp(text) {
+    return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+}
 
 /**
  * GET / - the feed page.
- * Renders the main feed view. Initial data will be loaded via client-side fetch.
+ * Renders the main feed view with the first 20 articles pre-loaded on the server.
  *
  * @param {import('express').Request} request
  * @param {import('express').Response} response
  * @param {import('express').NextFunction} next
- * @returns {void}
+ * @returns {Promise<void>}
  */
-function showFeedPage(request, response, next) {
+async function showFeedPage(request, response, next) {
     try {
-        // Renders the views/public/feed.ejs file we created earlier
-        response.render('public/feed');
+        const limit = 20;
+        
+        // Base query: Only show live articles
+        const query = { published: { $ne: null } };
+        const sortOption = { lastPublishedAt: -1, _id: -1 }; 
+
+        const fetchedArticles = await Article.find(query)
+            .sort(sortOption)
+            .limit(limit)
+            .populate('reporter', 'displayName')
+            .select('published lastPublishedAt totalViews reporter')
+            .lean(); 
+
+        const shapedArticles = fetchedArticles.map(article => ({
+            id: article._id,
+            title: article.published.title,
+            summary: article.published.summary,
+            imageUrl: article.published.imageUrl,
+            category: article.published.category,
+            reporterName: article.reporter?.displayName || 'Unknown',
+            publishedAt: article.lastPublishedAt,
+            totalViews: article.totalViews || 0
+        }));
+
+        response.render('public/feed', { 
+            articles: shapedArticles // Passing initial articles to the EJS template
+        });
     } catch (error) {
         next(error);
     }
@@ -28,7 +69,7 @@ function showFeedPage(request, response, next) {
 
 /**
  * GET /api/articles?search=&category=&viewed=&sort=&page= - 20 live articles.
- * Fetches published articles with pagination, filtering, search, and sorting.
+ * Fetches live articles with pagination, filtering, search, and sorting.
  *
  * @param {import('express').Request} request
  * @param {import('express').Response} response
@@ -38,58 +79,78 @@ function showFeedPage(request, response, next) {
 async function listFeedArticles(request, response, next) {
     try {
         const page = parseInt(request.query.page) || 1;
-        const limit = 20; // Load 20 articles per request for infinite scroll
+        const limit = 20;
         const skip = (page - 1) * limit;
 
-        // 1. Base query: Only show published articles
-        const query = { status: 'published' };
-
-        // 2. Category filter
-        if (request.query.category) {
-            query.category = request.query.category;
+        // 7. Validation: page number
+        if (page < 1) {
+            return response.status(400).json({ success: false, error: 'Page must be 1 or greater.' });
         }
 
-        // 3. Search filter (case-insensitive text search in title or summary)
+        // 7. Validation: sort parameter
+        if (request.query.sort && !VALID_SORTS.includes(request.query.sort)) {
+            return response.status(400).json({ success: false, error: 'Unknown sort option.' });
+        }
+
+        // 7. Validation: category parameter
+        if (request.query.category && !VALID_CATEGORIES.includes(request.query.category)) {
+            return response.status(400).json({ success: false, error: 'Unknown category.' });
+        }
+
+        const query = { published: { $ne: null } };
+
+        if (request.query.category) {
+            query['published.category'] = request.query.category;
+        }
+
         if (request.query.search) {
+            const safeSearch = escapeRegExp(request.query.search);
             query.$or = [
-                { title: { $regex: request.query.search, $options: 'i' } },
-                { summary: { $regex: request.query.search, $options: 'i' } }
+                { 'published.title': { $regex: safeSearch,$options: 'i' } },
+                { 'published.summary': { $regex: safeSearch,$options: 'i' } }
             ];
         }
 
-        // 4. Sorting logic
-        let sortOption = { publishedAt: -1 }; // Default: Newest first
-        if (request.query.sort === 'popular') {
-            // Sort by views descending, then newest as fallback
-            sortOption = { views: -1, publishedAt: -1 };
+        // 7. Viewed Filter (using SM's DeviceArticleView model)
+        if (request.query.viewed && request.deviceId) {
+            const viewedRecords = await DeviceArticleView.find({ deviceId: request.deviceId }).select('article').lean();
+            const viewedIds = viewedRecords.map(record => record.article);
+
+            if (request.query.viewed === 'viewed') {
+                query._id = { $in: viewedIds };
+            } else if (request.query.viewed === 'unviewed') {
+                query._id = { $nin: viewedIds };
+            }
         }
 
-        // Note: The "viewed" filter will be added later 
-        // as it requires joining with the DeviceArticleView stats.
+        let sortOption = { lastPublishedAt: -1, _id: -1 }; 
+        if (request.query.sort === 'popular') {
+            sortOption = { totalViews: -1, lastPublishedAt: -1, _id: -1 };
+        }
 
-        // 5. Execute DB query
-        const articles = await Article.find(query)
+        const fetchedArticles = await Article.find(query)
             .sort(sortOption)
             .skip(skip)
-            .limit(limit)
-            .select('title summary category publishedAt authorName views'); 
+            .limit(limit + 1)
+            .populate('reporter', 'displayName')
+            .select('published lastPublishedAt totalViews reporter')
+            .lean(); 
 
-        response.json({ success: true, data: articles });
-    } catch (error) {
-        // Pass to the global error handler
-        next(error);
-    }
-}
+        const hasMore = fetchedArticles.length > limit;
+        const itemsToReturn = fetchedArticles.slice(0, limit);
 
-/**
- * DELETE /api/articles/viewed - forget which articles this device has seen. PLACEHOLDER.
- *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
- */
-function resetViewedMarks(request, response) {
-    response.status(501).json({ success: false, error: 'Not implemented yet' });
-}
+        const shapedArticles = itemsToReturn.map(article => ({
+            id: article._id,
+            title: article.published.title,
+            summary: article.published.summary,
+            imageUrl: article.published.imageUrl,
+            category: article.published.category,
+            reporterName: article.reporter?.displayName || 'Unknown',
+            publishedAt: article.lastPublishedAt,
+            totalViews: article.totalViews || 0
+        }));
 
-module.exports = { showFeedPage, listFeedArticles, resetViewedMarks };
+        response.json({ 
+            success: true, 
+            data: {
+                articles: shapedArticles
