@@ -2,7 +2,11 @@
  * services/viewTracker.js
  *
  * Records that an article was viewed, for the Impact Analytics chart and the feed's
- * "viewed / not viewed" filter. The article page calls recordView() on every visit.
+ * "viewed / not viewed" filter. The article page is meant to call recordView() on
+ * every visit (requirements: every visit to an article counts toward the statistics).
+ * Its name, parameters and "Promise that never throws" are a shared contract
+ * ("Functions that cross between students" in the work plan), so SH's article page
+ * can call it without knowing how views are stored.
  *
  * How views are stored (requirements: thousands of readers at the same time):
  * - ArticleViewStats: one counter per article per hour. Every view in the same
@@ -17,8 +21,15 @@
  *
  * It also reads the statistics back for the chart: getViewsOverTime().
  *
+ * Cost per view at scale: three small writes, each found through an index (the
+ * article by _id, the counter by the unique { article, hourStart } index, the
+ * device pair by the unique { deviceId, article } index), so a view costs the same
+ * whether the site has 50 articles or thousands.
+ *
  * Used by: controllers/articlePageController.js (SH, recordView),
- * controllers/analyticsController.js (SM, getViewsOverTime).
+ * controllers/analyticsController.js (SM, getViewsOverTime, DEFAULT_RANGE_DAYS,
+ * MAX_RANGE_DAYS), and scripts/seed.js later (OS's full seed should build its
+ * hourly statistics with getHourStart, so seeded and real views share the same hours).
  * Related: models/ArticleViewStats.js, models/DeviceArticleView.js, models/Article.js.
  * Owner: SM.
  */
@@ -52,6 +63,15 @@ function getHourStart(date) {
  * the article, so any failure (database down, invalid id) is logged here instead of
  * breaking the reader's page.
  *
+ * Every call counts, including a refresh or a visit by a reporter or the editor:
+ * the requirements say every visit counts, and the chart shows reading activity,
+ * not unique readers.
+ *
+ * Known limit: the three writes below are separate, not one transaction (our single
+ * MongoDB server has no transactions; they need a replica set). If the database
+ * failed between them, totalViews could be one higher than the hourly counters. For
+ * a view counter that is acceptable; the next views carry on normally.
+ *
  * @param {string|import('mongoose').Types.ObjectId} articleId - The article that was opened.
  * @param {string} deviceId - The visitor's device id (req.deviceId).
  * @returns {Promise<void>} Resolves when the view has been handled.
@@ -61,6 +81,9 @@ async function recordView(articleId, deviceId) {
     // Increase the total first, and only on a live article (published not null).
     // If nothing matched, the article doesn't exist or isn't public, and we stop
     // here, so no hourly counter is ever created for an article readers can't see.
+    // This one update is both the existence check and the count, so a view needs no
+    // extra "does it exist?" query. "Live" is published not null, not status:
+    // status only describes the working copy (see models/Article.js).
     const articleUpdate = await Article.updateOne(
       { _id: articleId, published: { $ne: null } },
       { $inc: { totalViews: 1 } }
@@ -73,6 +96,9 @@ async function recordView(articleId, deviceId) {
     // upsert: true means "update the counter for this hour, or create it with
     // views: 1 if this is the hour's first view". The unique index on
     // { article, hourStart } guarantees there is only ever one counter per hour.
+    // $inc is applied by MongoDB itself: we never read the number, add 1 and write
+    // it back, so two readers at the same millisecond both count (with read-then-
+    // write, both would read 5 and both would write 6, losing one view).
     await ArticleViewStats.updateOne(
       { article: articleId, hourStart: getHourStart(new Date()) },
       { $inc: { views: 1 } },
@@ -82,6 +108,8 @@ async function recordView(articleId, deviceId) {
     // Remember that this device has opened the article, for the feed's "viewed"
     // filter. We check the id ourselves because updates don't run the schema's
     // "required" rule: without this check an empty id could be stored.
+    // A missing device id doesn't stop the view from counting above: the chart
+    // counts the view, and only the "viewed" mark needs a device.
     if (typeof deviceId === 'string' && deviceId !== '') {
       // $setOnInsert only writes these fields when the pair is new. On a repeat
       // visit nothing changes except updatedAt, which Mongoose sets automatically
@@ -164,7 +192,9 @@ function fillMissingHours(storedBuckets, from, to) {
  * @throws {Error} If the database query fails.
  */
 async function getViewsOverTime(articleId, from = new Date(Date.now() - DEFAULT_RANGE_DAYS * DAY_MS), to = new Date()) {
-  // We only need the publish history from the article, so we load only that field.
+  // We only need the publish history from the article, so we load only that field
+  // (not its body of up to 50,000 characters). lean() returns plain objects, which
+  // are faster than full Mongoose documents when we only read.
   const article = await Article.findById(articleId).select('publishHistory').lean();
   if (!article) {
     return null;
