@@ -1,0 +1,136 @@
+<%#
+  views/reporter/articleEditor.ejs
+
+  The reporter's article editor: a form with the five fields of an article's draft
+  (title, summary, category, image URL, body), filled from the draft stored on the
+  server. There is deliberately NO Save button: the requirements say work must be saved
+  continuously, so public/js/reporterEditor.js sends the form to the server a moment
+  after the reporter stops typing, and shows the result in the status line. The page has
+  one button, "Submit for approval", which sends the finished article to the editor. A hidden
+  notice (session-expired-notice) tells the reporter if the login session ends while editing.
+
+  Rendered by: controllers/reporterController.js (showArticleEditor), for
+  GET /reporter/articles/:id/edit. Only the owner of an editable article ever gets here.
+  Locals: title (the page title),
+  article ({ id, statusLabel, isLive, editorNote, draft: { title, summary, category,
+  imageUrl, body } }),
+  categories (the fixed category list, from Article.CATEGORIES in models/Article.js).
+  Includes: the shared head, header and footer (views/partials).
+
+  Every piece of text a user wrote (the draft fields and the editor's note) is printed
+  with the escaping tag (equals sign), never the raw one: if a title contained
+  "<script>", the browser would show it as plain text instead of running it (XSS).
+
+  The field names (title, summary, category, imageUrl, body) are fixed in "Shared
+  contracts", because SM's editor edit page uses the same names.
+  Owner: EZ.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+
+  <main class="main-content">
+    <h2>Edit article</h2>
+
+    <p><a href="/reporter">&larr; Back to my articles</a></p>
+
+    <p>Status: <span class="status-badge status-<%= article.isLive ? 'published' : 'draft' %>"><%= article.statusLabel %></span></p>
+
+    <%# The requirements: readers keep seeing the last approved version while the reporter
+        works on a new one. Telling the reporter avoids the worry "did I just change the live page?" %>
+    <% if (article.isLive) { %>
+      <p class="empty-state">
+        This article is live. Readers keep seeing the published version until an editor
+        approves your changes.
+      </p>
+    <% } %>
+
+    <%# Shown only for a returned article (the controller leaves the note empty otherwise). %>
+    <% if (article.editorNote) { %>
+      <p class="form-error"><strong>Editor's note:</strong> <%= article.editorNote %></p>
+    <% } %>
+
+    <%# The autosave script writes "Saving...", "Saved at 14:32" or an error here. role="status"
+        makes screen readers announce each change politely, which matters because there is no
+        Save button to tell a blind reporter that their work was saved. The sentence inside is
+        shown until the first save and is then replaced by the script (with textContent). %>
+    <p id="save-status" role="status">Your work is saved automatically.</p>
+
+    <%# Shown by reporterEditor.js only when the server answers 401, which means the login session
+        has ended (it expired, or the reporter logged out in another tab). It is written here as
+        normal HTML (hidden until needed) and not built in the script, so no text is ever turned
+        into HTML. The link opens the login page in a NEW tab (target="_blank"): going to the
+        login page in THIS tab would throw away the text that is not saved yet. rel="noopener" is
+        the standard safety setting for links that open a new tab. After logging in there, the
+        session cookie is shared by all tabs, so the next save from this page works. %>
+    <p id="session-expired-notice" class="form-error" role="alert" hidden>
+      <strong>Your login session has ended.</strong> Your text is still on this page, but it is
+      not saved. <a href="/login" target="_blank" rel="noopener">Log in again in a new tab</a>,
+      then come back here: your work is saved automatically, or click "Submit for approval".
+    </p>
+
+    <%# No action, method or submit button on purpose: this form is never submitted to the
+        server in the normal way, because that would reload the whole page. The autosave
+        script reads the fields and sends them with fetch. data-article-id tells that
+        script which article to save to, without it having to read the URL. %>
+    <form id="article-form" data-article-id="<%= article.id %>">
+      <%# Each field has a label whose "for" matches the field's id. This is what lets a
+          screen reader announce the field name, and lets a click on the label focus the field. %>
+      <div class="form-field">
+        <label for="article-title">Title</label>
+        <input type="text" id="article-title" name="title" maxlength="200" value="<%= article.draft.title %>">
+      </div>
+
+      <div class="form-field">
+        <label for="article-summary">Summary</label>
+        <textarea id="article-summary" name="summary" rows="3" maxlength="500"><%= article.draft.summary %></textarea>
+      </div>
+
+      <div class="form-field">
+        <label for="article-category">Category</label>
+        <select id="article-category" name="category">
+          <%# The empty choice is the starting point of a new article. It is valid while
+              writing; the server requires a real category only when the article is submitted. %>
+          <option value="">Choose a category</option>
+          <% categories.forEach(function (category) { %>
+            <option value="<%= category %>"<%= article.draft.category === category ? ' selected' : '' %>><%= category %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label for="article-image-url">Image URL</label>
+        <input type="url" id="article-image-url" name="imageUrl" maxlength="2000" value="<%= article.draft.imageUrl %>">
+      </div>
+
+      <%# The body goes between the textarea tags (a textarea has no value attribute). %>
+      <div class="form-field">
+        <label for="article-body">Article text</label>
+        <textarea id="article-body" name="body" rows="15" maxlength="50000"><%= article.draft.body %></textarea>
+      </div>
+    </form>
+
+    <%# The only button of the page. It sits OUTSIDE the form and has type="button", so it never
+        submits the form in the browser's normal way (that would reload the page). Autosave keeps
+        the text safe while writing; this button is the reporter's decision "I am finished, send
+        it to the editor". public/js/reporterEditor.js first saves the latest text, and only then
+        asks the server to submit. The server checks everything again (required fields, status).
+        The paragraph below the button receives the server's message when something is wrong
+        (role="alert" makes screen readers announce it). %>
+    <p>After you submit, the editor reviews the article and you can't change it until they decide.</p>
+    <p>
+      <button type="button" id="submit-article-button" class="btn btn-primary">Submit for approval</button>
+    </p>
+    <p id="submit-error" class="form-error" role="alert"></p>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <%# Order matters: reporterEditor.js calls apiClient, so apiClient.js must load first. %>
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/reporterEditor.js"></script>
+</body>
+</html>
