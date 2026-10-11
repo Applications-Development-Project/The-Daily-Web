@@ -3,9 +3,9 @@
  *
  * Page route for Impact Analytics. Mounted at "/" in app.js.
  * Created by OS in phase 0 with the path and access from the routes table in
- * "Shared contracts". The page itself (showAnalyticsPage) is still a placeholder
- * answering 501 until SM builds the chart; its data API already works
- * (analyticsApiRoutes.js).
+ * "Shared contracts". The page (showAnalyticsPage) is the frame; its script
+ * public/js/analyticsChart.js loads the chart data from analyticsApiRoutes.js.
+ * ?article=<id> is optional and opens that article's chart at once.
  *
  * requireRole('editor') runs on the server before the controller, so only an editor
  * can open the page, whatever the browser sends (requirements: server-side permissions).
