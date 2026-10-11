@@ -49,8 +49,13 @@
     <%# Errors from the server, for example an edit with empty text. role="alert" is announced at once. %>
     <p id="comment-list-error" class="form-error" role="alert" hidden></p>
 
-    <%# On a narrow screen the table scrolls sideways inside this box, not the whole page. %>
-    <div style="overflow-x: auto;">
+    <%#
+      On a narrow screen the table scrolls sideways inside this box, not the whole page
+      (requirements: responsive for computer, tablet and phone). table-scroll is the
+      shared class for this in public/css/main.css (SH), so every table on the site
+      behaves the same way.
+    %>
+    <div class="table-scroll">
       <table class="data-table">
         <thead>
           <tr>
