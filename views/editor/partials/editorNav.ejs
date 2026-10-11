@@ -15,9 +15,13 @@
   This is only navigation. The links don't protect anything: every /editor route
   checks requireRole('editor') on the server. Logging out is in the site header.
 
-  Included by: views/editor/dashboard.ejs, articleReview.ejs, analytics.ejs (SM),
-  views/editor/users.ejs and comments.ejs (OS).
-  Styled by: the .editor-nav rules in public/css/main.css.
+  Included by: views/editor/dashboard.ejs and articleReview.ejs (SM; the review page
+  passes 'dashboard', because reviewing an article is part of the Articles area),
+  views/editor/users.ejs (OS), and later analytics.ejs (SM) and comments.ejs (OS).
+  Styling: the classes editor-nav, editor-nav-list and editor-nav-link, and the
+  current link's aria-current="page", are for the shared stylesheet
+  public/css/main.css (SH). Until SH styles them, the nav shows as a plain list,
+  which still works.
   Owner: SM.
 
   This block is an EJS comment (it opens with a # sign), so it is never sent to the browser.
