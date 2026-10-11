@@ -153,4 +153,32 @@ async function listFeedArticles(request, response, next) {
         response.json({ 
             success: true, 
             data: {
-                articles: shapedArticles
+                articles: shapedArticles,
+                hasMore: hasMore
+            }
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+/**
+ * DELETE /api/articles/viewed - forget which articles this device has seen.
+ *
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
+ * @param {import('express').NextFunction} next
+ * @returns {Promise<void>}
+ */
+async function resetViewedMarks(request, response, next) {
+    try {
+        if (request.deviceId) {
+            await DeviceArticleView.deleteMany({ deviceId: request.deviceId });
+        }
+        response.json({ success: true });
+    } catch (error) {
+        next(error);
+    }
+}
+
+module.exports = { showFeedPage, listFeedArticles, resetViewedMarks };
