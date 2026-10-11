@@ -70,17 +70,15 @@
       <% } else { %>
         <p class="card"><strong>Changed in this update:</strong> <%= review.changedFieldLabels.join(', ') %></p>
         <%#
-          TEMP until SH adds a class for this to main.css: two columns side by side.
-          flex-wrap plus a minimum width of 18rem per column means that on a narrow
-          screen the columns stack instead of squeezing (requirements: responsive).
+          Two columns side by side: the live version on the left, the submitted one on
+          the right, so the editor reads them line by line. two-column is the shared class
+          in public/css/main.css (SH): a two-column grid that becomes one column on a
+          phone, where the columns would be too narrow to read (requirements: responsive).
+          Each included partial is one section element, so it is one grid column by itself.
         %>
-        <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
-          <div style="flex: 1 1 18rem; min-width: 0;">
-            <%- include('partials/articleContent', { heading: 'Currently live', content: review.published, changedFields: review.changedFields }) %>
-          </div>
-          <div style="flex: 1 1 18rem; min-width: 0;">
-            <%- include('partials/articleContent', { heading: 'Submitted changes', content: review.draft, changedFields: review.changedFields }) %>
-          </div>
+        <div class="two-column">
+          <%- include('partials/articleContent', { heading: 'Currently live', content: review.published, changedFields: review.changedFields }) %>
+          <%- include('partials/articleContent', { heading: 'Submitted changes', content: review.draft, changedFields: review.changedFields }) %>
         </div>
       <% } %>
 
