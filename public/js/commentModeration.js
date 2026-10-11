@@ -5,9 +5,11 @@
  * happens with Ajax through apiClient, so the page never reloads:
  * - the table shows 20 comments at a time from GET /api/comments, newest first, each
  *   with a link to the article it was posted on, and Previous/Next buttons,
- * - typing in the search box filters the table (300 ms after the last key).
- * The server checks everything again (editor only, search and page rules); this
- * script only shows its answers.
+ * - typing in the search box filters the table (300 ms after the last key),
+ * - Edit turns a row's text into a text box that sends PATCH /api/comments/:id,
+ * - Delete asks for confirmation, then sends DELETE /api/comments/:id.
+ * The server checks everything again (editor only, search and page rules, the text
+ * rules); this script only shows its answers.
  *
  * Every value from the server is put on the page with textContent, never innerHTML.
  * That matters most on this page: it shows comments typed by any guest on the site,
@@ -20,6 +22,10 @@
 // How long to wait after the last key in the search box before searching, so typing
 // "noa" sends one request instead of three.
 const SEARCH_DELAY_MS = 300;
+
+// The same limit the server checks (controllers/commentController.js). Checking here
+// too gives an instant message; the server still checks, because a browser can be bypassed.
+const MAX_COMMENT_TEXT_LENGTH = 1000;
 
 /**
  * Creates an element with optional text, as plain text.
@@ -37,6 +43,36 @@ function createElementWithText(tagName, text) {
 }
 
 /**
+ * Creates a button. type="button" so it never submits a form by accident.
+ *
+ * @param {string} label - The button text.
+ * @param {string} className - CSS classes, for example 'btn btn-danger'.
+ * @returns {HTMLButtonElement}
+ */
+function createButton(label, className) {
+  const button = createElementWithText('button', label);
+  button.type = 'button';
+  button.className = className;
+  return button;
+}
+
+/**
+ * Checks edited text before sending, with the same rules and messages as the server.
+ *
+ * @param {string} text - The new text, already trimmed.
+ * @returns {string|null} A message to show, or null if the text is fine.
+ */
+function findCommentTextError(text) {
+  if (text === '') {
+    return 'Please write a comment.';
+  }
+  if (text.length > MAX_COMMENT_TEXT_LENGTH) {
+    return 'A comment can be at most 1,000 characters.';
+  }
+  return null;
+}
+
+/**
  * Formats a comment's date like "10 Oct 2026, 13:51", the same format as the
  * comments on the article page (public/js/articleComments.js).
  *
@@ -51,6 +87,21 @@ function formatCommentDate(isoDate) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/**
+ * Builds the table cell with the comment's date. <time datetime="..."> gives the exact
+ * date to the browser, while people read the formatted one.
+ *
+ * @param {string} isoDate - comment.createdAt from the API.
+ * @returns {HTMLTableCellElement}
+ */
+function createDateCell(isoDate) {
+  const cell = document.createElement('td');
+  const date = createElementWithText('time', formatCommentDate(isoDate));
+  date.dateTime = isoDate;
+  cell.append(date);
+  return cell;
 }
 
 /**
@@ -117,7 +168,7 @@ function setUpCommentModeration() {
   }
 
   /**
-   * Builds the table row for one comment.
+   * Builds the normal (not editing) table row for one comment, with Edit and Delete.
    *
    * @param {{id: string, authorName: string, text: string, createdAt: string,
    *   article: ({id: string, title: string}|null)}} comment - From the API.
@@ -126,22 +177,144 @@ function setUpCommentModeration() {
   function createCommentRow(comment) {
     const row = document.createElement('tr');
 
-    // <time datetime="..."> gives the exact date to the browser, while people read
-    // the formatted one.
-    const dateCell = document.createElement('td');
-    const date = createElementWithText('time', formatCommentDate(comment.createdAt));
-    date.dateTime = comment.createdAt;
-    dateCell.append(date);
+    const actions = document.createElement('td');
+    const editButton = createButton('Edit', 'btn');
+    const deleteButton = createButton('Delete', 'btn btn-danger');
+    // replaceWith swaps only this row, so the rest of the table stays as it is.
+    editButton.addEventListener('click', () => {
+      const editRow = createEditRow(comment);
+      row.replaceWith(editRow);
+      // Put the cursor in the text box, so the editor can start typing at once.
+      // (This must come after replaceWith: an element not on the page can't take focus.)
+      editRow.querySelector('textarea').focus();
+    });
+    deleteButton.addEventListener('click', () => deleteComment(comment, deleteButton));
+    actions.append(editButton, ' ', deleteButton);
 
     row.append(
       createElementWithText('td', comment.text),
       createElementWithText('td', comment.authorName),
       createArticleCell(comment.article),
-      dateCell,
-      // Edit and Delete buttons are added here in the next step.
-      document.createElement('td')
+      createDateCell(comment.createdAt),
+      actions
     );
     return row;
+  }
+
+  /**
+   * Builds the editing version of a row: the text in a text box, with Save and Cancel.
+   * Only the text can be edited, the same rule as on the server: the author's name,
+   * article and date stay as they were, so the comment still shows who wrote it.
+   *
+   * @param {Object} comment - The comment before editing (same shape as above).
+   * @returns {HTMLTableRowElement}
+   */
+  function createEditRow(comment) {
+    const row = document.createElement('tr');
+
+    // .value (like textContent) puts the text in as text, never as HTML.
+    const textBox = document.createElement('textarea');
+    textBox.className = 'form-field';
+    textBox.rows = 3;
+    textBox.maxLength = MAX_COMMENT_TEXT_LENGTH;
+    textBox.value = comment.text;
+    textBox.setAttribute('aria-label', `Text of the comment by ${comment.authorName}`);
+    const textCell = document.createElement('td');
+    textCell.append(textBox);
+
+    const actions = document.createElement('td');
+    const saveButton = createButton('Save', 'btn btn-primary');
+    const cancelButton = createButton('Cancel', 'btn');
+    cancelButton.addEventListener('click', () => {
+      showListError('');
+      row.replaceWith(createCommentRow(comment));
+    });
+    saveButton.addEventListener('click', () => saveComment(comment, row, saveButton, textBox.value.trim()));
+    actions.append(saveButton, ' ', cancelButton);
+
+    row.append(
+      textCell,
+      createElementWithText('td', comment.authorName),
+      createArticleCell(comment.article),
+      createDateCell(comment.createdAt),
+      actions
+    );
+    return row;
+  }
+
+  /**
+   * Sends the edited text. On success the row goes back to normal with the server's
+   * version of the text (trimmed, exactly as saved); on failure the row stays in edit
+   * mode, so nothing the editor typed is lost, and the message is shown above the table.
+   *
+   * @param {Object} comment - The comment before editing.
+   * @param {HTMLTableRowElement} row - The editing row.
+   * @param {HTMLButtonElement} saveButton - Disabled while saving.
+   * @param {string} newText - The text box's value, trimmed.
+   * @returns {Promise<void>}
+   */
+  async function saveComment(comment, row, saveButton, newText) {
+    // Nothing changed: no request is needed.
+    if (newText === comment.text) {
+      showListError('');
+      row.replaceWith(createCommentRow(comment));
+      return;
+    }
+
+    const textError = findCommentTextError(newText);
+    if (textError) {
+      showListError(textError);
+      return;
+    }
+
+    // Disabled while waiting, so a double click doesn't send the change twice.
+    saveButton.disabled = true;
+    const result = await apiClient.patch(`/api/comments/${encodeURIComponent(comment.id)}`, { text: newText });
+    saveButton.disabled = false;
+
+    if (!result.success) {
+      showListError(result.error);
+      return;
+    }
+
+    showListError('');
+    // The PATCH answer is the public comment shape, without the article, so we keep
+    // the article we already have and take everything else from the server.
+    const updatedComment = Object.assign({}, result.data, { article: comment.article });
+    row.replaceWith(createCommentRow(updatedComment));
+  }
+
+  /**
+   * Asks for confirmation, deletes the comment, then reloads the current page of the
+   * list, so the page stays full (the next comment moves up) and the count stays right.
+   *
+   * @param {Object} comment - The comment to delete.
+   * @param {HTMLButtonElement} deleteButton - Disabled while deleting.
+   * @returns {Promise<void>}
+   */
+  async function deleteComment(comment, deleteButton) {
+    // confirm() is the browser's own yes/no box; deleting can't be undone. The start
+    // of the text is shown so the editor can see which comment they clicked.
+    const preview = comment.text.length > 60 ? `${comment.text.slice(0, 60)}...` : comment.text;
+    if (!window.confirm(`Delete this comment by ${comment.authorName}?\n\n"${preview}"\n\nThis can't be undone.`)) {
+      return;
+    }
+
+    deleteButton.disabled = true;
+    const result = await apiClient.delete(`/api/comments/${encodeURIComponent(comment.id)}`);
+    if (!result.success) {
+      deleteButton.disabled = false;
+      showListError(result.error);
+      return;
+    }
+
+    showListError('');
+    await loadComments();
+    // If that was the last comment on the last page, step back one page.
+    if (tableBody.children.length === 0 && currentPage > 1) {
+      currentPage -= 1;
+      await loadComments();
+    }
   }
 
   /**
