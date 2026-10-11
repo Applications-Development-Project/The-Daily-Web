@@ -7,9 +7,10 @@
  * WARNING: it first deletes EVERYTHING in the database named in MONGODB_URI
  * (articles, users, comments, statistics, sessions), then creates fresh data.
  *
- * Version 1 (SM, phase 0): demo users and articles in every status.
- * In phase 2 OS extends it to the full demo data (500+ articles, comments,
- * view statistics for the analytics chart).
+ * Version 1 (SM, phase 0): demo users and about 50 articles in every status.
+ * Version 2 (OS, phase 2): the full demo data the requirements ask for: one editor,
+ * several reporters and 500+ articles in every status and category, so search, the
+ * filters and infinite scroll can be shown on a realistic amount of data.
  *
  * No password is written in this file or anywhere in the repo: every demo user
  * gets the password from SEED_DEMO_PASSWORD in your own .env, and the script
@@ -34,7 +35,8 @@ const DeviceArticleView = require('../models/DeviceArticleView');
 const Comment = require('../models/Comment');
 const { STATUS } = require('../services/articleWorkflow');
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 // How much work bcrypt does per hash. Each +1 doubles the time, which slows down
 // anyone trying to guess passwords from a stolen hash. 10 is the value the whole
@@ -43,11 +45,24 @@ const BCRYPT_ROUNDS = 10;
 
 // The demo accounts. Usernames are simple so they're easy to type in a demo;
 // display names are what readers see on articles. The requirements ask for one
-// editor and several reporters.
+// editor and several reporters. scripts/testReporterApi.js (EZ) logs in as editor,
+// reporter1 and reporter2, so those three usernames must stay.
 const DEMO_USERS = [
   { username: 'editor', displayName: 'Maya Cohen', role: 'editor' },
   { username: 'reporter1', displayName: 'Dana Levi', role: 'reporter' },
   { username: 'reporter2', displayName: 'Omer Ben-David', role: 'reporter' },
+  { username: 'reporter3', displayName: 'Noa Friedman', role: 'reporter' },
+  { username: 'reporter4', displayName: 'Yossi Mizrahi', role: 'reporter' },
+  { username: 'reporter5', displayName: 'Tamar Avraham', role: 'reporter' },
+];
+
+// Places put in front of a sample headline ("Haifa: City council approves ..."), the
+// way news sites mark local stories. There are 56 sample stories, so without this a
+// 500-article seed would repeat each headline about nine times, and searching for one
+// would show nine identical results. 10 places x 56 stories = 560 different titles.
+const STORY_PLACES = [
+  'Jerusalem', 'Tel Aviv', 'Haifa', 'Beersheba', 'Eilat',
+  'Nazareth', 'Ashdod', 'Netanya', 'Tiberias', 'Rishon LeZion',
 ];
 
 // Fictional headlines and summaries, 7 for each of the 8 categories in
@@ -128,10 +143,12 @@ const SAMPLE_STORIES = {
 };
 
 // How many never-published articles of each status to create.
+// Together with LIVE_ARTICLE_COUNTS: 70 + 440 = 510 articles, above the 500 the
+// requirements ask for, most of them published (as on a real news site).
 const UNPUBLISHED_ARTICLE_COUNTS = {
-  [STATUS.DRAFT]: 6,
-  [STATUS.PENDING]: 5,
-  [STATUS.RETURNED]: 4,
+  [STATUS.DRAFT]: 30,
+  [STATUS.PENDING]: 25,
+  [STATUS.RETURNED]: 15,
 };
 
 // Live articles (published is not null), grouped by the status of their working
@@ -139,10 +156,10 @@ const UNPUBLISHED_ARTICLE_COUNTS = {
 // ("Article status rules"), so a live article can also be in draft, pending or returned
 // while the reporter works on an update and readers keep seeing the approved version.
 const LIVE_ARTICLE_COUNTS = {
-  [STATUS.PUBLISHED]: 25, // no update in progress: draft is the same as published
-  [STATUS.DRAFT]: 4, // the reporter is editing an update
-  [STATUS.PENDING]: 3, // an update is waiting for the editor
-  [STATUS.RETURNED]: 3, // the update was returned to the reporter with a note
+  [STATUS.PUBLISHED]: 400, // no update in progress: draft is the same as published
+  [STATUS.DRAFT]: 15, // the reporter is editing an update
+  [STATUS.PENDING]: 15, // an update is waiting for the editor
+  [STATUS.RETURNED]: 10, // the update was returned to the reporter with a note
 };
 
 // Notes the editor left on returned articles.
@@ -205,7 +222,9 @@ function buildArticleBody(title, summary, category) {
  *
  * Numbers go round the categories in order (0 Politics, 1 Economy, ... 8 Politics
  * again), so every category gets a similar share, and each number in a category
- * gets the next story, so titles don't repeat until all 56 are used.
+ * gets the next story. After all 56 stories are used, the next round puts the next
+ * place from STORY_PLACES in front of the title, so titles don't repeat until 560
+ * articles (the first round has no place, so the original headlines stay too).
  *
  * @param {number} articleNumber - 0, 1, 2... one per article the seed creates.
  * @returns {{title: string, summary: string, body: string, imageUrl: string, category: string}}
@@ -214,7 +233,12 @@ function buildArticleContent(articleNumber) {
   const categories = Article.CATEGORIES;
   const category = categories[articleNumber % categories.length];
   const stories = SAMPLE_STORIES[category];
-  const [title, summary] = stories[Math.floor(articleNumber / categories.length) % stories.length];
+  const storyNumber = Math.floor(articleNumber / categories.length);
+  const [headline, summary] = stories[storyNumber % stories.length];
+
+  // Which round of the 56 stories this is: 0 for the first, 1 for the second...
+  const round = Math.floor(storyNumber / stories.length);
+  const title = round === 0 ? headline : `${STORY_PLACES[(round - 1) % STORY_PLACES.length]}: ${headline}`;
 
   return {
     title: title,
@@ -241,8 +265,7 @@ function buildUnpublishedArticle(articleNumber, status, reporter) {
 
   // Every third draft is left half-written, the way autosave stores them:
   // only a title and an opening paragraph, no summary, image or category yet.
-  // (Every third, not every second: reporters also alternate by even/odd number,
-  // so "every second" would give all the half-written drafts to the same reporter.)
+  // (Reporters take articles in turn by number, so every reporter gets some.)
   if (status === STATUS.DRAFT && articleNumber % 3 === 0) {
     draft.summary = '';
     draft.body = draft.body.split('\n\n')[0];
@@ -291,9 +314,14 @@ async function createUnpublishedArticles(reporters, firstArticleNumber) {
 /**
  * Builds the list of approvals of one live article: the first publish and then
  * each update, oldest first, each 1 to 4 days after the previous one.
- * The first publish is 20 to 30 days ago, so even 4 publishes end at least
- * 8 days ago, never in the future, and all fall inside the analytics chart's
- * default 30-day window.
+ *
+ * An article with updates is first published 17 to 27 days ago, so even 4 publishes
+ * (at most 3 x 4 days later) end at least 5 days ago, never in the future, and all of
+ * them fall inside the analytics chart's default 30-day window, where the editor can
+ * see each one. 27, not 30, leaves a few days of margin: the chart counts its 30 days
+ * back from when it is opened, which can be a day or two after the seed ran.
+ * An article published only once can be from any moment in the last 60 days (up to
+ * an hour ago), so sorting the feed by date shows a realistic spread of old and new.
  *
  * @param {number} publishCount - How many times the article was approved (1 to 4).
  * @param {Object} editor - The User who approved it.
@@ -301,7 +329,9 @@ async function createUnpublishedArticles(reporters, firstArticleNumber) {
  */
 function buildPublishHistory(publishCount, editor) {
   const publishHistory = [];
-  let publishedAt = randomDateBetween(daysAgo(30), daysAgo(20));
+  let publishedAt = publishCount === 1
+    ? randomDateBetween(daysAgo(60), new Date(Date.now() - HOUR_MS))
+    : randomDateBetween(daysAgo(27), daysAgo(17));
 
   for (let i = 0; i < publishCount; i++) {
     if (i > 0) {
