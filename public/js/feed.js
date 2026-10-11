@@ -2,7 +2,7 @@
  * public/js/feed.js
  * 
  * Client-side logic for the news feed.
- * Handles infinite scrolling, search, filtering, and rendering articles.
+ * Handles infinite scrolling, search, filtering, and rendering articles safely.
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -49,16 +49,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (result.success) {
-                const articles = result.data;
+                // Read from the newly shaped contract
+                const articles = result.data.articles;
+                hasMore = result.data.hasMore;
                 
-                if (articles.length === 0) {
-                    hasMore = false;
-                    if (reset) {
-                        feedList.innerHTML = '<p class="empty-state">No articles found matching your criteria.</p>';
-                    } else {
-                        sentinel.textContent = 'No more articles to show.';
-                        if (!feedList.contains(sentinel)) feedList.appendChild(sentinel);
-                    }
+                if (articles.length === 0 && reset) {
+                    feedList.innerHTML = '<p class="empty-state">No articles found matching your criteria.</p>';
                 } else {
                     // Render the fetched articles
                     articles.forEach(article => {
@@ -66,27 +62,62 @@ document.addEventListener('DOMContentLoaded', () => {
                         articleEl.className = 'card';
                         articleEl.style.marginBottom = 'var(--spacing-md)';
                         
-                        // Format the date
+                        // Category Badge
+                        const badge = document.createElement('span');
+                        badge.className = 'status-badge status-published';
+                        badge.textContent = article.category || 'News';
+                        articleEl.appendChild(badge);
+                        
+                        // Title and Link
+                        const titleH3 = document.createElement('h3');
+                        titleH3.style.margin = 'var(--spacing-sm) 0';
+                        const linkEl = document.createElement('a');
+                        linkEl.href = `/articles/${article.id}`; // Fixed URL path
+                        linkEl.style.textDecoration = 'none';
+                        linkEl.style.color = 'inherit';
+                        linkEl.textContent = article.title; // Using textContent prevents XSS
+                        titleH3.appendChild(linkEl);
+                        articleEl.appendChild(titleH3);
+                        
+                        // Meta info
                         const dateStr = new Date(article.publishedAt).toLocaleString('en-GB', {
                             day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
                         });
+                        const metaP = document.createElement('p');
+                        metaP.style.fontSize = '0.9rem';
+                        metaP.style.color = '#666';
+                        metaP.style.marginBottom = 'var(--spacing-sm)';
+                        metaP.textContent = `By ${article.reporterName} | ${dateStr} | ${article.totalViews || 0} views`;
+                        articleEl.appendChild(metaP);
                         
-                        articleEl.innerHTML = `
-                            <span class="status-badge status-published">${article.category || 'News'}</span>
-                            <h3 style="margin: var(--spacing-sm) 0;">
-                                <a href="/article/${article._id}" style="text-decoration: none; color: inherit;">${article.title}</a>
-                            </h3>
-                            <p style="font-size: 0.9rem; color: #666; margin-bottom: var(--spacing-sm);">
-                                By ${article.authorName} | ${dateStr} | ${article.views || 0} views
-                            </p>
-                            <p>${article.summary}</p>
-                        `;
+                        // Image (if available)
+                        if (article.imageUrl) {
+                            const img = document.createElement('img');
+                            img.src = article.imageUrl;
+                            img.alt = article.title;
+                            img.style.width = '100%';
+                            img.style.borderRadius = '8px';
+                            img.style.marginBottom = 'var(--spacing-sm)';
+                            articleEl.appendChild(img);
+                        }
+
+                        // Summary
+                        const summaryP = document.createElement('p');
+                        summaryP.textContent = article.summary; // Using textContent prevents XSS
+                        articleEl.appendChild(summaryP);
+                        
                         feedList.appendChild(articleEl);
                     });
                     
                     currentPage++;
-                    sentinel.textContent = 'Loading more articles...';
-                    feedList.appendChild(sentinel); // Move sentinel to the new bottom
+                    
+                    if (hasMore) {
+                        sentinel.textContent = 'Loading more articles...';
+                        feedList.appendChild(sentinel);
+                    } else {
+                        sentinel.textContent = 'No more articles to show.';
+                        feedList.appendChild(sentinel);
+                    }
                 }
             } else {
                 console.error('Failed to load articles:', result.error);
@@ -94,6 +125,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             console.error('Error fetching articles:', error);
+            if (reset) feedList.innerHTML = '<p class="empty-state form-error">Network error occurred.</p>';
         } finally {
             isLoading = false;
         }
@@ -104,7 +136,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (entries[0].isIntersecting) {
             loadArticles();
         }
-    }, { rootMargin: '100px' }); // Trigger slightly before it enters the viewport
+    }, { rootMargin: '100px' }); 
 
     // Add event listeners for filters (with debounce for the text search)
     let searchTimeout;
