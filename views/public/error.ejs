@@ -18,10 +18,9 @@
   Both values are printed with the escaping tag (equals sign), so even if a message
   contained HTML it would be shown as text, never run.
 
-  TEMP until the shared partials (views/partials/head, header, footer) are merged:
-  this page is a complete HTML document on its own. When they exist, replace the
-  head, header and footer below with includes, so the error page looks like the
-  rest of the site.
+  It uses the shared head, header and footer (views/partials), so an error looks like
+  the rest of the site, and a logged-in user still sees their name and the logout
+  button on it.
 
   Rendered by: middleware/errorHandler.js, and controllers for "not found" cases
   (for example SH's article page).
@@ -29,23 +28,28 @@
 %>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title><%= statusCode %> - The Web Daily</title>
-  <link rel="stylesheet" href="/css/main.css">
-</head>
-<body>
-  <header>
-    <a href="/">The Web Daily</a>
-  </header>
+<%- include('../partials/head', { title: statusCode + ' - The Web Daily' }) %>
 
-  <main class="page-container">
+<body class="page-container">
+  <%#
+    The shared header reads currentUser, which middleware/setCurrentUser.js sets for
+    every request. But this page can be shown for an error that happened before
+    setCurrentUser ran, or inside it (for example when the database is down), and then
+    currentUser doesn't exist. EJS would throw on the missing name, and the error page
+    itself would fail. "locals.currentUser" gives undefined instead of throwing, and
+    "|| null" turns that into "not logged in", so the page always renders.
+  %>
+  <%- include('../partials/header', { currentUser: locals.currentUser || null }) %>
+
+  <main class="main-content">
     <section class="empty-state" aria-labelledby="error-title">
-      <h1 id="error-title">Error <%= statusCode %></h1>
+      <%# h2: the shared header already holds the page's h1 (the site name). %>
+      <h2 id="error-title">Error <%= statusCode %></h2>
       <p><%= message %></p>
       <p><a class="btn btn-primary" href="/">Back to the home page</a></p>
     </section>
   </main>
+
+  <%- include('../partials/footer') %>
 </body>
 </html>
