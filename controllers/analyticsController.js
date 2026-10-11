@@ -17,9 +17,8 @@
  * (models/ArticleViewStats.js), so the chart reads at most 24 small documents per
  * day per article, however many readers there are.
  *
- * Built step by step from OS's phase 0 placeholders. Only showAnalyticsPage is still
- * a PLACEHOLDER answering 501. The function names must stay the same (the routes
- * call them).
+ * Built step by step from OS's phase 0 placeholders; none is left. The function names
+ * stayed the same, because the route files call them.
  *
  * Used by: routes/pageRoutes/analyticsPageRoutes.js, routes/apiRoutes/analyticsApiRoutes.js.
  * Related: services/viewTracker.js, models/ArticleViewStats.js, models/Article.js.
@@ -116,24 +115,60 @@ function readDateRange(query) {
   return { from: from, to: to };
 }
 
+// The ranges the page offers, newest data first. All are within MAX_RANGE_DAYS, so the
+// API never refuses one; the filter below keeps that true if the limit is ever lowered.
+const RANGE_OPTIONS = [
+  { days: 1, label: 'Last 24 hours' },
+  { days: 7, label: 'Last 7 days' },
+  { days: 30, label: 'Last 30 days' },
+  { days: 90, label: 'Last 90 days' },
+  { days: 365, label: 'Last 365 days' },
+].filter((option) => option.days <= MAX_RANGE_DAYS);
+
 /**
- * GET /editor/analytics - the Impact Analytics page. PLACEHOLDER.
+ * GET /editor/analytics?article= - the Impact Analytics page: the editor picks an article
+ * by title, chooses a range, and sees a chart of its views with a mark at every publish.
  *
- * Planned (work plan, SM phase 2): pick an article by title, choose a date range, and
- * draw a Chart.js line of views per hour from GET /api/editor/articles/:id/views.
- * The x-axis will be a "linear" axis of millisecond timestamps with labels formatted in
- * a callback, because Chart.js's "time" axis needs an extra date-adapter package we
- * don't use. Each publish event will be a dashed vertical line drawn by our own small
- * Chart.js plugin (afterDraw), so the editor sees the views before and after each update.
- * Waiting for the team's decision on how Chart.js is loaded (a CDN link or a file in
- * the repo).
+ * The page itself is only the frame. public/js/analyticsChart.js finds articles through
+ * GET /api/editor/articles?search= (the dashboard's list API, reused) and loads the chart
+ * data from GET /api/editor/articles/:id/views, so changing the article or the range never
+ * reloads the page.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * ?article=<id> is optional: the review page links here with it, so the chart of that
+ * article opens at once. A malformed or unknown id is not an error worth a 404 page: the
+ * editor still gets the page, with a short notice and the search to pick another article.
+ *
+ * @param {import('express').Request} request - query.article is optional.
+ * @param {import('express').Response} response - Renders views/editor/analytics.ejs.
+ * @returns {Promise<void>}
  */
-function showAnalyticsPage(request, response) {
-  response.status(501).render('public/error', { statusCode: 501, message: 'Impact Analytics is not built yet.' });
+async function showAnalyticsPage(request, response) {
+  let initialArticle = null;
+  let notice = '';
+
+  const articleId = request.query.article;
+  if (articleId !== undefined) {
+    // typeof check first: ?article=a&article=b arrives as an array, never a valid id.
+    const article = typeof articleId === 'string' && mongoose.isValidObjectId(articleId)
+      ? await Article.findById(articleId).select({ 'draft.title': 1, 'published.title': 1 }).lean()
+      : null;
+    if (article) {
+      // The live title is what readers know the article by; a never-published article
+      // only has its working title.
+      const title = (article.published && article.published.title) || article.draft.title || '(untitled)';
+      initialArticle = { id: article._id.toString(), title: title };
+    } else {
+      notice = 'That article was not found (it may have been deleted). Search for another one below.';
+    }
+  }
+
+  response.render('editor/analytics', {
+    title: 'Impact Analytics - Editor - The Web Daily',
+    rangeOptions: RANGE_OPTIONS,
+    defaultRangeDays: DEFAULT_RANGE_DAYS,
+    initialArticle: initialArticle,
+    notice: notice,
+  });
 }
 
 /**
