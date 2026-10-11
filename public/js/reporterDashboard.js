@@ -1,19 +1,24 @@
 /**
  * public/js/reporterDashboard.js
  *
- * The one interactive part of the reporter dashboard: the "New article" button.
- * Clicking it asks the server to create an empty draft (POST /api/reporter/articles)
- * and then opens the edit page of the new article, where the autosave takes over.
+ * The interactive parts of the reporter dashboard:
+ *   1. The "New article" button. Clicking it asks the server to create an empty draft
+ *      (POST /api/reporter/articles) and then opens the edit page of the new article,
+ *      where the autosave takes over.
+ *   2. The "Submit for approval" buttons in the table (POST /api/reporter/articles/:id/submit).
+ *      On success the page reloads, so the table is drawn again by the server with the new
+ *      status ("Awaiting editor approval", no Edit button).
  * The rest of the dashboard (the table of articles) is rendered on the server and
  * needs no script.
  *
- * Requirement served: "a reporter can create a new article", using Ajax (fetch)
- * and no full-page form submit.
+ * Requirements served: "a reporter can create a new article" and "a reporter can send a
+ * finished article to the editor", both with Ajax (fetch) and no full-page form submit.
  *
  * Used by: views/reporter/dashboard.ejs (loaded at the end of the page, after
  * /js/shared/apiClient.js, because this file calls apiClient).
- * Related: controllers/reporterController.js (createArticle), the element ids
- * "new-article-button" and "new-article-error" in dashboard.ejs.
+ * Related: controllers/reporterController.js (createArticle, submitArticleForApproval), the
+ * element ids "new-article-button" and "new-article-error" and the classes
+ * "submit-article-button" and "submit-error" in dashboard.ejs.
  * Owner: EZ.
  *
  * This is a plain browser script (no modules), so every top-level name is shared with
@@ -81,6 +86,65 @@ async function createNewArticle(newArticleButton, newArticleError) {
   window.location.href = '/reporter/articles/' + result.data.id + '/edit';
 }
 
+/**
+ * Makes every "Submit for approval" button in the table work, with ONE click listener on
+ * the whole page instead of one listener per button (event delegation). A click on any
+ * element bubbles up to the page, and we look for the button it came from with closest().
+ * This way the number of buttons doesn't matter, and it keeps working if rows are added later.
+ *
+ * @returns {void}
+ */
+function setUpSubmitButtons() {
+  document.addEventListener('click', function (event) {
+    const submitButton = event.target.closest('.submit-article-button');
+    if (submitButton) {
+      submitArticleFromDashboard(submitButton);
+    }
+  });
+}
+
+/**
+ * Sends one article to the editor and reloads the page, or shows why it could not be sent.
+ *
+ * The server does all the checking (the article is yours, the required fields are filled
+ * in, its status allows it). The page only shows the server's answer. Nothing needs to be
+ * saved first: the editor page saves continuously, so the draft in the database is already
+ * the latest one, and the server checks that saved draft.
+ *
+ * @param {HTMLButtonElement} submitButton - The button that was clicked; its data-article-id
+ *   attribute holds the article id (written by the server into the page).
+ * @returns {Promise<void>}
+ */
+async function submitArticleFromDashboard(submitButton) {
+  // The error paragraph is the one right after the button, in the same table cell.
+  const submitError = submitButton.parentElement.querySelector('.submit-error');
+
+  // Disable first, so a double click can't send the same request twice.
+  submitButton.disabled = true;
+  if (submitError) {
+    submitError.textContent = '';
+  }
+
+  // The body is empty on purpose: the article id is in the URL, the reporter comes from the
+  // session, and the new status is decided by the server, never by the browser.
+  const result = await apiClient.post('/api/reporter/articles/' + submitButton.dataset.articleId + '/submit', {});
+
+  if (!result.success) {
+    // textContent, never innerHTML: the message comes from the network and must be shown as
+    // plain text. The button is enabled again so the reporter can fix the problem and retry.
+    if (submitError) {
+      submitError.textContent = result.error;
+    }
+    submitButton.disabled = false;
+    return;
+  }
+
+  // Reloading shows the server's own version of the table: the new status label, and no
+  // Edit or Submit button for a pending article. The button stays disabled until then.
+  window.location.reload();
+}
+
 // The script is loaded at the end of the page, but waiting for DOMContentLoaded
-// guarantees the button exists, the same pattern as the other page scripts.
+// guarantees the buttons exist, the same pattern as the other page scripts.
 document.addEventListener('DOMContentLoaded', setUpReporterDashboard);
+document.addEventListener('DOMContentLoaded', setUpSubmitButtons);
