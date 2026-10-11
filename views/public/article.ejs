@@ -1,5 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- 
+  views/public/article.ejs
+  Single article page with full text and comments.
+  Owner: SH.
+-->
 <!-- Load the head partial and pass the dynamic title from the controller -->
 <%- include('../partials/head', { title: title }) %>
 
@@ -26,13 +31,15 @@
                 <% } %>
                 
                 <div class="article-body">
-                    <!-- Using <%= %> here to escape HTML and prevent injection attacks as requested -->
+                    <!-- Defense Question - Security: Why use <%= %> here? -->
+                    <!-- Using <%= %> escapes HTML and prevents Stored XSS injection attacks. Even though content is approved by an editor, we enforce strict server-side escaping for public viewers. -->
                     <%= article.published.body %>
                 </div>
             </article>
 
             <!-- Comments Section -->
-            <!-- The data-article-id is dynamic so OS's script knows which article this is -->
+            <!-- Defense Question - Contracts: What is the comment markup contract with OS? -->
+            <!-- OS's client-side script (articleComments.js) relies strictly on the IDs (#comments, #comment-list, #comment-form, #comment-error) and the data-article-id attribute below to know exactly which article to attach new comments to. -->
             <section id="comments" data-article-id="<%= article._id %>" class="card">
                 <h3>Comments</h3>
                 
