@@ -1,44 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- Load the head partial and pass a dynamic title -->
-<%- include('../partials/head', { title: 'The Web Daily - Feed' }) %>
+<%- include('../partials/head', { title: 'The Web Daily - Latest News' }) %>
 
 <body class="page-container">
     <%- include('../partials/header') %>
 
     <div class="main-content-wrapper">
         <main class="main-content">
-            <h2>Latest News</h2>
             
-            <!-- Filter and search area (will be handled by JS later) -->
-            <div class="card">
+            <!-- Filters & Search Section -->
+            <div class="filters-container card" style="margin-bottom: var(--spacing-lg);">
                 <input type="text" id="search-input" class="form-field" placeholder="Search articles...">
-                <select id="category-filter" class="form-field">
-                    <option value="">All Categories</option>
-                    <option value="Technology">Technology</option>
-                    <option value="Politics">Politics</option>
-                </select>
-                <select id="viewed-filter" class="form-field">
-                    <option value="all">All</option>
-                    <option value="unviewed">Unviewed</option>
-                </select>
-                <select id="sort-select" class="form-field">
-                    <option value="newest">Newest</option>
-                    <option value="popular">Popular</option>
-                </select>
+                <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm); flex-wrap: wrap;">
+                    <select id="category-filter" class="form-field">
+                        <option value="">All Categories</option>
+                        <option value="News">News</option>
+                        <option value="Economy">Economy</option>
+                        <option value="Technology">Technology</option>
+                        <option value="Sports">Sports</option>
+                        <option value="Entertainment">Entertainment</option>
+                        <option value="Health">Health</option>
+                        <option value="Politics">Politics</option>
+                        <option value="Culture">Culture</option>
+                    </select>
+                    
+                    <select id="viewed-filter" class="form-field">
+                        <option value="">All Articles</option>
+                        <option value="unviewed">Unviewed Only</option>
+                        <option value="viewed">Viewed Only</option>
+                    </select>
+                    
+                    <select id="sort-select" class="form-field">
+                        <option value="newest">Newest First</option>
+                        <option value="popular">Most Popular</option>
+                    </select>
+                    
+                    <!-- Reset views button for Item 8 -->
+                    <button id="reset-views-btn" class="btn btn-secondary">Reset History</button>
+                </div>
             </div>
 
-            <!-- The server and JS will inject the real articles here -->
+            <!-- Feed List -->
             <div id="feed-list">
-                <p class="empty-state">Articles will appear here shortly...</p>
+                <!-- Server-side rendered initial 20 articles (Item 9) -->
+                <% if (typeof articles !== 'undefined' && articles.length > 0) { %>
+                    <% articles.forEach(function(article) { %>
+                        <article class="card" style="margin-bottom: var(--spacing-md);">
+                            <span class="status-badge status-published"><%= article.category || 'News' %></span>
+                            <h3 style="margin: var(--spacing-sm) 0;">
+                                <a href="/articles/<%= article.id %>" style="text-decoration: none; color: inherit;"><%= article.title %></a>
+                            </h3>
+                            <p style="font-size: 0.9rem; color: #666; margin-bottom: var(--spacing-sm);">
+                                By <%= article.reporterName %> | 
+                                <time datetime="<%= article.publishedAt.toISOString() %>">
+                                    <%= new Date(article.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                                </time> | <%= article.totalViews || 0 %> views
+                            </p>
+                            <% if (article.imageUrl) { %>
+                                <img src="<%= article.imageUrl %>" alt="<%= article.title %>" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-sm);">
+                            <% } %>
+                            <!-- Using <%= %> to escape HTML -->
+                            <p><%= article.summary %></p>
+                        </article>
+                    <% }); %>
+                <% } %>
             </div>
-            
+
         </main>
 
         <%- include('../partials/sidebar') %>
     </div>
 
     <%- include('../partials/footer') %>
+
+    <!-- Required scripts -->
+    <script src="/js/shared/apiClient.js"></script>
     <script src="/js/feed.js"></script>
 </body>
 </html>
