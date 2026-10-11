@@ -1,7 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- 
+  views/public/feed.ejs
+  Main feed view with initial server-side rendering (SSR).
+  Owner: SH.
+-->
 <%- include('../partials/head', { title: 'The Web Daily - Latest News' }) %>
 
+<!-- 
+  Defense Question - Architecture: Why use semantic HTML5 (main, aside, article, time) and Flexbox?
+  Semantic HTML improves accessibility for screen readers and helps search engines understand the page structure. 
+  Flexbox (used in page-container and main-content-wrapper) allows the sidebar to effortlessly stack below the main content on mobile devices without relying on complex floats.
+-->
 <body class="page-container">
     <%- include('../partials/header') %>
 
@@ -10,6 +20,8 @@
             
             <!-- Filters & Search Section -->
             <div class="filters-container card" style="margin-bottom: var(--spacing-lg);">
+                <!-- Defense Question - Accessibility: Why are there aria-labels here? -->
+                <!-- aria-labels ensure visually impaired users using screen readers know exactly what each input does, even without a visible <label> tag. -->
                 <input type="text" id="search-input" class="form-field" placeholder="Search articles..." aria-label="Search articles">
                 <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm); flex-wrap: wrap;">
                     <select id="category-filter" class="form-field" aria-label="Filter by category">
@@ -57,9 +69,13 @@
                                 </time> | <%= article.totalViews || 0 %> views
                             </p>
                             <% if (article.imageUrl) { %>
+                                <!-- Defense Question - Edge cases: Why is onerror used here? -->
+                                <!-- If the image URL is broken or the external host is down, the onerror event replaces the broken image icon with a local fallback placeholder image. -->
                                 <img src="<%= article.imageUrl %>" alt="<%= article.title %>" onerror="this.onerror=null; this.src='/images/placeholder.jpg';" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-sm);">
                             <% } %>
-                            <!-- Using <%= %> to escape HTML -->
+                            
+                            <!-- Defense Question - Security: Why use <%= %> instead of <%- %> for the summary? -->
+                            <!-- <%= %> automatically HTML-escapes the text. If a malicious reporter saved a <script> tag in the summary, it will be rendered as harmless text rather than executed (XSS prevention). -->
                             <p><%= article.summary %></p>
                         </article>
                     <% }); %>
