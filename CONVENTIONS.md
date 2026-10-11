@@ -66,14 +66,9 @@ Adding any other package needs the whole team's agreement in the group chat. AI 
 `express-rate-limit`, `winston`, `joi` or `multer`; remove them. Images are stored as URLs, so we don't need
 upload libraries. No React, Vue, Angular, jQuery, Bootstrap, Tailwind, TypeScript or bundlers.
 
-**Lecturer approval of `express-session`, `connect-mongo`, `bcrypt` and `dotenv`:** *pending. OS fills this in
-with the lecturer's answer.*
-
-**Fallbacks if the lecturer rejects a package.** None of these needs a new package:
-
-- `bcrypt`: hash passwords with Node's built-in `crypto.scrypt` plus a random salt.
-- `dotenv`: load `.env` with `node --env-file=.env server.js` (Node 20.6 or newer).
-- `express-session` or `connect-mongo`: ask the lecturer what the course used for authentication and follow that.
+**Lecturer approval of `express-session`, `connect-mongo`, `bcrypt` and `dotenv`:** approved (OS asked the
+lecturer; answer received on 2026-10-11). We keep using all four, so the fallbacks the plan listed in case one was
+rejected (`crypto.scrypt` instead of `bcrypt`, `node --env-file=.env` instead of `dotenv`) are not needed.
 
 ## Git
 
