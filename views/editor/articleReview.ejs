@@ -1,0 +1,250 @@
+<%#
+  views/editor/articleReview.ejs
+
+  The editor's review page for one article: who wrote it, its status, whether it is
+  live, the editor's note if it was returned, the content and the publish history
+  (every approval, with its date and editor).
+
+  The content part depends on the article:
+  - never published: the submitted content;
+  - live with an update in progress: "Currently live" and "Submitted changes" side by
+    side, with the changed fields marked (requirements: the editor must understand
+    what is published now and what new content awaits approval);
+  - live with no update: the live version only.
+
+  The whole page is rendered on the server; no script is needed to read it.
+
+  Security: only an editor ever receives this page (requireRole('editor') in
+  routes/pageRoutes/editorPageRoutes.js). Everything a reporter typed (title, summary,
+  body, note) is printed with the escaping tag (equals sign), so it is shown as text and
+  can't run as script on the editor's page. The tag with a minus sign (no escaping) is
+  used only to include our own templates (head, header, nav, partials).
+
+  When the workflow allows a decision (only for an article awaiting approval), the
+  page also shows "Approve and publish" and "Return for corrections" with a required
+  note. The small script at the bottom sends them to the editor API with apiClient.
+  It lives in this file because the work plan lists no separate script for this
+  page (the same choice as views/public/login.ejs).
+
+  Rendered by: controllers/editorController.js (showArticleReview), for GET /editor/articles/:id.
+  Locals: title (the page title) and review (prepared by toReviewView() in the controller).
+  Includes: the shared head, header and footer, the editor nav and partials/articleContent.
+  Owner: SM.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'dashboard' }) %>
+
+  <main class="main-content">
+    <p><a href="/editor">&larr; All articles</a></p>
+
+    <article id="article-review" data-article-id="<%= review.id %>">
+      <header>
+        <h2><%= review.title %></h2>
+        <p>
+          <span class="status-badge status-<%= review.status %>"><%= review.statusLabel %></span>
+          By <%= review.reporterName %> &middot;
+          <%= review.isLive ? 'Live on the site' : 'Not published yet' %> &middot;
+          Last change <%= review.updatedAt %>
+        </p>
+      </header>
+
+      <%# The note the editor wrote when returning it; the reporter sees the same note on their dashboard. %>
+      <% if (review.editorNote) { %>
+        <section class="card">
+          <h3>Note to the reporter</h3>
+          <p><%= review.editorNote %></p>
+        </section>
+      <% } %>
+
+      <% if (!review.isLive) { %>
+        <%- include('partials/articleContent', { heading: 'Submitted content', content: review.draft }) %>
+
+      <% } else if (review.changedFields.length === 0) { %>
+        <%- include('partials/articleContent', { heading: 'Live version (no changes in progress)', content: review.published }) %>
+
+      <% } else { %>
+        <p class="card"><strong>Changed in this update:</strong> <%= review.changedFieldLabels.join(', ') %></p>
+        <%#
+          TEMP until SH adds a class for this to main.css: two columns side by side.
+          flex-wrap plus a minimum width of 18rem per column means that on a narrow
+          screen the columns stack instead of squeezing (requirements: responsive).
+        %>
+        <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
+          <div style="flex: 1 1 18rem; min-width: 0;">
+            <%- include('partials/articleContent', { heading: 'Currently live', content: review.published, changedFields: review.changedFields }) %>
+          </div>
+          <div style="flex: 1 1 18rem; min-width: 0;">
+            <%- include('partials/articleContent', { heading: 'Submitted changes', content: review.draft, changedFields: review.changedFields }) %>
+          </div>
+        </div>
+      <% } %>
+
+      <%#
+        The decision buttons appear only when canTransition allows them (pending).
+        The server checks again when they are used, so hiding them is only for
+        clarity, never the protection.
+      %>
+      <% if (review.canApprove || review.canReturn) { %>
+        <section class="card" id="review-decision">
+          <h3>Your decision</h3>
+          <p id="decision-message" aria-live="polite" hidden></p>
+
+          <% if (review.canApprove) { %>
+            <button type="button" id="approve-button" class="btn btn-primary">Approve and publish</button>
+          <% } %>
+
+          <%#
+            required and maxlength="2000" give a quick answer in the browser; the server
+            checks the same rules again (an empty note gets 400), because a request can
+            be sent without this page.
+          %>
+          <% if (review.canReturn) { %>
+            <form id="return-form">
+              <label for="return-note">Note to the reporter: what needs to be fixed? (required)</label>
+              <textarea id="return-note" name="note" class="form-field" rows="4" maxlength="2000" required></textarea>
+              <button type="submit" class="btn btn-danger">Return for corrections</button>
+            </form>
+          <% } %>
+        </section>
+      <% } else { %>
+        <p class="card">No decision is needed now: this article is "<%= review.statusLabel %>".
+          The editor decides only on articles awaiting approval.</p>
+      <% } %>
+
+      <section class="card">
+        <h3>Publish history</h3>
+        <% if (review.publishHistory.length === 0) { %>
+          <p class="empty-state">Never published.</p>
+        <% } else { %>
+          <%# reversed: the list is newest first, so the numbers count down and the first approval keeps number 1. %>
+          <ol reversed>
+            <% review.publishHistory.forEach(function (publishEvent) { %>
+              <li>Published <%= publishEvent.publishedAt %> by <%= publishEvent.editorName %></li>
+            <% }); %>
+          </ol>
+        <% } %>
+      </section>
+    </article>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script>
+    /**
+     * Sends the editor's decision (approve, or return with a note) to the editor API.
+     * On success the page reloads, so the status, the buttons and the publish history
+     * come fresh from the server. Text from the server is shown with textContent.
+     *
+     * Why a reload here and not for search or paging: the requirements ask for no full
+     * reload in interactive areas like search, filtering, paging and comments. After a
+     * decision, the whole page changes (status, buttons, history), and all of it is
+     * rendered on the server, so reloading shows the true new state without repeating
+     * the page's rendering in JavaScript.
+     *
+     * The server makes every real check (editor role, pending status, the note); these
+     * functions only send the request and show the answer, including 409 when someone
+     * already decided and 401 when the session ended.
+     */
+
+    /**
+     * Shows a message in the decision box.
+     *
+     * @param {string} text - The message.
+     * @param {string} className - '' for a normal message, 'form-error' for an error.
+     * @returns {void}
+     */
+    function showDecisionMessage(text, className) {
+      const message = document.getElementById('decision-message');
+      message.textContent = text;
+      message.className = className;
+      message.hidden = false;
+    }
+
+    /**
+     * Turns every decision button on or off, so the editor can't send a second
+     * decision while the first one is on its way.
+     *
+     * @param {boolean} disabled
+     * @returns {void}
+     */
+    function setDecisionButtonsDisabled(disabled) {
+      document.querySelectorAll('#review-decision button').forEach(function (button) {
+        button.disabled = disabled;
+      });
+    }
+
+    /**
+     * Sends one decision and handles the answer.
+     *
+     * @param {string} action - 'approve' or 'return' (the end of the API path).
+     * @param {Object} [body] - { note } for a return.
+     * @returns {Promise<void>}
+     */
+    async function sendDecision(action, body) {
+      const articleId = document.getElementById('article-review').dataset.articleId;
+      setDecisionButtonsDisabled(true);
+      showDecisionMessage('Saving...', 'loading');
+
+      const result = await apiClient.post(`/api/editor/articles/${encodeURIComponent(articleId)}/${action}`, body);
+
+      if (result.success) {
+        showDecisionMessage(action === 'approve' ? 'Published. Reloading...' : 'Returned to the reporter. Reloading...', '');
+        window.location.reload();
+        return;
+      }
+      setDecisionButtonsDisabled(false);
+      if (result.status === 401) {
+        showDecisionMessage('Your session has ended. Please log in again in another tab, then try again.', 'form-error');
+      } else {
+        // For example 409 if someone already decided, or 400 for an empty note.
+        showDecisionMessage(result.error, 'form-error');
+      }
+    }
+
+    /**
+     * Approve: asks for confirmation first, because readers see the new version at once.
+     *
+     * @returns {void}
+     */
+    function approveArticle() {
+      const confirmed = window.confirm('Publish this version? Readers will see it immediately.');
+      if (confirmed) {
+        sendDecision('approve');
+      }
+    }
+
+    /**
+     * Return: the note is required (requirements: returning comes with a note). We check
+     * it here for a quick message; the server checks it again.
+     *
+     * @param {SubmitEvent} event - The return form's submit event.
+     * @returns {void}
+     */
+    function returnArticle(event) {
+      // Stop the normal form submit, which would load a new page.
+      event.preventDefault();
+      const note = document.getElementById('return-note').value.trim();
+      if (note === '') {
+        showDecisionMessage('Please write a note telling the reporter what to fix.', 'form-error');
+        return;
+      }
+      sendDecision('return', { note: note });
+    }
+
+    const approveButton = document.getElementById('approve-button');
+    if (approveButton) {
+      approveButton.addEventListener('click', approveArticle);
+    }
+    const returnForm = document.getElementById('return-form');
+    if (returnForm) {
+      returnForm.addEventListener('submit', returnArticle);
+    }
+  </script>
+</body>
+</html>

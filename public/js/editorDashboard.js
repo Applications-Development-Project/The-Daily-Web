@@ -7,11 +7,24 @@
  * Each row links to the article's review page and has a Delete button, which asks
  * for confirmation and then deletes the article with its comments and statistics.
  *
+ * Requirements this serves: the editor sees every article and filters them by status;
+ * search, filtering and paging happen without a full page reload (Ajax with fetch,
+ * through apiClient.js).
+ *
  * Every text from the server is put on the page with textContent, never innerHTML,
  * so a title like "<script>..." is shown as plain text and can't run as code.
  *
+ * Nothing here is a permission check. The server decides: the list and delete APIs
+ * answer 401/403 to anyone who isn't an editor, whatever this script does. Checks in
+ * the browser (the 200-character limit on the search box, the delete confirmation)
+ * are only for a quick, friendly answer; the server checks the same things again.
+ *
+ * The answer it reads, { articles: [{ id, title, reporterName, status, statusLabel,
+ * isLive, updatedAt }], page, totalPages, totalArticles }, is SM's own contract with
+ * listAllArticles in controllers/editorController.js.
+ *
  * Loaded by: views/editor/dashboard.ejs, after public/js/shared/apiClient.js.
- * Related: controllers/editorController.js (listAllArticles).
+ * Related: controllers/editorController.js (listAllArticles, deleteArticle).
  * Owner: SM.
  */
 
@@ -23,6 +36,8 @@ const SEARCH_DELAY_MS = 300;
 
 /**
  * Formats a date from the server for the table, for example "10 Oct 2026, 14:32".
+ * It runs in the browser, so the time is shown in the editor's own time zone; the
+ * server sends the exact moment in ISO format (UTC).
  *
  * @param {string} isoDate - A date in ISO format, as JSON sends it.
  * @returns {string}
@@ -60,6 +75,8 @@ function createTextCell(text) {
  */
 function createArticleRow(article, onDeleteClick) {
   const row = document.createElement('tr');
+  // encodeURIComponent: a value placed inside a URL is always encoded, so even an
+  // unexpected id could never change the address (ids are 24 hex characters today).
   const reviewUrl = `/editor/articles/${encodeURIComponent(article.id)}`;
 
   const titleCell = document.createElement('td');

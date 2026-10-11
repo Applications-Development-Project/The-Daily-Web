@@ -12,6 +12,21 @@
  *
  * This is separate from ArticleViewStats on purpose: ArticleViewStats counts views
  * (how many), this one only answers yes or no for one device (has it seen it).
+ * Putting both in one model would mean one document per device per hour per article.
+ *
+ * The device id always comes from the httpOnly deviceId cookie that the server sets
+ * (request.deviceId), never from the URL or the request body, so a page can't mark
+ * articles as viewed for another device.
+ * Known limit: someone who clears their cookies gets a new device id, and their
+ * "viewed" marks start again from nothing. Without logins for readers there is no
+ * stronger identity; that is acceptable for a reading filter.
+ *
+ * Full CRUD on this model:
+ * - Create and Update: recordView in services/viewTracker.js (upsert; a repeat visit
+ *   only refreshes updatedAt).
+ * - Read: the feed's viewed / not-viewed filter (SH, controllers/feedController.js).
+ * - Delete: "Reset viewed marks" in the feed (SH), and deleting the article
+ *   (editorController.deleteArticle).
  *
  * Used by: services/viewTracker.js (recordView records the pair),
  * controllers/feedController.js (the viewed filter and "Reset viewed marks"),
@@ -25,6 +40,9 @@ const mongoose = require('mongoose');
 const deviceArticleViewSchema = new mongoose.Schema(
   {
     // The browser's id from the deviceId cookie (req.deviceId).
+    // required is checked by create() and save(). recordView writes with updateOne,
+    // which skips schema validators, so it checks for an empty id itself before
+    // writing (otherwise every guest without an id would look like one device).
     deviceId: {
       type: String,
       required: [true, 'Device id is required'],
