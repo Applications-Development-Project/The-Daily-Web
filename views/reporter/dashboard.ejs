@@ -3,7 +3,8 @@
 
   The reporter's dashboard: a table of the logged-in reporter's own articles, newest
   update first, each with its status label and the actions allowed for that status.
-  The whole table is rendered on the server, so no browser script is needed here.
+  The whole table is rendered on the server, so no browser script is needed for it. The
+  only script is public/js/reporterDashboard.js, for the "New article" button.
 
   Rendered by: controllers/reporterController.js (showReporterDashboard), for GET /reporter.
   Locals: title (the page title), articles (items from findReporterArticles: id, title,
@@ -40,6 +41,15 @@
 
   <main class="main-content">
     <h2>My articles</h2>
+
+    <%# The button is outside the if below, so a reporter with no articles can still create the first one.
+        public/js/reporterDashboard.js finds these two elements by id: it sends the request when the
+        button is clicked and writes any error message into the empty paragraph (role="alert" makes
+        screen readers announce it). %>
+    <p>
+      <button type="button" id="new-article-button" class="btn btn-primary">New article</button>
+    </p>
+    <p id="new-article-error" class="form-error" role="alert"></p>
 
     <%# A new reporter has no articles. Say so, instead of showing an empty table. %>
     <% if (articles.length === 0) { %>
@@ -115,5 +125,9 @@
   </main>
 
   <%- include('../partials/footer') %>
+
+  <%# Order matters: reporterDashboard.js calls apiClient, so apiClient.js must load first. %>
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/reporterDashboard.js"></script>
 </body>
 </html>
