@@ -11,7 +11,8 @@ const Article = require('../models/Article');
 const Comment = require('../models/Comment');
 
 // TODO: Import SM's recordView function once his view service is merged.
-// const { recordView } = require('../services/viewService'); 
+// Note: EZ mentioned the real file will be services/viewTracker.js
+// const { recordView } = require('../services/viewTracker'); 
 
 /**
  * GET /articles/:id - the full article page.
@@ -33,8 +34,9 @@ async function showArticlePage(request, response, next) {
             });
         }
 
-        // 2. Fetch the article (must be live/published)
-        const article = await Article.findOne({ _id: articleId, status: 'published' });
+        // 2. Fetch the article (must be live/published) and populate the reporter
+        const article = await Article.findOne({ _id: articleId, published: { $ne: null } })
+            .populate('reporter', 'displayName');
 
         if (!article) {
             return response.status(404).render('public/error', { 
@@ -43,8 +45,8 @@ async function showArticlePage(request, response, next) {
             });
         }
 
-        // 3. Fetch the first comments (e.g., earliest 10 comments)
-        const comments = await Comment.find({ articleId: article._id })
+        // 3. Fetch the first comments (the field on Comment model is 'article')
+        const comments = await Comment.find({ article: article._id })
             .sort({ createdAt: 1 })
             .limit(10);
 
@@ -57,9 +59,9 @@ async function showArticlePage(request, response, next) {
 
         // 5. Render the page with the dynamic data
         response.render('public/article', {
-            title: `${article.title} - The Web Daily`,
+            title: `${article.published.title} - The Web Daily`,
             article: article,
-            comments: comments // Passing comments to the view
+            comments: comments
         });
 
     } catch (error) {
