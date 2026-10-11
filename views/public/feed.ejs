@@ -10,9 +10,9 @@
             
             <!-- Filters & Search Section -->
             <div class="filters-container card" style="margin-bottom: var(--spacing-lg);">
-                <input type="text" id="search-input" class="form-field" placeholder="Search articles...">
+                <input type="text" id="search-input" class="form-field" placeholder="Search articles..." aria-label="Search articles">
                 <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm); flex-wrap: wrap;">
-                    <select id="category-filter" class="form-field">
+                    <select id="category-filter" class="form-field" aria-label="Filter by category">
                         <option value="">All Categories</option>
                         <option value="News">News</option>
                         <option value="Economy">Economy</option>
@@ -24,13 +24,13 @@
                         <option value="Culture">Culture</option>
                     </select>
                     
-                    <select id="viewed-filter" class="form-field">
+                    <select id="viewed-filter" class="form-field" aria-label="Filter by viewed status">
                         <option value="">All Articles</option>
                         <option value="unviewed">Unviewed Only</option>
                         <option value="viewed">Viewed Only</option>
                     </select>
                     
-                    <select id="sort-select" class="form-field">
+                    <select id="sort-select" class="form-field" aria-label="Sort articles">
                         <option value="newest">Newest First</option>
                         <option value="popular">Most Popular</option>
                     </select>
@@ -57,7 +57,7 @@
                                 </time> | <%= article.totalViews || 0 %> views
                             </p>
                             <% if (article.imageUrl) { %>
-                                <img src="<%= article.imageUrl %>" alt="<%= article.title %>" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-sm);">
+                                <img src="<%= article.imageUrl %>" alt="<%= article.title %>" onerror="this.onerror=null; this.src='/images/placeholder.jpg';" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-sm);">
                             <% } %>
                             <!-- Using <%= %> to escape HTML -->
                             <p><%= article.summary %></p>
