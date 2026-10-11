@@ -11,38 +11,27 @@
   That is only a convenience: the server refuses to delete or demote your own account
   in any case (controllers/userController.js).
 
-  TEMP until the shared partials (views/partials/head, header, footer) are merged: this
-  page is a complete HTML document with its own small header and logout form. When the
-  partials exist, replace the head and header below with includes.
+  The editor's name and the logout button come from the shared header, like on every
+  other page; this page doesn't have its own copy of them.
 
   Rendered by: controllers/userController.js (showUserManagementPage), for GET /editor/users.
-  Includes: views/editor/partials/editorNav.ejs (SM).
+  Includes: the shared head, header and footer (views/partials) and the editor nav (SM).
   Owner: OS.
 %>
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Users - The Web Daily</title>
-  <link rel="stylesheet" href="/css/main.css">
-</head>
-<body>
-  <header class="site-header">
-    <a href="/">The Web Daily</a>
-    <span><%= currentUser.displayName %></span>
-    <form method="post" action="/logout">
-      <button class="btn" type="submit">Log out</button>
-    </form>
-  </header>
+<%- include('../partials/head', { title: 'Users - The Web Daily' }) %>
 
+<body class="page-container">
+  <%- include('../partials/header') %>
   <%- include('partials/editorNav', { activePage: 'users' }) %>
 
-  <main class="page-container" id="user-management" data-current-user-id="<%= currentUser.id %>">
-    <h1>Users</h1>
+  <main class="main-content" id="user-management" data-current-user-id="<%= currentUser.id %>">
+    <%# h2: the shared header already holds the page's h1 (the site name). %>
+    <h2>Users</h2>
 
     <section class="card" aria-labelledby="add-user-title">
-      <h2 id="add-user-title">Add a user</h2>
+      <h3 id="add-user-title">Add a user</h3>
       <form id="add-user-form">
         <div class="form-field">
           <label for="new-username">Username</label>
@@ -70,7 +59,7 @@
     </section>
 
     <section aria-labelledby="user-list-title">
-      <h2 id="user-list-title">All users</h2>
+      <h3 id="user-list-title">All users</h3>
 
       <form id="user-search-form" role="search">
         <label for="user-search">Search by username or display name</label>
@@ -101,6 +90,9 @@
     </section>
   </main>
 
+  <%- include('../partials/footer') %>
+
+  <%# apiClient first: userManagement.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="/js/userManagement.js"></script>
 </body>
