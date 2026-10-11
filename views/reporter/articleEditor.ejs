@@ -5,7 +5,8 @@
   (title, summary, category, image URL, body), filled from the draft stored on the
   server. There is deliberately NO Save button: the requirements say work must be saved
   continuously, so public/js/reporterEditor.js sends the form to the server a moment
-  after the reporter stops typing, and shows the result in the status line.
+  after the reporter stops typing, and shows the result in the status line. The page has
+  one button, "Submit for approval", which sends the finished article to the editor.
 
   Rendered by: controllers/reporterController.js (showArticleEditor), for
   GET /reporter/articles/:id/edit. Only the owner of an editable article ever gets here.
@@ -97,6 +98,19 @@
         <textarea id="article-body" name="body" rows="15" maxlength="50000"><%= article.draft.body %></textarea>
       </div>
     </form>
+
+    <%# The only button of the page. It sits OUTSIDE the form and has type="button", so it never
+        submits the form in the browser's normal way (that would reload the page). Autosave keeps
+        the text safe while writing; this button is the reporter's decision "I am finished, send
+        it to the editor". public/js/reporterEditor.js first saves the latest text, and only then
+        asks the server to submit. The server checks everything again (required fields, status).
+        The paragraph below the button receives the server's message when something is wrong
+        (role="alert" makes screen readers announce it). %>
+    <p>After you submit, the editor reviews the article and you can't change it until they decide.</p>
+    <p>
+      <button type="button" id="submit-article-button" class="btn btn-primary">Submit for approval</button>
+    </p>
+    <p id="submit-error" class="form-error" role="alert"></p>
   </main>
 
   <%- include('../partials/footer') %>

@@ -100,9 +100,9 @@ const TRANSITIONS = Object.freeze({
  * It checks the ROLE only. Whether the article belongs to this reporter is the
  * controller's job, because it needs the article from the database (and the user's
  * id from the session), and this file stays a pure function with no database.
- * Today the controller does not check ownership yet: the dashboard only lists
- * the reporter's own articles, and the routes that change articles (autosave,
- * submit) are still placeholders that answer 501.
+ * In reporterController.js, findOwnedArticle does that ownership check (403 for
+ * someone else's article) before autosaveDraft and submitArticleForApproval call
+ * canTransition.
  *
  * @param {string} currentStatus - The article's status now, one of STATUS.
  * @param {string} nextStatus - The status the caller wants to move to, one of STATUS.

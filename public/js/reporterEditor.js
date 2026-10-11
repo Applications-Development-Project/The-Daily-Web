@@ -22,12 +22,15 @@
  *   5. Save when the page is being closed (fetch with keepalive), so the last seconds of
  *      typing are not lost when the reporter closes the tab.
  *   6. A half-typed image address can't block the saving of the rest of the draft.
+ *   7. The "Submit for approval" button: it first saves the latest text, and only if that
+ *      worked asks the server to send the article to the editor (see submitForApproval).
  * Still missing (phase 2 in the plan): a clearer message when the login session has ended.
  *
  * Used by: views/reporter/articleEditor.ejs (loaded at the end of the page, after
  * /js/shared/apiClient.js, because this file calls apiClient).
- * Related: controllers/reporterController.js (autosaveDraft, which validates everything
- * again on the server), the ids "article-form" and "save-status" in articleEditor.ejs.
+ * Related: controllers/reporterController.js (autosaveDraft and submitArticleForApproval,
+ * which validate everything again on the server), the ids "article-form", "save-status",
+ * "submit-article-button" and "submit-error" in articleEditor.ejs.
  * Owner: EZ.
  *
  * This is a plain browser script (no modules), so top-level names are shared with
@@ -134,6 +137,12 @@ function setUpReporterEditor() {
   }
 
   const draftUrl = '/api/reporter/articles/' + articleId + '/draft';
+  const submitUrl = '/api/reporter/articles/' + articleId + '/submit';
+
+  // The submit button and its message line. They are optional for autosave: if the page
+  // has no such button, autosave still works and nothing below tries to use them.
+  const submitButton = document.getElementById('submit-article-button');
+  const submitError = document.getElementById('submit-error');
 
   // The last image address the server accepted. Starts as the address the server wrote into
   // the page (defaultValue is the HTML "value" attribute, not what the reporter typed since,
@@ -153,6 +162,13 @@ function setUpReporterEditor() {
   // true when the form holds text the server has not confirmed yet. Used to decide whether
   // there is anything to send when the page is being closed.
   let hasUnsavedChanges = false;
+  // The request that is on its way to the server right now (the promise returned by
+  // apiClient), or null. Submitting waits for it, so the final save never overlaps with it.
+  let inFlightRequest = null;
+  // true from the click on "Submit for approval" until it has finished or failed. While it
+  // is true, autosave timers, follow-up saves and retries are switched off: only the submit
+  // sequence may talk to the server (see submitForApproval).
+  let isSubmitting = false;
 
   /**
    * Shows a message in the status line. textContent, never innerHTML: the message can
@@ -240,6 +256,12 @@ function setUpReporterEditor() {
     // The timer that called us has fired, so no timer is waiting any more.
     isSaveTimerPending = false;
 
+    // The submit sequence is running and does its own final save. A second save from a
+    // timer would overlap with it, so it is dropped.
+    if (isSubmitting) {
+      return;
+    }
+
     if (isSaving) {
       saveRequestedWhileSaving = true;
       return;
@@ -253,9 +275,11 @@ function setUpReporterEditor() {
    *
    * On failure the text is NOT touched: the form keeps exactly what the reporter typed,
    * so nothing is lost on screen, and hasUnsavedChanges goes back to true so the page-close
-   * save still tries. A temporary failure (network down, server error) is retried by itself.
+   * save still tries. A temporary failure (network down, server error) is retried by itself,
+   * except while the submit sequence is running (it reports the failure to the reporter instead).
    *
-   * @returns {Promise<void>}
+   * @returns {Promise<{success: boolean, error: (string|null), status: number}>} What
+   *   apiClient returned for the save, so submitForApproval knows whether it worked.
    */
   async function saveDraft() {
     isSaving = true;
@@ -265,7 +289,11 @@ function setUpReporterEditor() {
     showStatus('Saving...');
 
     const { draft, imageUrlIsInvalid } = readDraftForSaving();
-    const result = await apiClient.patch(draftUrl, draft);
+    // Keep the promise in a variable (not only await it), so submitForApproval can wait for
+    // this very request to finish.
+    inFlightRequest = apiClient.patch(draftUrl, draft);
+    const result = await inFlightRequest;
+    inFlightRequest = null;
 
     isSaving = false;
 
@@ -300,14 +328,114 @@ function setUpReporterEditor() {
     if (saveRequestedWhileSaving) {
       saveRequestedWhileSaving = false;
       requestSave();
-      return;
+      return result;
     }
 
     // Retry later after a temporary failure, unless a save is already scheduled (the
     // reporter typed during the failed attempt): that earlier timer will send the latest text.
-    if (!result.success && isTemporaryFailure(result) && !isSaveTimerPending) {
+    // Not while submitting: then the reporter is told about the failure and clicks again.
+    if (!result.success && isTemporaryFailure(result) && !isSaveTimerPending && !isSubmitting) {
       startSaveTimer(RETRY_DELAY_MS);
     }
+
+    return result;
+  }
+
+  /**
+   * Switches the five fields and the submit button on or off together. While the submit
+   * sequence runs they are off, so nothing can be typed between the final save and the
+   * submit (the text that gets submitted is exactly the text that was saved). A disabled
+   * field still keeps its value, so readDraftForSaving can read it as usual.
+   *
+   * @param {boolean} enabled - true to allow editing and clicking, false to block them.
+   * @returns {void}
+   */
+  function setFormEnabled(enabled) {
+    fields.forEach(function (field) {
+      field.disabled = !enabled;
+    });
+    submitButton.disabled = !enabled;
+  }
+
+  /**
+   * Shows why the article was not submitted and gives control back to the reporter.
+   * The text is untouched: nothing the reporter typed is lost.
+   *
+   * @param {string} message - The reason, for the reporter. Shown with textContent.
+   * @returns {void}
+   */
+  function stopSubmitting(message) {
+    submitError.textContent = message;
+    isSubmitting = false;
+    setFormEnabled(true);
+  }
+
+  /**
+   * The "Submit for approval" button: the reporter says "I am finished, send it to the editor".
+   * Steps, in this order:
+   *   1. Disable the button and the fields. A double click can't send two requests, and
+   *      nothing can change from now on.
+   *   2. Cancel the waiting autosave timer (or retry timer): this function does the final
+   *      save itself, a second one would be a duplicate.
+   *   3. Wait for a save that is already on its way. Saves never overlap (single flight).
+   *   4. Save the latest draft once. If that save FAILS we stop and tell the reporter: the
+   *      server checks the draft that is stored in the database, so submitting after a
+   *      failed save would send an OLDER version to the editor than the one on the screen.
+   *   5. Only then ask the server to submit. The server checks the owner, that the required
+   *      fields are filled in, and that the status allows it, and answers with the reason
+   *      if not. On success we go to the dashboard, where the article is now
+   *      "Awaiting editor approval".
+   *
+   * Why this works with an autosave that has no Save button: the final save in step 4 is what
+   * makes "submit" safe, because the page can't know whether the last few seconds of typing
+   * have reached the server yet.
+   *
+   * @returns {Promise<void>}
+   */
+  async function submitForApproval() {
+    isSubmitting = true;
+    setFormEnabled(false);
+    submitError.textContent = '';
+
+    // The image address is the one field the server would refuse. Autosave quietly keeps the
+    // last good address while the reporter is still typing, but submitting is the moment of
+    // decision: sending the OLD address without saying so would be a surprise. So stop here.
+    if (!isEmptyOrHttpUrl(articleForm.elements.imageUrl.value)) {
+      stopSubmitting('The image address must be empty or start with http:// or https:// before you can submit.');
+      return;
+    }
+
+    // Step 2: the waiting timer (debounce or retry) and any follow-up save are cancelled.
+    clearTimeout(saveTimerId);
+    isSaveTimerPending = false;
+    saveRequestedWhileSaving = false;
+
+    // Step 3: wait for the save that is already running, if there is one.
+    if (inFlightRequest) {
+      await inFlightRequest;
+    }
+
+    // Step 4: save the latest text once, and stop if it did not work.
+    const saveResult = await saveDraft();
+    if (!saveResult.success) {
+      stopSubmitting('The article was not submitted because the latest text could not be saved: ' + saveResult.error);
+      return;
+    }
+
+    // Step 5: the body is empty on purpose. The article id is in the URL, the reporter comes
+    // from the session, and the new status is decided by the server, never by the browser.
+    showStatus('Submitting...');
+    const submitResult = await apiClient.post(submitUrl, {});
+    if (!submitResult.success) {
+      // For example 400 "Please fill in these fields before submitting: summary." The text
+      // stays in the form so the reporter can fix it and click again.
+      stopSubmitting(submitResult.error);
+      return;
+    }
+
+    // Done. The fields and the button stay disabled while the browser leaves this page,
+    // because the article is now read-only for the reporter.
+    window.location.href = '/reporter';
   }
 
   /**
@@ -361,6 +489,10 @@ function setUpReporterEditor() {
   fields.forEach(function (field) {
     field.addEventListener('input', scheduleSave);
   });
+
+  if (submitButton && submitError) {
+    submitButton.addEventListener('click', submitForApproval);
+  }
 
   // Two events, because no single one is reliable everywhere. "visibilitychange" to hidden
   // is the most dependable on phones (switching apps, closing a tab), and "pagehide" covers
