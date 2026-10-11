@@ -90,6 +90,8 @@ function setUpUserManagement() {
   let currentPage = 1;
   let totalPages = 1;
   let searchTimer = null;
+  // Counts the list requests, so only the answer to the newest one is shown.
+  let latestRequestNumber = 0;
 
   /**
    * Shows an error above the table, or hides it when message is empty.
@@ -105,9 +107,19 @@ function setUpUserManagement() {
   /**
    * Loads one page of users from the API and shows it.
    *
+   * Why the request number: searches are sent while the editor types, and the answers
+   * don't always come back in the order the requests were sent. Without this check, a
+   * slow answer for "ma" could arrive after the answer for "maya" and replace it, so
+   * the table would show results for text that is no longer in the box. Each call
+   * takes a new number, and an answer is shown only if no newer request started since.
+   * (The same technique as in public/js/commentModeration.js.)
+   *
    * @returns {Promise<void>}
    */
   async function loadUsers() {
+    latestRequestNumber += 1;
+    const requestNumber = latestRequestNumber;
+
     listStatus.textContent = 'Loading users...';
     listStatus.hidden = false;
 
@@ -117,6 +129,10 @@ function setUpUserManagement() {
       query.set('search', searchInput.value.trim());
     }
     const result = await apiClient.get(`/api/users?${query.toString()}`);
+
+    if (requestNumber !== latestRequestNumber) {
+      return;
+    }
 
     if (!result.success) {
       listStatus.hidden = true;
