@@ -10,7 +10,8 @@
  * Version 1 (SM, phase 0): demo users and about 50 articles in every status.
  * Version 2 (OS, phase 2): the full demo data the requirements ask for: one editor,
  * several reporters and 500+ articles in every status and category, so search, the
- * filters and infinite scroll can be shown on a realistic amount of data.
+ * filters and infinite scroll can be shown on a realistic amount of data; live articles
+ * updated several times after publishing; guest comments on most live articles.
  *
  * No password is written in this file or anywhere in the repo: every demo user
  * gets the password from SEED_DEMO_PASSWORD in your own .env, and the script
@@ -24,6 +25,7 @@
 // Must run first, so process.env is filled before the files below read it.
 require('dotenv').config({ quiet: true });
 
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const { connectToDatabase, disconnectFromDatabase } = require('../config/database');
@@ -169,6 +171,46 @@ const RETURN_NOTES = [
   'Add a quote from someone directly involved in the story.',
   'Check the spelling of the names and choose a clearer main image.',
 ];
+
+// Names readers typed on their comments. Guests have no accounts, so a comment only
+// stores the name as typed (see models/Comment.js).
+const COMMENT_AUTHOR_NAMES = [
+  'Noa', 'Avi', 'Shira K.', 'Daniel', 'Michal', 'Eitan', 'Rina', 'Yonatan', 'Lea',
+  'Amir', 'Talia', 'Guy', 'Hila B.', 'Ron', 'Maya', 'Itai', 'Dafna', 'Oren',
+];
+
+// Comment texts, general enough to fit any article.
+const COMMENT_TEXTS = [
+  'Great article, thank you for the clear explanation.',
+  'I did not know about this. Thanks for sharing!',
+  'Interesting, but I would like to see more numbers.',
+  'Finally someone is writing about this.',
+  'I disagree with the second paragraph, but the reporting is good.',
+  'Can you write a follow-up when there is news?',
+  'This affects my family directly. Thank you for covering it.',
+  'Well written and to the point.',
+  'Is there an official source for this?',
+  'I hope the decision makers read this.',
+  'My neighbours were talking about this just yesterday.',
+  'Short and clear, exactly what I needed.',
+  'The photo says it all.',
+  'Let us see what happens next month.',
+];
+
+// One seeded comment contains HTML on purpose, so the defense can show that text
+// typed by readers is always displayed as plain text and never runs: the article page
+// prints comments with the escaping <%= %> tag, and the browser scripts use
+// textContent (public/js/articleComments.js, public/js/commentModeration.js).
+const XSS_DEMO_COMMENT = {
+  authorName: '<b>Test reader</b>',
+  text: '<script>alert("hacked")</script> If you can read this tag, the page is safe.',
+};
+
+// About 7 in 10 live articles get comments; the rest have none, so the article page's
+// "No comments yet." state can be shown too. Most get a few, every 25th a lot.
+const SHARE_OF_ARTICLES_WITH_COMMENTS = 0.7;
+const MAX_COMMENTS_ON_A_NORMAL_ARTICLE = 6;
+const COMMENTS_ON_A_POPULAR_ARTICLE = 25;
 
 /**
  * Picks a random moment between two dates.
@@ -430,6 +472,72 @@ async function createLiveArticles(reporters, editor, firstArticleNumber) {
 }
 
 /**
+ * Picks a random item of a list.
+ *
+ * @param {Array} list - A list with at least one item.
+ * @returns {*} One of its items.
+ */
+function pickRandom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+/**
+ * Builds (does not save) one comment on a live article, written by a guest at a
+ * random moment between the article's first publish and now. A comment can only be
+ * posted on a live article, so it can never be older than the article's first publish.
+ *
+ * @param {Object} article - A live article (needs _id and firstPublishedAt).
+ * @param {{authorName: string, text: string}} [content] - Fixed name and text; random if left out.
+ * @returns {Object} A plain object ready for Comment.insertMany().
+ */
+function buildComment(article, content) {
+  const createdAt = randomDateBetween(article.firstPublishedAt, new Date());
+  return {
+    article: article._id,
+    authorName: content ? content.authorName : pickRandom(COMMENT_AUTHOR_NAMES),
+    text: content ? content.text : pickRandom(COMMENT_TEXTS),
+    // Each comment comes from its own made-up browser, in the same UUID shape that
+    // middleware/assignDeviceId.js gives real ones.
+    deviceId: crypto.randomUUID(),
+    createdAt: createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+/**
+ * Creates guest comments on about 70% of the live articles (see the numbers above),
+ * plus the one XSS demo comment on the newest live article, where it is easy to find.
+ *
+ * @returns {Promise<number>} How many comments were created.
+ */
+async function createComments() {
+  // The live articles, newest first. Only the two fields buildComment needs are loaded.
+  const liveArticles = await Article.find({ published: { $ne: null } })
+    .sort({ lastPublishedAt: -1 })
+    .select('_id firstPublishedAt')
+    .lean();
+
+  const comments = [buildComment(liveArticles[0], XSS_DEMO_COMMENT)];
+
+  liveArticles.forEach((article, index) => {
+    if (Math.random() >= SHARE_OF_ARTICLES_WITH_COMMENTS) {
+      return;
+    }
+    const commentCount = index % 25 === 0
+      ? COMMENTS_ON_A_POPULAR_ARTICLE
+      : 1 + Math.floor(Math.random() * MAX_COMMENTS_ON_A_NORMAL_ARTICLE);
+    for (let i = 0; i < commentCount; i++) {
+      comments.push(buildComment(article));
+    }
+  });
+
+  // One insertMany for all the comments, as for the articles. Mongoose keeps the
+  // createdAt values we give here, because this is a new document, not an update.
+  await Comment.insertMany(comments);
+  return comments.length;
+}
+
+/**
  * Deletes every document in every collection of the connected database.
  *
  * We loop over the collections that actually exist instead of listing our models,
@@ -536,6 +644,9 @@ async function runSeed() {
   // Continue the story numbers after the unpublished articles, so no title repeats.
   const liveCount = await createLiveArticles(users.reporters, users.editor, unpublishedCount);
   logger.info(`Created ${liveCount} live articles`);
+
+  const commentCount = await createComments();
+  logger.info(`Created ${commentCount} comments on live articles`);
 
   logger.info(`Seed finished: ${unpublishedCount + liveCount} articles in total`);
   printDemoLogins();
