@@ -3,6 +3,9 @@
  * 
  * Client-side logic for the news feed.
  * Handles infinite scrolling, search, filtering, and rendering articles safely.
+ * Owner: SH.
+ * 
+ * Related files: controllers/feedController.js, views/public/feed.ejs
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,6 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Item 9: Check if the server already rendered initial articles
     const initialArticlesCount = feedList.querySelectorAll('article').length;
+    
+    // Defense Question - Architecture: Why start at page 2?
+    // The server already rendered the first 20 articles in the HTML (SSR) for performance and SEO.
+    // We start client-side pagination at page 2 to avoid fetching and rendering duplicate content on load.
     let currentPage = initialArticlesCount > 0 ? 2 : 1;
     let isLoading = false;
     let hasMore = true;
@@ -28,8 +35,14 @@ document.addEventListener('DOMContentLoaded', () => {
     sentinel.textContent = initialArticlesCount > 0 ? 'Loading more articles...' : '';
     feedList.appendChild(sentinel);
 
-    // Load articles from our API
+    /**
+     * Load articles from our API
+     * @param {boolean} reset - If true, clears the feed and resets pagination to page 1.
+     */
     async function loadArticles(reset = false) {
+        // Defense Question - State Management: Why check isLoading?
+        // "Never start a second request while one is running." 
+        // This prevents race conditions and duplicating articles if the user scrolls aggressively.
         if (isLoading || (!hasMore && !reset)) return;
         
         isLoading = true;
@@ -50,6 +63,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 viewed: viewedFilter.value
             });
 
+            // Defense Question - Contracts: What is the expected response shape?
+            // We depend on feedController returning { success: true, data: { articles, hasMore } }.
             const response = await fetch(`/api/articles?${params.toString()}`);
             const result = await response.json();
 
@@ -61,6 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     sentinel.textContent = 'No articles found matching your criteria.';
                 } else {
                     // Render the fetched articles
+                    // Defense Question - Security: Why use createElement and textContent instead of innerHTML?
+                    // If a reporter includes a malicious script tag in an article's summary or title, 
+                    // setting it via innerHTML would execute the script (Cross-Site Scripting / XSS). 
+                    // textContent treats everything strictly as safe text.
                     articles.forEach(article => {
                         const articleEl = document.createElement('article');
                         articleEl.className = 'card';
@@ -129,7 +148,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Use Intersection Observer to trigger loadArticles when sentinel comes into view
+    // Defense Question - Performance: Why IntersectionObserver instead of a scroll event listener?
+    // Scroll events fire hundreds of times per second, blocking the main thread and causing lag.
+    // IntersectionObserver runs highly optimized in the background by the browser, only waking up our JS 
+    // when the sentinel element actually enters the viewport.
     const observer = new IntersectionObserver((entries) => {
         if (entries[0].isIntersecting) {
             loadArticles();
@@ -139,6 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Add event listeners for filters (with debounce for the text search)
     let searchTimeout;
     searchInput.addEventListener('input', () => {
+        // Defense Question - Performance: What is this 300ms delay and why?
+        // This is a "debounce". Without it, typing "Israel" would fire 6 separate HTTP requests to our database.
+        // By clearing and resetting the 300ms timer on every keystroke, we wait until the user pauses before searching.
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(() => loadArticles(true), 300);
     });
@@ -148,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
     sortSelect.addEventListener('change', () => loadArticles(true));
 
     // Item 8: Reset Viewed Marks
+    // Edge case: If the user resets views, we fetch fresh data without a full page reload for better UX.
     if (resetViewsBtn) {
         resetViewsBtn.addEventListener('click', async () => {
             try {
@@ -170,7 +196,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (initialArticlesCount === 0) {
         loadArticles(true);
     }
-
 
     // Item 10: Weather Widget Logic (Reuse sidebar loadWeather)
     // Refresh every 5 minutes (300,000 milliseconds)
