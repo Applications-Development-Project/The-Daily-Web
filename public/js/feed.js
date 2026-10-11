@@ -11,8 +11,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const categoryFilter = document.getElementById('category-filter');
     const viewedFilter = document.getElementById('viewed-filter');
     const sortSelect = document.getElementById('sort-select');
+    const resetViewsBtn = document.getElementById('reset-views-btn'); // Item 8
 
-    let currentPage = 1;
+    // Item 9: Check if the server already rendered initial articles
+    const initialArticlesCount = feedList.querySelectorAll('article').length;
+    let currentPage = initialArticlesCount > 0 ? 2 : 1;
     let isLoading = false;
     let hasMore = true;
 
@@ -22,7 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     sentinel.style.textAlign = 'center';
     sentinel.style.padding = '1rem';
     sentinel.style.color = '#666';
-    sentinel.textContent = 'Loading more articles...';
+    sentinel.textContent = initialArticlesCount > 0 ? 'Loading more articles...' : '';
+    feedList.appendChild(sentinel);
 
     // Load articles from our API
     async function loadArticles(reset = false) {
@@ -32,7 +36,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (reset) {
             currentPage = 1;
             hasMore = true;
-            feedList.innerHTML = ''; // Clear current feed
+            feedList.innerHTML = ''; // Clear current feed for new filters
+            feedList.appendChild(sentinel);
         }
 
         try {
@@ -49,12 +54,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const result = await response.json();
 
             if (result.success) {
-                // Read from the newly shaped contract
                 const articles = result.data.articles;
                 hasMore = result.data.hasMore;
                 
                 if (articles.length === 0 && reset) {
-                    feedList.innerHTML = '<p class="empty-state">No articles found matching your criteria.</p>';
+                    sentinel.textContent = 'No articles found matching your criteria.';
                 } else {
                     // Render the fetched articles
                     articles.forEach(article => {
@@ -72,10 +76,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         const titleH3 = document.createElement('h3');
                         titleH3.style.margin = 'var(--spacing-sm) 0';
                         const linkEl = document.createElement('a');
-                        linkEl.href = `/articles/${article.id}`; // Fixed URL path
+                        linkEl.href = `/articles/${article.id}`;
                         linkEl.style.textDecoration = 'none';
                         linkEl.style.color = 'inherit';
-                        linkEl.textContent = article.title; // Using textContent prevents XSS
+                        linkEl.textContent = article.title; 
                         titleH3.appendChild(linkEl);
                         articleEl.appendChild(titleH3);
                         
@@ -103,29 +107,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
                         // Summary
                         const summaryP = document.createElement('p');
-                        summaryP.textContent = article.summary; // Using textContent prevents XSS
+                        summaryP.textContent = article.summary; 
                         articleEl.appendChild(summaryP);
                         
-                        feedList.appendChild(articleEl);
+                        // Insert before the sentinel
+                        feedList.insertBefore(articleEl, sentinel);
                     });
                     
                     currentPage++;
-                    
-                    if (hasMore) {
-                        sentinel.textContent = 'Loading more articles...';
-                        feedList.appendChild(sentinel);
-                    } else {
-                        sentinel.textContent = 'No more articles to show.';
-                        feedList.appendChild(sentinel);
-                    }
+                    sentinel.textContent = hasMore ? 'Loading more articles...' : 'No more articles to show.';
                 }
             } else {
                 console.error('Failed to load articles:', result.error);
-                if (reset) feedList.innerHTML = '<p class="empty-state form-error">Error loading articles.</p>';
+                sentinel.textContent = 'Error loading articles.';
             }
         } catch (error) {
             console.error('Error fetching articles:', error);
-            if (reset) feedList.innerHTML = '<p class="empty-state form-error">Network error occurred.</p>';
+            sentinel.textContent = 'Network error occurred.';
         } finally {
             isLoading = false;
         }
@@ -149,11 +147,46 @@ document.addEventListener('DOMContentLoaded', () => {
     viewedFilter.addEventListener('change', () => loadArticles(true));
     sortSelect.addEventListener('change', () => loadArticles(true));
 
-    // Initial setup
-    feedList.innerHTML = '';
-    feedList.appendChild(sentinel);
+    // Item 8: Reset Viewed Marks
+    if (resetViewsBtn) {
+        resetViewsBtn.addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/articles/viewed', { method: 'DELETE' });
+                if (response.ok) {
+                    loadArticles(true); // Reload the list without reloading the page
+                } else {
+                    console.error('Failed to reset views');
+                }
+            } catch (err) {
+                console.error('Network error resetting views:', err);
+            }
+        });
+    }
+
+    // Initialize Intersection Observer
     observer.observe(sentinel);
     
-    // Trigger the first load
-    loadArticles(true);
+    // Trigger the first load ONLY if there are no server-rendered articles
+    if (initialArticlesCount === 0) {
+        loadArticles(true);
+    }
+
+    // Item 10: Weather Widget Logic
+    const weatherContainer = document.getElementById('weather-widget-content');
+    if (weatherContainer) {
+        // Refresh every 15 minutes (900,000 milliseconds)
+        setInterval(async () => {
+            try {
+                const res = await fetch('/api/weather'); // Assumes this endpoint serves the weather HTML
+                if (res.ok) {
+                    const html = await res.text();
+                    weatherContainer.innerHTML = html;
+                } else {
+                    weatherContainer.textContent = 'Weather unavailable';
+                }
+            } catch (e) {
+                weatherContainer.textContent = 'Weather unavailable';
+            }
+        }, 15 * 60 * 1000);
+    }
 });
