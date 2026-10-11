@@ -7,9 +7,13 @@
  * WARNING: it first deletes EVERYTHING in the database named in MONGODB_URI
  * (articles, users, comments, statistics, sessions), then creates fresh data.
  *
- * Version 1 (SM, phase 0): demo users and articles in every status.
- * In phase 2 OS extends it to the full demo data (500+ articles, comments,
- * view statistics for the analytics chart).
+ * Version 1 (SM, phase 0): demo users and about 50 articles in every status.
+ * Version 2 (OS, phase 2): the full demo data the requirements ask for: one editor,
+ * several reporters and 500+ articles in every status and category, so search, the
+ * filters and infinite scroll can be shown on a realistic amount of data; live articles
+ * updated several times after publishing; guest comments on most live articles; and
+ * hourly view statistics for the last 30 days, with a clear jump after every publish,
+ * for the Impact Analytics chart. It takes a few seconds (about 226,000 view counters).
  *
  * No password is written in this file or anywhere in the repo: every demo user
  * gets the password from SEED_DEMO_PASSWORD in your own .env, and the script
@@ -23,6 +27,7 @@
 // Must run first, so process.env is filled before the files below read it.
 require('dotenv').config({ quiet: true });
 
+const crypto = require('crypto');
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const { connectToDatabase, disconnectFromDatabase } = require('../config/database');
@@ -33,8 +38,13 @@ const ArticleViewStats = require('../models/ArticleViewStats');
 const DeviceArticleView = require('../models/DeviceArticleView');
 const Comment = require('../models/Comment');
 const { STATUS } = require('../services/articleWorkflow');
+// getHourStart is the same function recordView uses to round a real view down to its
+// hour (UTC), so seeded counters and counters from real visits use the same hourStart
+// values and add up in the same documents.
+const { getHourStart, DEFAULT_RANGE_DAYS } = require('../services/viewTracker');
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
 
 // How much work bcrypt does per hash. Each +1 doubles the time, which slows down
 // anyone trying to guess passwords from a stolen hash. 10 is the value the whole
@@ -43,11 +53,24 @@ const BCRYPT_ROUNDS = 10;
 
 // The demo accounts. Usernames are simple so they're easy to type in a demo;
 // display names are what readers see on articles. The requirements ask for one
-// editor and several reporters.
+// editor and several reporters. scripts/testReporterApi.js (EZ) logs in as editor,
+// reporter1 and reporter2, so those three usernames must stay.
 const DEMO_USERS = [
   { username: 'editor', displayName: 'Maya Cohen', role: 'editor' },
   { username: 'reporter1', displayName: 'Dana Levi', role: 'reporter' },
   { username: 'reporter2', displayName: 'Omer Ben-David', role: 'reporter' },
+  { username: 'reporter3', displayName: 'Noa Friedman', role: 'reporter' },
+  { username: 'reporter4', displayName: 'Yossi Mizrahi', role: 'reporter' },
+  { username: 'reporter5', displayName: 'Tamar Avraham', role: 'reporter' },
+];
+
+// Places put in front of a sample headline ("Haifa: City council approves ..."), the
+// way news sites mark local stories. There are 56 sample stories, so without this a
+// 500-article seed would repeat each headline about nine times, and searching for one
+// would show nine identical results. 10 places x 56 stories = 560 different titles.
+const STORY_PLACES = [
+  'Jerusalem', 'Tel Aviv', 'Haifa', 'Beersheba', 'Eilat',
+  'Nazareth', 'Ashdod', 'Netanya', 'Tiberias', 'Rishon LeZion',
 ];
 
 // Fictional headlines and summaries, 7 for each of the 8 categories in
@@ -128,10 +151,12 @@ const SAMPLE_STORIES = {
 };
 
 // How many never-published articles of each status to create.
+// Together with LIVE_ARTICLE_COUNTS: 70 + 440 = 510 articles, above the 500 the
+// requirements ask for, most of them published (as on a real news site).
 const UNPUBLISHED_ARTICLE_COUNTS = {
-  [STATUS.DRAFT]: 6,
-  [STATUS.PENDING]: 5,
-  [STATUS.RETURNED]: 4,
+  [STATUS.DRAFT]: 30,
+  [STATUS.PENDING]: 25,
+  [STATUS.RETURNED]: 15,
 };
 
 // Live articles (published is not null), grouped by the status of their working
@@ -139,10 +164,10 @@ const UNPUBLISHED_ARTICLE_COUNTS = {
 // ("Article status rules"), so a live article can also be in draft, pending or returned
 // while the reporter works on an update and readers keep seeing the approved version.
 const LIVE_ARTICLE_COUNTS = {
-  [STATUS.PUBLISHED]: 25, // no update in progress: draft is the same as published
-  [STATUS.DRAFT]: 4, // the reporter is editing an update
-  [STATUS.PENDING]: 3, // an update is waiting for the editor
-  [STATUS.RETURNED]: 3, // the update was returned to the reporter with a note
+  [STATUS.PUBLISHED]: 400, // no update in progress: draft is the same as published
+  [STATUS.DRAFT]: 15, // the reporter is editing an update
+  [STATUS.PENDING]: 15, // an update is waiting for the editor
+  [STATUS.RETURNED]: 10, // the update was returned to the reporter with a note
 };
 
 // Notes the editor left on returned articles.
@@ -152,6 +177,74 @@ const RETURN_NOTES = [
   'Add a quote from someone directly involved in the story.',
   'Check the spelling of the names and choose a clearer main image.',
 ];
+
+// Names readers typed on their comments. Guests have no accounts, so a comment only
+// stores the name as typed (see models/Comment.js).
+const COMMENT_AUTHOR_NAMES = [
+  'Noa', 'Avi', 'Shira K.', 'Daniel', 'Michal', 'Eitan', 'Rina', 'Yonatan', 'Lea',
+  'Amir', 'Talia', 'Guy', 'Hila B.', 'Ron', 'Maya', 'Itai', 'Dafna', 'Oren',
+];
+
+// Comment texts, general enough to fit any article.
+const COMMENT_TEXTS = [
+  'Great article, thank you for the clear explanation.',
+  'I did not know about this. Thanks for sharing!',
+  'Interesting, but I would like to see more numbers.',
+  'Finally someone is writing about this.',
+  'I disagree with the second paragraph, but the reporting is good.',
+  'Can you write a follow-up when there is news?',
+  'This affects my family directly. Thank you for covering it.',
+  'Well written and to the point.',
+  'Is there an official source for this?',
+  'I hope the decision makers read this.',
+  'My neighbours were talking about this just yesterday.',
+  'Short and clear, exactly what I needed.',
+  'The photo says it all.',
+  'Let us see what happens next month.',
+];
+
+// One seeded comment contains HTML on purpose, so the defense can show that text
+// typed by readers is always displayed as plain text and never runs: the article page
+// prints comments with the escaping <%= %> tag, and the browser scripts use
+// textContent (public/js/articleComments.js, public/js/commentModeration.js).
+const XSS_DEMO_COMMENT = {
+  authorName: '<b>Test reader</b>',
+  text: '<script>alert("hacked")</script> If you can read this tag, the page is safe.',
+};
+
+// About 7 in 10 live articles get comments; the rest have none, so the article page's
+// "No comments yet." state can be shown too. Most get a few, every 25th a lot.
+const SHARE_OF_ARTICLES_WITH_COMMENTS = 0.7;
+const MAX_COMMENTS_ON_A_NORMAL_ARTICLE = 6;
+const COMMENTS_ON_A_POPULAR_ARTICLE = 25;
+
+// View statistics: hourly counters (models/ArticleViewStats.js) for the analytics
+// chart's default range (DEFAULT_RANGE_DAYS in services/viewTracker.js, 30 days).
+// The counters are counted back from the moment the seed runs, so the chart shows
+// data right up to that moment, which is why the plan says to re-seed shortly before
+// the defense.
+const VIEW_STATS_DAYS = DEFAULT_RANGE_DAYS;
+
+// The shape of one article's views per hour (see expectedViewsInHour):
+// - an everyday level of 1 to 5 views an hour, and every 10th article 5 times that,
+//   so "sort by popularity" has clear winners;
+// - a jump after each publish that fades by half about every 12 hours, so the chart
+//   shows a clear change around every publish marker. An update gets a smaller jump
+//   than the first publish, but still easy to see.
+const MIN_BASE_VIEWS_PER_HOUR = 1;
+const MAX_BASE_VIEWS_PER_HOUR = 5;
+const POPULAR_ARTICLE_FACTOR = 5;
+const FIRST_PUBLISH_JUMP = 40;
+const UPDATE_JUMP = 25;
+const JUMP_HALF_LIFE_HOURS = 12;
+
+// Israel is 2 or 3 hours ahead of UTC; 3 is close enough for a day/night rhythm.
+const LOCAL_TIME_OFFSET_HOURS = 3;
+
+// The counters are saved in batches of this many documents. One insertMany per batch
+// keeps the number of trips to the database small, while no single request to MongoDB
+// gets too big.
+const VIEW_STATS_BATCH_SIZE = 10000;
 
 /**
  * Picks a random moment between two dates.
@@ -205,7 +298,9 @@ function buildArticleBody(title, summary, category) {
  *
  * Numbers go round the categories in order (0 Politics, 1 Economy, ... 8 Politics
  * again), so every category gets a similar share, and each number in a category
- * gets the next story, so titles don't repeat until all 56 are used.
+ * gets the next story. After all 56 stories are used, the next round puts the next
+ * place from STORY_PLACES in front of the title, so titles don't repeat until 560
+ * articles (the first round has no place, so the original headlines stay too).
  *
  * @param {number} articleNumber - 0, 1, 2... one per article the seed creates.
  * @returns {{title: string, summary: string, body: string, imageUrl: string, category: string}}
@@ -214,7 +309,12 @@ function buildArticleContent(articleNumber) {
   const categories = Article.CATEGORIES;
   const category = categories[articleNumber % categories.length];
   const stories = SAMPLE_STORIES[category];
-  const [title, summary] = stories[Math.floor(articleNumber / categories.length) % stories.length];
+  const storyNumber = Math.floor(articleNumber / categories.length);
+  const [headline, summary] = stories[storyNumber % stories.length];
+
+  // Which round of the 56 stories this is: 0 for the first, 1 for the second...
+  const round = Math.floor(storyNumber / stories.length);
+  const title = round === 0 ? headline : `${STORY_PLACES[(round - 1) % STORY_PLACES.length]}: ${headline}`;
 
   return {
     title: title,
@@ -241,8 +341,7 @@ function buildUnpublishedArticle(articleNumber, status, reporter) {
 
   // Every third draft is left half-written, the way autosave stores them:
   // only a title and an opening paragraph, no summary, image or category yet.
-  // (Every third, not every second: reporters also alternate by even/odd number,
-  // so "every second" would give all the half-written drafts to the same reporter.)
+  // (Reporters take articles in turn by number, so every reporter gets some.)
   if (status === STATUS.DRAFT && articleNumber % 3 === 0) {
     draft.summary = '';
     draft.body = draft.body.split('\n\n')[0];
@@ -291,9 +390,14 @@ async function createUnpublishedArticles(reporters, firstArticleNumber) {
 /**
  * Builds the list of approvals of one live article: the first publish and then
  * each update, oldest first, each 1 to 4 days after the previous one.
- * The first publish is 20 to 30 days ago, so even 4 publishes end at least
- * 8 days ago, never in the future, and all fall inside the analytics chart's
- * default 30-day window.
+ *
+ * An article with updates is first published 17 to 27 days ago, so even 4 publishes
+ * (at most 3 x 4 days later) end at least 5 days ago, never in the future, and all of
+ * them fall inside the analytics chart's default 30-day window, where the editor can
+ * see each one. 27, not 30, leaves a few days of margin: the chart counts its 30 days
+ * back from when it is opened, which can be a day or two after the seed ran.
+ * An article published only once can be from any moment in the last 60 days (up to
+ * an hour ago), so sorting the feed by date shows a realistic spread of old and new.
  *
  * @param {number} publishCount - How many times the article was approved (1 to 4).
  * @param {Object} editor - The User who approved it.
@@ -301,7 +405,9 @@ async function createUnpublishedArticles(reporters, firstArticleNumber) {
  */
 function buildPublishHistory(publishCount, editor) {
   const publishHistory = [];
-  let publishedAt = randomDateBetween(daysAgo(30), daysAgo(20));
+  let publishedAt = publishCount === 1
+    ? randomDateBetween(daysAgo(60), new Date(Date.now() - HOUR_MS))
+    : randomDateBetween(daysAgo(27), daysAgo(17));
 
   for (let i = 0; i < publishCount; i++) {
     if (i > 0) {
@@ -397,6 +503,177 @@ async function createLiveArticles(reporters, editor, firstArticleNumber) {
 
   await Article.insertMany(articles);
   return articles.length;
+}
+
+/**
+ * Picks a random item of a list.
+ *
+ * @param {Array} list - A list with at least one item.
+ * @returns {*} One of its items.
+ */
+function pickRandom(list) {
+  return list[Math.floor(Math.random() * list.length)];
+}
+
+/**
+ * Builds (does not save) one comment on a live article, written by a guest at a
+ * random moment between the article's first publish and now. A comment can only be
+ * posted on a live article, so it can never be older than the article's first publish.
+ *
+ * @param {Object} article - A live article (needs _id and firstPublishedAt).
+ * @param {{authorName: string, text: string}} [content] - Fixed name and text; random if left out.
+ * @returns {Object} A plain object ready for Comment.insertMany().
+ */
+function buildComment(article, content) {
+  const createdAt = randomDateBetween(article.firstPublishedAt, new Date());
+  return {
+    article: article._id,
+    authorName: content ? content.authorName : pickRandom(COMMENT_AUTHOR_NAMES),
+    text: content ? content.text : pickRandom(COMMENT_TEXTS),
+    // Each comment comes from its own made-up browser, in the same UUID shape that
+    // middleware/assignDeviceId.js gives real ones.
+    deviceId: crypto.randomUUID(),
+    createdAt: createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+/**
+ * Creates guest comments on about 70% of the live articles (see the numbers above),
+ * plus the one XSS demo comment on the newest live article, where it is easy to find.
+ *
+ * @returns {Promise<number>} How many comments were created.
+ */
+async function createComments() {
+  // The live articles, newest first. Only the two fields buildComment needs are loaded.
+  const liveArticles = await Article.find({ published: { $ne: null } })
+    .sort({ lastPublishedAt: -1 })
+    .select('_id firstPublishedAt')
+    .lean();
+
+  const comments = [buildComment(liveArticles[0], XSS_DEMO_COMMENT)];
+
+  liveArticles.forEach((article, index) => {
+    if (Math.random() >= SHARE_OF_ARTICLES_WITH_COMMENTS) {
+      return;
+    }
+    const commentCount = index % 25 === 0
+      ? COMMENTS_ON_A_POPULAR_ARTICLE
+      : 1 + Math.floor(Math.random() * MAX_COMMENTS_ON_A_NORMAL_ARTICLE);
+    for (let i = 0; i < commentCount; i++) {
+      comments.push(buildComment(article));
+    }
+  });
+
+  // One insertMany for all the comments, as for the articles. Mongoose keeps the
+  // createdAt values we give here, because this is a new document, not an update.
+  await Comment.insertMany(comments);
+  return comments.length;
+}
+
+/**
+ * How many views an article gets on average in one hour.
+ *
+ * @param {Date} hourStart - The hour.
+ * @param {number} baseViews - The article's everyday views per hour.
+ * @param {Date[]} publishDates - When the editor approved it, oldest first.
+ * @returns {number} The expected number of views (not rounded).
+ */
+function expectedViewsInHour(hourStart, baseViews, publishDates) {
+  // Day and night: readers are awake from about 7:00 to 23:00 local time.
+  const localHour = (hourStart.getUTCHours() + LOCAL_TIME_OFFSET_HOURS) % 24;
+  const timeOfDayFactor = localHour >= 7 && localHour < 23 ? 1 : 0.3;
+
+  // Each publish so far adds a jump that halves every JUMP_HALF_LIFE_HOURS hours.
+  let jumpViews = 0;
+  publishDates.forEach((publishedAt, index) => {
+    const hoursSincePublish = (hourStart.getTime() - publishedAt.getTime()) / HOUR_MS;
+    if (hoursSincePublish < 0) {
+      return;
+    }
+    const jumpSize = index === 0 ? FIRST_PUBLISH_JUMP : UPDATE_JUMP;
+    jumpViews += jumpSize * Math.pow(0.5, hoursSincePublish / JUMP_HALF_LIFE_HOURS);
+  });
+
+  return (baseViews + jumpViews) * timeOfDayFactor;
+}
+
+/**
+ * Builds (does not save) the hourly counters of one live article, from the hour it was
+ * first published (or VIEW_STATS_DAYS ago, if that is later) up to the current hour.
+ * Hours with no views get no counter at all, exactly as with real visits: recordView
+ * only creates a counter when a view happens.
+ *
+ * @param {Object} article - A live article (needs _id, firstPublishedAt, publishHistory).
+ * @param {number} articleIndex - Its position in the list, to pick the popular ones.
+ * @returns {{counters: Object[], totalViews: number}} The counters and their sum.
+ */
+function buildViewCounters(article, articleIndex) {
+  const popularityFactor = articleIndex % 10 === 0 ? POPULAR_ARTICLE_FACTOR : 1;
+  const baseViews = popularityFactor *
+    (MIN_BASE_VIEWS_PER_HOUR + Math.random() * (MAX_BASE_VIEWS_PER_HOUR - MIN_BASE_VIEWS_PER_HOUR));
+  const publishDates = article.publishHistory.map((publishEvent) => publishEvent.publishedAt);
+
+  const firstHour = getHourStart(new Date(Math.max(article.firstPublishedAt.getTime(), daysAgo(VIEW_STATS_DAYS).getTime())));
+  const currentHour = getHourStart(new Date());
+
+  const counters = [];
+  let totalViews = 0;
+  for (let time = firstHour.getTime(); time <= currentHour.getTime(); time += HOUR_MS) {
+    const hourStart = new Date(time);
+    // Random noise of +-30%, so the line looks like real traffic, not a formula.
+    const noise = 0.7 + Math.random() * 0.6;
+    const views = Math.round(expectedViewsInHour(hourStart, baseViews, publishDates) * noise);
+    if (views > 0) {
+      counters.push({ article: article._id, hourStart: hourStart, views: views });
+      totalViews += views;
+    }
+  }
+  return { counters, totalViews };
+}
+
+/**
+ * Creates the hourly view counters of every live article for the last VIEW_STATS_DAYS
+ * days, and sets each article's totalViews to the sum of its counters, so "sort by
+ * popularity" in the feed agrees with what the analytics chart shows.
+ *
+ * DeviceArticleView ("which device saw which article") is not seeded: it only means
+ * something for real browsers, whose device ids we can't know in advance.
+ *
+ * @returns {Promise<number>} How many counters were created.
+ */
+async function createViewStats() {
+  const liveArticles = await Article.find({ published: { $ne: null } })
+    .select('_id firstPublishedAt publishHistory')
+    .lean();
+
+  let counters = [];
+  let counterCount = 0;
+  const totalViewsUpdates = [];
+
+  for (const [index, article] of liveArticles.entries()) {
+    const result = buildViewCounters(article, index);
+    counters = counters.concat(result.counters);
+    totalViewsUpdates.push({
+      updateOne: { filter: { _id: article._id }, update: { $set: { totalViews: result.totalViews } } },
+    });
+
+    // Save a full batch as soon as there is one, so the script never holds all
+    // the counters in memory at once.
+    if (counters.length >= VIEW_STATS_BATCH_SIZE) {
+      await ArticleViewStats.insertMany(counters);
+      counterCount += counters.length;
+      counters = [];
+    }
+  }
+  if (counters.length > 0) {
+    await ArticleViewStats.insertMany(counters);
+    counterCount += counters.length;
+  }
+
+  // bulkWrite sends all 440 totalViews updates to MongoDB in one request.
+  await Article.bulkWrite(totalViewsUpdates);
+  return counterCount;
 }
 
 /**
@@ -506,6 +783,12 @@ async function runSeed() {
   // Continue the story numbers after the unpublished articles, so no title repeats.
   const liveCount = await createLiveArticles(users.reporters, users.editor, unpublishedCount);
   logger.info(`Created ${liveCount} live articles`);
+
+  const commentCount = await createComments();
+  logger.info(`Created ${commentCount} comments on live articles`);
+
+  const viewCounterCount = await createViewStats();
+  logger.info(`Created ${viewCounterCount} hourly view counters for the last ${VIEW_STATS_DAYS} days`);
 
   logger.info(`Seed finished: ${unpublishedCount + liveCount} articles in total`);
   printDemoLogins();
