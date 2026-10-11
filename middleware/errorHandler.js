@@ -72,11 +72,24 @@ function getErrorResponse(error) {
     return { statusCode: 409, message: `This ${fieldName} already exists` };
   }
 
-  // An error our own code created on purpose, with a 4xx status and a readable message
-  // (see the example in the header). We accept only 4xx here: those are the user's
-  // mistakes, so their message is safe and useful to show.
-  if (Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
-    return { statusCode: error.statusCode, message: error.message };
+  // The URL has a broken "%" sequence in a route parameter, for example
+  // /articles/%E0%A4%A. Express's router can't decode it, so it stops before any
+  // controller runs and passes on a URIError marked with status 400. Its own message
+  // ("Failed to decode param ...") means nothing to a reader, so we give a clear one.
+  // We check status 400 too, so that a URIError from a bug in our own code still
+  // counts as a server error (500) and is logged with its stack trace.
+  if (error instanceof URIError && error.status === 400) {
+    return { statusCode: 400, message: 'The address contains invalid characters.' };
+  }
+
+  // An error with a 4xx status and a readable message: one our own code created on
+  // purpose (see the example in the header), or one from Express or its helpers.
+  // We read both statusCode and status: our team sets statusCode, but Express 5's
+  // router and the libraries it uses set status. We accept only 4xx here: those are
+  // the user's mistakes, so their message is safe and useful to show.
+  const clientStatus = error.statusCode || error.status;
+  if (Number.isInteger(clientStatus) && clientStatus >= 400 && clientStatus < 500) {
+    return { statusCode: clientStatus, message: error.message };
   }
 
   return { statusCode: 500, message: SERVER_ERROR_MESSAGE };
