@@ -51,12 +51,16 @@ async function getWeather() {
   const city = process.env.WEATHER_CITY || 'Tel Aviv';
 
   if (!apiKey) {
-    logger.error('Weather API key is missing in .env');
+    // Defense Question - Logs: Why log as WARN and not ERROR?
+    // Missing an external API key or a third-party service being down is an expected operational issue, 
+    // not a crash in our own server code. Logging as WARN keeps the critical error logs clean.
+    logger.warn('Weather API key is missing in .env');
+    
     // Defense Question - Edge cases: What happens if the API fails or is unconfigured?
     // We try to return the last known good result (`cachedWeather`) so the user still sees something.
     // If we have no cache at all, we throw an error which triggers the "Weather unavailable" UI state.
     if (cachedWeather) return cachedWeather;
-    throw new Error('Weather unavailable'); // Trigger failure for success: false
+    throw new Error('Weather unavailable'); 
   }
 
   fetchPromise = fetch(`https://api.openweathermap.org/data/2.5/weather?q=${city}&units=metric&appid=${apiKey}`)
@@ -78,7 +82,7 @@ async function getWeather() {
       return cachedWeather;
     })
     .catch((error) => {
-      logger.error('Failed to fetch weather: ' + error.message);
+      logger.warn('Failed to fetch weather: ' + error.message);
       fetchPromise = null;
       // Return stale data if available, otherwise fail
       if (cachedWeather) return cachedWeather;
