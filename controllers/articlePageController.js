@@ -5,6 +5,8 @@
  * Renders the full article from the database, fetches initial comments,
  * records the view, and handles 404s for invalid/missing articles.
  * Owner: SH.
+ * 
+ * Related files: views/public/article.ejs, services/viewTracker.js
  */
 
 const Article = require('../models/Article');
@@ -14,11 +16,23 @@ const logger = require('../services/logger');
 
 /**
  * GET /articles/:id
+ * 
+ * Defense Question - Architecture: Why render the article on the server instead of fetching via JS?
+ * Server-side rendering (SSR) ensures the full article text is present in the initial HTML source. 
+ * This is critical for SEO (Search Engine Optimization) so search engine crawlers can index the content.
+ * 
+ * @param {import('express').Request} request 
+ * @param {import('express').Response} response 
+ * @param {import('express').NextFunction} next 
+ * @returns {Promise<void>}
  */
 async function showArticlePage(request, response, next) {
     try {
         const articleId = request.params.id;
 
+        // Defense Question - Edge cases & Security: Why validate the ID format with a regex?
+        // MongoDB throws a CastError if we pass a malformed ObjectId, which would result in a 500 Internal Server Error.
+        // Validating it first allows us to gracefully return a 404 Not Found instead of crashing.
         if (!articleId.match(/^[0-9a-fA-F]{24}$/)) {
             return response.status(404).render('public/error', { 
                 statusCode: 404, 
@@ -26,6 +40,9 @@ async function showArticlePage(request, response, next) {
             });
         }
 
+        // Defense Question - Architecture: Why filter by { published: { $ne: null } }?
+        // Ensures readers only see approved content. If an editor reverts an article to a complete draft 
+        // (meaning no published version exists), it correctly disappears from the public site.
         const article = await Article.findOne({ _id: articleId, published: { $ne: null } })
             .populate('reporter', 'displayName');
 
@@ -36,12 +53,16 @@ async function showArticlePage(request, response, next) {
             });
         }
 
-        // Fixed: Sorting by newest first (-1)
+        // Defense Question - Performance & Contracts: Why limit to 10?
+        // Prevents massive payloads if an article has thousands of comments. 
+        // The -1 sort ensures we meet the contract of showing the newest comments first.
         const comments = await Comment.find({ article: article._id })
             .sort({ createdAt: -1 })
             .limit(10);
 
-        // Fixed: Calling the actual view tracker
+        // Defense Question - Architecture: Why wrap recordView in a try/catch?
+        // The primary goal is to let the user read the news. If the analytics/view tracking database fails, 
+        // recordView throws an error. Catching it here ensures the page still loads (availability over strict tracking).
         try {
             await recordView(article._id, request.deviceId);
         } catch (err) {
