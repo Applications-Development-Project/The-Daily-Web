@@ -61,8 +61,10 @@ async function showArticlePage(request, response, next) {
             .limit(10);
 
         // Defense Question - Architecture: Why wrap recordView in a try/catch?
-        // The primary goal is to let the user read the news. If the analytics/view tracking database fails, 
-        // recordView throws an error. Catching it here ensures the page still loads (availability over strict tracking).
+        // Extra safety; recordView already never throws because it catches its own errors.
+        // However, keeping this try/catch acts as an ultimate fallback boundary ensuring that 
+        // even if the view tracker's internal error handling is modified in the future, 
+        // a failed count can never break the article page.
         try {
             await recordView(article._id, request.deviceId);
         } catch (err) {
