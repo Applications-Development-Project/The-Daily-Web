@@ -13,6 +13,8 @@
  * - DELETE /api/editor/articles/:id       delete with its comments and statistics
  * - GET and DELETE /api/editor/articles/:id/views  the chart data and the reset
  * - GET /editor and GET /editor/articles/:id       the dashboard and review pages
+ * - GET /editor/analytics?article=                  the Impact Analytics page (the server side;
+ *                                                    its chart runs in the browser, see below)
  * - recordView() in services/viewTracker.js         called directly, it is not a route
  *
  * Requirements it checks (in our own words): permissions are checked on the server (guest,
@@ -320,7 +322,7 @@ async function testOnlyEditorsGetIn(fixtures, cookies) {
   // A role cookie a guest made up must not help: the role comes only from the server-side session.
   checkStatus('fake role cookie, approve', 401, await request('role=editor; userRole=editor', 'POST', `${API}/${id}/approve`));
 
-  for (const path of ['/editor', `/editor/articles/${id}`]) {
+  for (const path of ['/editor', `/editor/articles/${id}`, '/editor/analytics']) {
     const guestPage = await request('', 'GET', path);
     checkStatus(`guest page ${path}`, 302, guestPage);
     check(String(guestPage.location).startsWith('/login'), `guest page ${path} should redirect to /login, got ${guestPage.location}`);
@@ -433,6 +435,74 @@ async function testPages(fixtures, cookies) {
   checkStatus('review page, malformed id', 404, await request(cookies.editor, 'GET', '/editor/articles/abc'));
   checkStatus('review page, unknown id', 404, await request(cookies.editor, 'GET', `/editor/articles/${MISSING_ID}`));
   checkStatus('review page, broken % encoding', 400, await request(cookies.editor, 'GET', '/editor/articles/%E0%A4%A'));
+}
+
+/**
+ * Reads the value of one data-* attribute from a page's HTML, as the browser would see it
+ * before decoding entities (so an escaped value is still escaped here).
+ *
+ * @param {string} html - The page.
+ * @param {string} attributeName - For example 'data-initial-article-id'.
+ * @returns {string|null} The raw value, or null if the attribute is missing.
+ */
+function readAttribute(html, attributeName) {
+  const match = html.match(new RegExp(`${attributeName}="([^"]*)"`));
+  return match ? match[1] : null;
+}
+
+/**
+ * GET /editor/analytics: the page renders for the editor with Chart.js and its integrity hash;
+ * ?article= opens a live article's chart (its id and title reach the script through data-*
+ * attributes, escaped); a malformed, unknown or repeated ?article= gives a notice, never an
+ * error page; and only a live article's review page links to its chart.
+ *
+ * Only the server side is checked here. The chart itself is drawn by public/js/analyticsChart.js
+ * in the browser, which a Node script can't run; it was checked in a real browser (see the pull
+ * request of the analytics page).
+ *
+ * Runs before testApprove, while the fixtures still have their starting statuses.
+ *
+ * @param {Object} fixtures - The ids from setUp.
+ * @param {Object} cookies - The login cookies from setUp.
+ * @returns {Promise<void>}
+ */
+async function testAnalyticsPage(fixtures, cookies) {
+  const analyticsPage = (query) => request(cookies.editor, 'GET', `/editor/analytics${query}`);
+
+  const plainPage = await analyticsPage('');
+  checkStatus('analytics page', 200, plainPage);
+  check(plainPage.text.includes('id="views-chart"') && plainPage.text.includes('/js/analyticsChart.js'), 'the analytics page should have the chart canvas and its script');
+  check(/chart\.umd\.min\.js"\s+integrity="sha512-/.test(plainPage.text), 'Chart.js should be loaded with an integrity hash');
+  check(readAttribute(plainPage.text, 'data-initial-article-id') === '', 'without ?article= no article should be preselected');
+
+  const livePage = await analyticsPage(`?article=${fixtures.publishedId}`);
+  checkStatus('analytics page with ?article= of a live article', 200, livePage);
+  check(readAttribute(livePage.text, 'data-initial-article-id') === fixtures.publishedId, '?article= should pass the article id to the script');
+  check(readAttribute(livePage.text, 'data-initial-article-title') === `${RUN_TAG} ${STATUS.PUBLISHED}`, '?article= should pass the live title to the script');
+
+  // The hostile title, inside an attribute: escaped, it can't close the attribute or open a tag.
+  const hostilePage = await analyticsPage(`?article=${fixtures.hostileTitleId}`);
+  check(readAttribute(hostilePage.text, 'data-initial-article-title') === `${RUN_TAG} C++ (test) &lt;img src=x onerror=alert(1)&gt;`,
+    'a title with HTML should reach the data attribute escaped');
+  check(!hostilePage.text.includes('<img src=x onerror'), 'the hostile title must never appear as a real HTML tag on the analytics page');
+
+  const badArticles = [
+    ['malformed', 'abc'],
+    ['unknown', MISSING_ID],
+    ['given twice', `${fixtures.publishedId}&article=${fixtures.publishedId}`],
+  ];
+  for (const [name, value] of badArticles) {
+    const page = await analyticsPage(`?article=${value}`);
+    checkStatus(`analytics page with a ${name} ?article=`, 200, page);
+    check(page.text.includes('was not found') && readAttribute(page.text, 'data-initial-article-id') === '',
+      `a ${name} ?article= should show a notice and preselect nothing`);
+  }
+
+  const chartLink = (id) => `/editor/analytics?article=${id}`;
+  const liveReview = await request(cookies.editor, 'GET', `/editor/articles/${fixtures.publishedId}`);
+  check(liveReview.text.includes(chartLink(fixtures.publishedId)), 'a live article\'s review page should link to its chart');
+  const draftReview = await request(cookies.editor, 'GET', `/editor/articles/${fixtures.draftId}`);
+  check(!draftReview.text.includes('/editor/analytics?article='), 'a never-published article\'s review page should not link to a chart');
 }
 
 /**
@@ -759,6 +829,7 @@ async function main() {
     // The list runs before approve, return and delete change the statuses it counts.
     await testArticleList(fixtures, cookies);
     await testPages(fixtures, cookies);
+    await testAnalyticsPage(fixtures, cookies);
     await testApprove({ ...fixtures, editorId }, cookies);
     await testReturn(fixtures, cookies);
     // recordView first: the chart and reset checks count the views it adds.
