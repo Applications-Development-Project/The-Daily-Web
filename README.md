@@ -40,9 +40,10 @@ and comment. Built with Node.js, Express, EJS and MongoDB, following the MVC str
 - **Delete** an article together with its comments and statistics.
 - **Comment moderation**: search, edit and delete comments.
 - **User management**: create, edit and delete users.
-- **Impact Analytics** (in progress): views per hour of one article on a chart, with a marker at every
-  publish, and a reset of the article's statistics. The data API (`GET /api/editor/articles/:id/views`)
-  is ready; the page is being built.
+- **Impact Analytics**: find an article by title and choose a period (24 hours up to 365 days) to see its
+  views on a line chart, with a numbered dashed line at every publish, so the views before and after each
+  update can be compared. A live article's review page links straight to its chart. The editor can also
+  reset an article's statistics.
 
 ### Article statuses
 
@@ -60,6 +61,8 @@ article stays online, unchanged, while its next version is written and reviewed.
 
 - **Server:** Node.js (20.6 or newer), Express 5, EJS templates, MongoDB with Mongoose.
 - **Browser:** HTML5, CSS3 and plain JavaScript (`fetch` for the Ajax calls). No front-end framework.
+  Chart.js (4.5.1) draws the Impact Analytics chart; it is loaded from the cdnjs CDN on that page only,
+  so the page needs an internet connection to show the chart (the numbers are shown without it).
 - **Packages:** only those in `package.json`: `express`, `ejs`, `mongoose`, `express-session`,
   `connect-mongo` (sessions are stored in MongoDB, so they survive a server restart), `bcrypt`
   (password hashing) and `dotenv` (reads `.env`).
@@ -75,6 +78,8 @@ You need **Node.js 20.6 or newer** and **MongoDB** running on your computer
    cd The-Daily-Web
    npm install
    ```
+   Newer versions of npm may warn that `bcrypt`'s install script was not run. That is expected and safe:
+   `bcrypt` ships ready-built files for Windows, Mac and Linux, so it works without the script.
 
 2. **Create your `.env` file** from the template, then fill in the values:
    ```
@@ -87,7 +92,7 @@ You need **Node.js 20.6 or newer** and **MongoDB** running on your computer
    | `MONGODB_URI` | `mongodb://127.0.0.1:27017/the-web-daily` |
    | `SESSION_SECRET` | A long random text. Generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
    | `PORT` | Optional. Empty means 3000 |
-   | `WEATHER_API_KEY` | A free OpenWeatherMap API key |
+   | `WEATHER_API_KEY` | A free OpenWeatherMap API key. Optional: without it everything else works, and the weather widget shows "Weather unavailable" |
    | `WEATHER_CITY` | For example `Tel Aviv` |
    | `SEED_DEMO_PASSWORD` | The password every demo user will get (choose any) |
 
@@ -143,7 +148,7 @@ The-Daily-Web/
 │   ├── partials/        Head, header, footer and sidebar, shared by every page
 │   ├── public/          Feed, article, login and error pages
 │   ├── reporter/        Reporter dashboard and article editor
-│   └── editor/          Editor dashboard, review, comments and users pages
+│   └── editor/          Editor dashboard, review, Impact Analytics, comments and users pages
 ├── public/
 │   ├── css/main.css     The shared stylesheet
 │   └── js/              Browser scripts, one per page; shared/apiClient.js wraps fetch for all of them
