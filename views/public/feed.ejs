@@ -26,14 +26,12 @@
                 <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm); flex-wrap: wrap;">
                     <select id="category-filter" class="form-field" aria-label="Filter by category">
                         <option value="">All Categories</option>
-                        <option value="News">News</option>
-                        <option value="Economy">Economy</option>
-                        <option value="Technology">Technology</option>
-                        <option value="Sports">Sports</option>
-                        <option value="Entertainment">Entertainment</option>
-                        <option value="Health">Health</option>
-                        <option value="Politics">Politics</option>
-                        <option value="Culture">Culture</option>
+                        <!-- Dynamically render categories from the Model -->
+                        <% if (typeof categories !== 'undefined') { %>
+                            <% categories.forEach(function(cat) { %>
+                                <option value="<%= cat %>"><%= cat %></option>
+                            <% }); %>
+                        <% } %>
                     </select>
                     
                     <select id="viewed-filter" class="form-field" aria-label="Filter by viewed status">

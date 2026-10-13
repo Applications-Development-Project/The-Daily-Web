@@ -11,8 +11,6 @@
 const Article = require('../models/Article');
 const DeviceArticleView = require('../models/DeviceArticleView'); // Imported SM's model
 
-// Define valid categories for API validation
-const VALID_CATEGORIES = ['News', 'Economy', 'Technology', 'Sports', 'Entertainment', 'Health', 'Politics', 'Culture'];
 const VALID_SORTS = ['newest', 'popular'];
 
 /**
@@ -39,10 +37,9 @@ function escapeRegExp(text) {
  * is in the page HTML source. This is crucial for search engine optimization (SEO) 
  * and provides a faster initial display for readers without waiting for a JS fetch.
  *
- * @param {import('express').Request} request - The Express request object.
- * @param {import('express').Response} response - The Express response object.
- * @param {import('express').NextFunction} next - The next middleware function.
- * @returns {Promise<void>}
+ * @param {import('express').Request} request 
+ * @param {import('express').Response} response 
+ * @param {import('express').NextFunction} next 
  */
 async function showFeedPage(request, response, next) {
     try {
@@ -53,14 +50,8 @@ async function showFeedPage(request, response, next) {
         // version (the 'published' object) even if a reporter is currently editing it and the status is 'draft'.
         const query = { published: { $ne: null } };
         
-        // Defense Question - Edge cases: Why use _id as a tie-breaker in sorting?
-        // If two articles have the exact same lastPublishedAt time, MongoDB's sort order is unpredictable.
-        // Adding _id ensures pages never repeat or skip articles during infinite scrolling.
         const sortOption = { lastPublishedAt: -1, _id: -1 }; 
 
-        // Defense Question - Performance: Why use .select() and .lean()?
-        // We expect thousands of readers. .select() fetches only the necessary fields, saving memory.
-        // .lean() strips heavy Mongoose document methods, returning plain JavaScript objects for much faster processing.
         const fetchedArticles = await Article.find(query)
             .sort(sortOption)
             .limit(limit)
@@ -80,12 +71,10 @@ async function showFeedPage(request, response, next) {
         }));
 
         response.render('public/feed', { 
-            articles: shapedArticles // Passing initial articles to the EJS template
+            articles: shapedArticles, // Passing initial articles to the EJS template
+            categories: Article.CATEGORIES || [] // Dynamically pass categories from the Model
         });
     } catch (error) {
-        // Defense Question - Express 5 behavior:
-        // In Express 5, async errors automatically go to the errorHandler without explicit try/catch.
-        // We keep it here for consistency and explicit error forwarding to 'next()'.
         next(error);
     }
 }
@@ -93,23 +82,11 @@ async function showFeedPage(request, response, next) {
 /**
  * GET /api/articles?search=&category=&viewed=&sort=&page= - 20 live articles.
  * Fetches live articles with pagination, filtering, search, and sorting.
- *
- * Defense Question - Contracts: Who depends on this?
- * public/js/feed.js uses this endpoint for infinite scrolling. It expects 
- * the exact shape: { success: true, data: { articles, hasMore } }.
- *
- * @param {import('express').Request} request - The Express request containing query params.
- * @param {import('express').Response} response - The Express response object.
- * @param {import('express').NextFunction} next - The next middleware function.
- * @returns {Promise<void>}
  */
 async function listFeedArticles(request, response, next) {
     try {
         let page = 1;
         
-        // Defense Question - Validation: Why validate here if the browser has checks?
-        // Browser checks are just for quick feedback. The server check is the real security layer 
-        // because anyone can bypass the UI and send requests directly using tools like Postman.
         // Strict validation: check the raw value first
         if (request.query.page !== undefined) {
             page = Number(request.query.page);
@@ -121,14 +98,18 @@ async function listFeedArticles(request, response, next) {
         const limit = 20;
         const skip = (page - 1) * limit;
         
-        // 7. Validation: sort parameter
         if (request.query.sort && !VALID_SORTS.includes(request.query.sort)) {
             return response.status(400).json({ success: false, error: 'Unknown sort option.' });
         }
 
-        // 7. Validation: category parameter
-        if (request.query.category && !VALID_CATEGORIES.includes(request.query.category)) {
+        // Use dynamic categories from the Model
+        if (request.query.category && (!Article.CATEGORIES || !Article.CATEGORIES.includes(request.query.category))) {
             return response.status(400).json({ success: false, error: 'Unknown category.' });
+        }
+
+        // Optional viewed validation for strictness
+        if (request.query.viewed && !['viewed', 'unviewed'].includes(request.query.viewed)) {
+            return response.status(400).json({ success: false, error: 'Unknown viewed option.' });
         }
 
         const query = { published: { $ne: null } };
@@ -145,10 +126,6 @@ async function listFeedArticles(request, response, next) {
             ];
         }
 
-        // 7. Viewed Filter (using SM's DeviceArticleView model)
-        // Defense Question - Security: Why is deviceId taken from request.deviceId and not the body/query?
-        // request.deviceId is securely set by our server middleware via an HttpOnly cookie. 
-        // If we took it from the request query, a malicious user could spoof it and view another person's history.
         if (request.query.viewed && request.deviceId) {
             const viewedRecords = await DeviceArticleView.find({ deviceId: request.deviceId }).select('article').lean();
             const viewedIds = viewedRecords.map(record => record.article);
@@ -165,9 +142,6 @@ async function listFeedArticles(request, response, next) {
             sortOption = { totalViews: -1, lastPublishedAt: -1, _id: -1 };
         }
 
-        // Defense Question - Pagination: Why limit + 1?
-        // We fetch 21 items instead of 20. If we get 21, we instantly know there is a next page (hasMore: true)
-        // without needing a separate, heavy count() query on the database. We then slice the array to return only the 20 requested items.
         const fetchedArticles = await Article.find(query)
             .sort(sortOption)
             .skip(skip)
@@ -204,12 +178,6 @@ async function listFeedArticles(request, response, next) {
 
 /**
  * DELETE /api/articles/viewed - forget which articles this device has seen.
- * Deletes all DeviceArticleView records tied to the current user's device cookie.
- *
- * @param {import('express').Request} request - Express request containing the middleware-injected deviceId.
- * @param {import('express').Response} response - Express response indicating success.
- * @param {import('express').NextFunction} next - Express next function for error handling.
- * @returns {Promise<void>}
  */
 async function resetViewedMarks(request, response, next) {
     try {
