@@ -156,6 +156,7 @@ body {
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: bold;
+  white-space: nowrap; /* Fixed: Prevents status badge text from wrapping on mobile */
 }
 
 .status-draft { background-color: #f1c40f; color: #333; }
@@ -202,6 +203,10 @@ body {
 /* Responsive wrapper for tables */
 .table-scroll {
     overflow-x: auto;
+}
+/* Fixed: Forces data tables inside scroll wrappers to maintain width on mobile */
+.table-scroll .data-table { 
+    min-width: 48rem; 
 }
 /* --- Phase 2: Responsive & Shared Classes --- */
 
