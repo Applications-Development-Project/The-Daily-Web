@@ -25,9 +25,9 @@ async function getCurrentWeather(req, res, next) {
     } catch (error) {
         // Defense Question - Error Handling: Why return 503 instead of passing to next(error)?
         // An external service (OpenWeatherMap) being down or missing an API key isn't a server failure (500).
-        // Returning 503 Service Unavailable with a success: false contract allows the frontend 
-        // widget to gracefully show "Weather unavailable" without breaking the page or filling logs with 500s.
-        res.status(503).json({ success: false, error: "Weather is unavailable right now" });
+        // Returning 503 Service Unavailable directly ensures the global errorHandler doesn't print a stack trace.
+        // It also allows the frontend widget to gracefully show "Weather unavailable".
+        res.status(503).json({ success: false, error: 'Weather unavailable' });
     }
 }
 
