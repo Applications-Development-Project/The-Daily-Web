@@ -1,15 +1,16 @@
 /**
- * middleware/isApiRequest.js
+ * utils/isApiRequest.js
  *
  * Tells whether a request is for the JSON API (/api/...) or for a normal page.
  * The answer decides how we reply to an error: an API call gets JSON
  * ({ success: false, error }), which the browser's fetch code can read, while
  * a page gets the HTML error page (or a redirect to /login), which a person can read.
  *
- * Not a middleware itself; a small helper used by the middleware in this folder.
+ * Not a middleware itself (it never calls next), so it lives in utils/ with the other
+ * small helpers, not in middleware/.
  *
- * Used by: middleware/errorHandler.js, and middleware/requireLogin.js and
- * requireRole.js (401/403 replies).
+ * Used by: middleware/errorHandler.js (JSON or error page), middleware/requireLogin.js
+ * (401 JSON or a redirect to /login; requireRole.js uses it through requireLogin).
  * Owner: OS.
  */
 

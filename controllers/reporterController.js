@@ -79,12 +79,11 @@ const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWor
 const logger = require('../services/logger');
 // The draft rules and createHttpError live in a shared service, so the editor's edit of a
 // pending article (SM) follows exactly the same rules as the reporter's autosave.
-const { DRAFT_FIELDS, createHttpError, readDraftFromRequestBody } = require('../services/draftValidation');
-
-// An article id from the URL must be exactly 24 hexadecimal characters. We check the
-// shape ourselves ("Checking ids from the URL" in the plan) because
-// mongoose.isValidObjectId() also accepts any 12-character string.
-const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
+const { DRAFT_FIELDS, readDraftFromRequestBody } = require('../services/draftValidation');
+const { createHttpError } = require('../utils/httpErrors');
+// An article id from the URL must be exactly 24 hexadecimal characters; the rule is
+// written once, in utils/requestValidation.js.
+const { isValidObjectId } = require('../utils/requestValidation');
 
 // The statuses in which a reporter may open and change the working copy (the draft):
 // "In preparation", "Returned for corrections", and "Published" (editing a live
@@ -111,7 +110,7 @@ const EDITABLE_STATUSES = [STATUS.DRAFT, STATUS.RETURNED, STATUS.PUBLISHED];
  * @throws {Error} With statusCode 400, 404 or 403 (see above). Database errors pass through.
  */
 async function findOwnedArticle(articleId, reporterId) {
-  if (!OBJECT_ID_PATTERN.test(articleId)) {
+  if (!isValidObjectId(articleId)) {
     throw createHttpError(400, 'Invalid article id.');
   }
 
@@ -147,7 +146,7 @@ async function showReporterDashboard(request, response) {
   const articles = await findReporterArticles(request.session.user.id);
 
   response.render('reporter/dashboard', {
-    title: 'My articles - The Web Daily',
+    title: 'My articles - The Daily Web',
     articles,
     // The view compares item.status with these names instead of typing 'draft' etc.
     // (a typo in a string would silently show the wrong buttons; STATUS.PNDING is undefined).
@@ -157,7 +156,7 @@ async function showReporterDashboard(request, response) {
 
 /**
  * GET /reporter/articles/:id/edit - the article editor page: a form filled with the
- * article's draft. The autosave script (public/js/reporterEditor.js) saves what the
+ * article's draft. The autosave script (public/js/reporter/articleEditor.js) saves what the
  * reporter types. The dashboard's "Edit" link leads here. Before showing anything,
  * findOwnedArticle checks that the article belongs to the logged-in reporter.
  *
@@ -186,7 +185,7 @@ async function showArticleEditor(request, response) {
   }
 
   response.render('reporter/articleEditor', {
-    title: 'Edit article - The Web Daily',
+    title: 'Edit article - The Daily Web',
     // A plain object with only what the view needs, instead of the whole Mongoose
     // document: the view can't accidentally depend on (or print) any other field.
     article: {
@@ -343,7 +342,7 @@ async function createArticle(request, response) {
 /**
  * PATCH /api/reporter/articles/:id/draft - autosave: replaces the article's whole draft
  * with the five fields in the request body. The browser calls it a couple of seconds
- * after the reporter stops typing (public/js/reporterEditor.js).
+ * after the reporter stops typing (public/js/reporter/articleEditor.js).
  *
  * Requirements served (in our own words):
  *   - Continuity: the reporter's work is saved all the time without pressing "Save", and

@@ -3,7 +3,8 @@
  *
  * One place for all server logging. Every file calls logger.info() for important
  * operational events (server start, database connection, logins, article status
- * changes) and logger.error() for failures, instead of calling console.log directly.
+ * changes), logger.warn() for a problem we expected and handled (the weather service
+ * being down), and logger.error() for failures, instead of calling console.log directly.
  * Because everyone goes through these two functions, where the logs go is decided
  * here only, and no caller had to change when the log files were added.
  *
@@ -16,10 +17,12 @@
  *
  * Where each line goes:
  * - the console, as before, so whoever runs "npm run dev" sees what happens;
- * - logs/app.log: every line, INFO and ERROR, so the whole story of the server can be
- *   read in order in one file;
+ * - logs/app.log: every line, INFO, WARN and ERROR, so the whole story of the server can
+ *   be read in order in one file;
  * - logs/error.log: only errors, each with its stack trace, so failures are easy to find
- *   without scrolling through thousands of normal events.
+ *   without scrolling through thousands of normal events. Warnings are not errors of our
+ *   server (for example an outside service didn't answer, and we showed the last good
+ *   value instead), so they stay out of this file.
  * The logs folder is created when the server starts if it doesn't exist. It is in
  * .gitignore: log files are output of the running program, not source code.
  *
@@ -62,7 +65,7 @@ appLogStream.on('error', (streamError) => {
  * Builds one log line with a timestamp and a level, so every line has the same shape
  * and lines can be sorted and searched by time.
  *
- * @param {string} level - "INFO" or "ERROR".
+ * @param {string} level - "INFO", "WARN" or "ERROR".
  * @param {string} message - What happened.
  * @returns {string} For example "[2026-10-05T18:30:00.000Z] INFO Server listening on port 3000".
  */
@@ -124,6 +127,21 @@ function logInfo(message) {
 }
 
 /**
+ * Logs a problem that was expected and handled, so the server carried on normally:
+ * to the console (as a warning) and app.log, but not error.log. Example: the weather
+ * service didn't answer, so the widget got the last good result instead.
+ *
+ * @param {string} message - What happened, for example "Weather service failed: timeout".
+ * @returns {void}
+ */
+function logWarning(message) {
+  const line = formatLogLine('WARN', message);
+  console.warn(line);
+  appLogStream.write(`${line}
+`);
+}
+
+/**
  * Logs a failure: to the console, app.log (one line, so the timeline there is
  * complete) and error.log (the line plus the stack trace). When an Error object is
  * given we include its stack trace, because the stack shows the exact file and line
@@ -148,11 +166,13 @@ function logError(message, error) {
   appendToErrorLog(errorDescription ? `${line}\n${errorDescription}` : line);
 }
 
-// Exported as logger.info and logger.error, the names fixed in "Shared contracts".
-// Inside this file the functions have verb-first names (logInfo, logError), as the
-// naming convention asks. It also means logError's parameter can be called "error"
-// without hiding a function that is itself called "error".
+// Exported as logger.info, logger.warn and logger.error (info and error are the names
+// fixed in "Shared contracts"; warn was added for the weather service). Inside this file
+// the functions have verb-first names (logInfo, logWarning, logError), as the naming
+// convention asks. It also means logError's parameter can be called "error" without
+// hiding a function that is itself called "error".
 module.exports = {
   info: logInfo,
+  warn: logWarning,
   error: logError,
 };

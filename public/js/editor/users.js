@@ -1,5 +1,5 @@
 /**
- * public/js/userManagement.js
+ * public/js/editor/users.js
  *
  * Runs the editor's user management page (views/editor/users.ejs). Everything happens
  * with Ajax through apiClient, so the page never reloads:
@@ -112,7 +112,7 @@ function setUpUserManagement() {
    * slow answer for "ma" could arrive after the answer for "maya" and replace it, so
    * the table would show results for text that is no longer in the box. Each call
    * takes a new number, and an answer is shown only if no newer request started since.
-   * (The same technique as in public/js/commentModeration.js.)
+   * (The same technique as in public/js/editor/comments.js.)
    *
    * @returns {Promise<void>}
    */

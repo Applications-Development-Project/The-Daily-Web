@@ -1,7 +1,33 @@
+<%#
+  views/partials/head.ejs
+
+  The head element shared by every page: character set, the viewport for phones, the
+  page title, the site icon and the one shared stylesheet.
+
+  Locals (both optional):
+    title       - the page title shown in the browser tab and in search results.
+                  Default: the site name.
+    description - a one-sentence summary for search engines (the article page passes the
+                  article's summary). Left out when not given.
+  "locals.title" instead of "title": reading a local that a page didn't pass would make
+  EJS throw, while reading it from locals just gives undefined.
+
+  The viewport meta tag makes phones use the real screen width instead of pretending to be
+  a desktop, which is what makes the responsive CSS work (requirements: computer, tablet
+  and phone). Express serves the public folder at "/" (app.js), so public/css/main.css is
+  at /css/main.css.
+
+  Included by: every page view.
+  Owner: SH.
+%>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title><%= typeof title !== 'undefined' ? title : 'The Web Daily' %></title>
-    <!-- Note: Path changed to /css since Express serves the public folder automatically -->
+    <title><%= locals.title || 'The Daily Web' %></title>
+    <% if (locals.description) { %>
+    <meta name="description" content="<%= locals.description %>">
+    <% } %>
+    <%# Declaring the icon stops browsers from asking for /favicon.ico, which doesn't exist. %>
+    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/main.css">
 </head>

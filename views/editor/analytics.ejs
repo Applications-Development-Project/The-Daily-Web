@@ -6,7 +6,7 @@
   the views before and after each update can be compared. A button resets the article's
   statistics.
 
-  This file is only the frame. public/js/analyticsChart.js does the work in the browser:
+  This file is only the frame. public/js/editor/analytics.js does the work in the browser:
   it searches with GET /api/editor/articles?search=, loads the chart data from
   GET /api/editor/articles/:id/views and draws it with Chart.js, all without reloading
   the page. The element ids below are what that script uses.
@@ -106,11 +106,11 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first and Chart.js second: analyticsChart.js uses both. %>
+  <%# apiClient first and Chart.js second: public/js/editor/analytics.js uses both. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
     integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="
     crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-  <script src="/js/analyticsChart.js"></script>
+  <script src="/js/editor/analytics.js"></script>
 </body>
 </html>

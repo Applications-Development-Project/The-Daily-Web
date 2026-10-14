@@ -14,11 +14,11 @@
  * (requireRole also checks login by itself, so requireRole alone is enough too.)
  *
  * Used by: every protected route file, and middleware/requireRole.js.
- * Related: middleware/isApiRequest.js, middleware/errorHandler.js (sends the 401 JSON).
+ * Related: utils/isApiRequest.js, middleware/errorHandler.js (sends the 401 JSON).
  * Owner: OS.
  */
 
-const isApiRequest = require('./isApiRequest');
+const isApiRequest = require('../utils/isApiRequest');
 
 /**
  * Lets the request through only if someone is logged in.

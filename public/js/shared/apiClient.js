@@ -23,7 +23,7 @@
  *
  * How to use it: load this file before the page's own script, then call it.
  *   <script src="/js/shared/apiClient.js"></script>
- *   <script src="/js/editorDashboard.js"></script>
+ *   <script src="/js/editor/dashboard.js"></script>
  *
  *   const result = await apiClient.post('/api/editor/articles/123/return', { note: 'Fix the title' });
  *   if (!result.success) { showError(result.error); return; }

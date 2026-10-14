@@ -1,5 +1,5 @@
 /**
- * scripts/testReporterApi.js
+ * tests/testReporterApi.js
  *
  * A self-check for the reporter's routes, run against a REAL running server. It sends
  * about a hundred and fifty requests, many of them deliberately wrong, and checks that
@@ -20,11 +20,11 @@
  *   2. In a second terminal start the server with the SAME two values:
  *        MONGODB_URI=mongodb://127.0.0.1:27017/the-web-daily-test PORT=3098 npm start
  *   3. In the first terminal run this script with the same two values:
- *        MONGODB_URI=mongodb://127.0.0.1:27017/the-web-daily-test PORT=3098 node scripts/testReporterApi.js
+ *        MONGODB_URI=mongodb://127.0.0.1:27017/the-web-daily-test PORT=3098 node tests/testReporterApi.js
  * The logins use the seeded users reporter1, reporter2 and editor, with the password
  * SEED_DEMO_PASSWORD from your .env (it is never written in this file).
  * It needs no test library (the work plan allows only plain console.assert), the same as
- * scripts/testWorkflow.js. It prints one line per failed check and a summary, and exits with
+ * tests/testWorkflow.js. It prints one line per failed check and a summary, and exits with
  * a non-zero code if anything failed.
  *
  * Safety (why this script can't damage your real data). It creates and changes articles, so
