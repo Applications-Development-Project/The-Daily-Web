@@ -51,7 +51,7 @@
   <h4><%= fieldHeading('imageUrl', 'Main image') %></h4>
   <% if (content.imageUrl) { %>
     <%# loading="lazy": the browser fetches the image only when it scrolls into view. %>
-    <img src="<%= content.imageUrl %>" alt="Main image of the article" loading="lazy" style="max-width: 100%; height: auto;">
+    <img class="review-image" src="<%= content.imageUrl %>" alt="Main image of the article" loading="lazy">
     <p><small><%= content.imageUrl %></small></p>
   <% } else { %>
     <p>(no image)</p>

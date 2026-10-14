@@ -1,23 +1,55 @@
 /**
  * public/css/main.css
- * Shared styles and Flexbox layouts for The Web Daily.
- * Owner: SH
+ *
+ * The one stylesheet of the whole site, loaded by views/partials/head.ejs on every page.
+ * One file means one download that the browser caches for every page after the first.
+ *
+ * Requirements this serves: an HTML5/CSS site whose layout is built with Flexbox, and an
+ * interface that works on a computer, a tablet and a phone (responsive).
+ *
+ * How it is organised (in this order):
+ *   1. Design tokens: colours and spacing as CSS variables, defined once and reused.
+ *   2. Base elements: body, links, headings, form controls.
+ *   3. Page layout (Flexbox): header, the content + sidebar row, pages without a sidebar, footer.
+ *   4. Shared components: the class names fixed in "Shared contracts" (btn, card, form-field,
+ *      data-table, status-badge, empty-state, loading...), which every area's views use.
+ *   5. Area styles: feed and article (public), weather, comments, login, editor pages.
+ *   6. Narrow screens: the changes for phones and small tablets (one media query).
+ *
+ * Why no inline style="" attributes in the views: styles written here can be changed in one
+ * place for every page, and the views stay about structure and content only.
+ *
+ * Why Flexbox (and a small CSS grid for the two-column comparison): the course teaches
+ * Flexbox, and it lets the sidebar move below the content on a phone by changing one line
+ * (flex-direction), with no floats or fixed widths.
+ *
+ * Owner: SH (shared classes and public pages). Every area's views use it.
  */
 
-/* Base Reset & Variables */
+/* ---------- 1. Design tokens ---------- */
+
 :root {
   --color-primary: #2c3e50;
   --color-secondary: #34495e;
-  --color-accent: #3498db;
-  --color-danger: #e74c3c;
+  --color-accent: #2f7fc1;
+  --color-danger: #c0392b;
   --color-background: #f8f9fa;
-  --color-text: #333;
-  --color-border: #ddd;
+  --color-surface: #ffffff;
+  --color-text: #222;
+  --color-muted: #5f6b76;
+  --color-border: #dcdfe3;
+  --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
   --spacing-lg: 2rem;
+  --radius: 8px;
+  --content-width: 1200px;
 }
 
+/* ---------- 2. Base elements ---------- */
+
+/* box-sizing: border-box makes width include padding and border, so width: 100% never
+   overflows its container (a common cause of sideways scrolling on phones). */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -25,99 +57,52 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   background-color: var(--color-background);
   color: var(--color-text);
   line-height: 1.6;
 }
 
-/* Layout: Flexbox Grid */
-.page-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
+a {
+  color: var(--color-accent);
 }
 
-.site-header {
-  background-color: var(--color-primary);
-  color: white;
-  padding: var(--spacing-md) var(--spacing-lg);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.site-header nav {
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
-}
-
-.site-header a {
-  color: white;
-  text-decoration: none;
-}
-
-.main-content-wrapper {
-  display: flex;
-  flex: 1;
-  max-width: 1200px;
-  margin: 0 auto;
-  width: 100%;
-  padding: var(--spacing-lg);
-  gap: var(--spacing-lg);
-}
-
-.main-content {
-  flex: 3;
-}
-
-.sidebar {
-  flex: 1;
-}
-
-.site-footer {
-  background-color: var(--color-secondary);
-  color: white;
-  text-align: center;
-  padding: var(--spacing-md);
-  margin-top: auto;
-}
-
-/* Shared Classes (Contract) */
-.card {
-  background: white;
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: var(--spacing-md);
+h2 {
   margin-bottom: var(--spacing-md);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
 
-.btn {
-  display: inline-block;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1rem;
-  text-decoration: none;
+h3,
+h4 {
+  margin: var(--spacing-md) 0 var(--spacing-sm);
 }
 
-.btn-primary {
-  background-color: var(--color-accent);
-  color: white;
+p {
+  margin-bottom: var(--spacing-sm);
 }
 
-.btn-danger {
-  background-color: var(--color-danger);
-  color: white;
+img {
+  max-width: 100%;
 }
 
-.btn-secondary {
-  background-color: #e9ecef;
-  color: var(--color-text);
-  border: 1px solid var(--color-border);
+/* Form controls use the page's font instead of the browser's smaller default. */
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+/* Labels sit above their field. */
+form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Visible keyboard focus on every control and link, for readers who don't use a mouse. */
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 /* Hidden on the screen but still read by screen readers: for labels whose meaning the
@@ -132,65 +117,253 @@ body {
   white-space: nowrap;
 }
 
-.form-field {
+/* ---------- 3. Page layout (Flexbox) ---------- */
+
+/* The body is a column: header, the page's content, footer. min-height and the footer's
+   margin-top: auto keep the footer at the bottom even on a short page. */
+.page-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.site-header {
+  background-color: var(--color-primary);
+  color: white;
+  padding: var(--spacing-md) var(--spacing-lg);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-sm) var(--spacing-md);
+}
+
+.site-title {
+  font-size: 1.8rem;
+  line-height: 1.2;
+}
+
+.site-header a {
+  color: white;
+  text-decoration: none;
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm) var(--spacing-md);
+  align-items: center;
+}
+
+/* The logout form sits in the header's row like a link. */
+.inline-form {
+  display: inline;
+}
+
+/* Public pages: the content and the sidebar side by side. */
+.main-content-wrapper {
+  display: flex;
+  flex: 1;
+  max-width: var(--content-width);
+  margin: 0 auto;
   width: 100%;
-  padding: 0.5rem;
+  padding: var(--spacing-lg);
+  gap: var(--spacing-lg);
+}
+
+.main-content {
+  flex: 3;
+  /* min-width: 0 lets a flex item shrink below the width of a long word or a wide
+     table, so it scrolls inside its own box instead of pushing the page sideways. */
+  min-width: 0;
+}
+
+.sidebar {
+  flex: 1;
+}
+
+/* Pages without a sidebar (reporter, editor, login, error): the main element is a direct
+   child of the body, so it gets the same centred width and padding as the public pages. */
+.page-container > .main-content {
+  flex: 1;
+  width: 100%;
+  max-width: var(--content-width);
+  margin: 0 auto;
+  padding: var(--spacing-lg);
+}
+
+.site-footer {
+  background-color: var(--color-secondary);
+  color: white;
+  text-align: center;
+  padding: var(--spacing-md);
+  margin-top: auto;
+}
+
+/* ---------- 4. Shared components (the contract's class names) ---------- */
+
+.card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* A plain .btn is a neutral button (for example Previous / Next); the colour classes
+   below mark the main action and the dangerous one. */
+.btn {
+  display: inline-block;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background-color: #e9ecef;
+  color: var(--color-text);
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1.4;
+}
+
+.btn-primary {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: white;
+}
+
+.btn-danger {
+  background-color: var(--color-danger);
+  border-color: var(--color-danger);
+  color: white;
+}
+
+.btn-secondary {
+  background-color: #e9ecef;
+  color: var(--color-text);
+}
+
+.btn:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+button:disabled,
+.btn:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* .form-field is used two ways in the views: on the control itself (input.form-field),
+   and on a div that groups a label with its control (div.form-field). Both get full-width,
+   readable controls. */
+.form-field:is(input, select, textarea),
+.form-field input,
+.form-field select,
+.form-field textarea {
+  display: block;
+  width: 100%;
+  padding: var(--spacing-sm);
   margin-bottom: var(--spacing-sm);
   border: 1px solid var(--color-border);
   border-radius: 4px;
+  background-color: var(--color-surface);
+}
+
+div.form-field {
+  margin-bottom: var(--spacing-md);
 }
 
 .form-error {
   color: var(--color-danger);
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   margin-bottom: var(--spacing-md);
+}
+
+.form-error:empty {
+  margin: 0;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
+  background-color: var(--color-surface);
 }
 
-.data-table th, .data-table td {
+.data-table th,
+.data-table td {
   padding: var(--spacing-sm);
   border: 1px solid var(--color-border);
   text-align: left;
+  vertical-align: top;
+}
+
+.data-table th {
+  background-color: #eef1f4;
+}
+
+/* Buttons inside a table cell get a little space between them. */
+.data-table td .btn {
+  margin: 0 var(--spacing-xs) var(--spacing-xs) 0;
+}
+
+/* A wide table scrolls sideways inside this box on a narrow screen, never the whole page. */
+.table-scroll,
+.scroll-wrapper {
+  overflow-x: auto;
+  width: 100%;
+  margin-bottom: var(--spacing-md);
+}
+
+.table-scroll .data-table {
+  min-width: 48rem;
 }
 
 .empty-state {
   text-align: center;
   padding: var(--spacing-lg);
-  color: #666;
+  color: var(--color-muted);
 }
 
+/* While something loads: dimmed, and clicks are ignored. */
 .loading {
   opacity: 0.7;
   pointer-events: none;
 }
 
-/* Status Badges */
 .status-badge {
-  padding: 0.25rem 0.5rem;
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: bold;
-  white-space: nowrap; /* Fixed: Prevents status badge text from wrapping on mobile */
+  /* A status never breaks over two lines, even in a narrow table cell. */
+  white-space: nowrap;
 }
 
-.status-draft { background-color: #f1c40f; color: #333; }
-.status-pending { background-color: #e67e22; color: white; }
-.status-published { background-color: #2ecc71; color: white; }
+.status-draft { background-color: #f1c40f; color: #222; }
+.status-pending { background-color: #b35c00; color: white; }
+.status-published { background-color: #1e8449; color: white; }
 .status-returned { background-color: var(--color-danger); color: white; }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .main-content-wrapper {
-    flex-direction: column;
-  }
-  .sidebar {
-    order: 2; /* Moves sidebar below main content on mobile */
-  }
+/* Two versions side by side (the editor's review page); one column on a phone (section 6). */
+.two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
 }
+
+/* Previous / Next under a paged list. */
+#pagination,
+nav[aria-label="User list pages"] {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin: var(--spacing-md) 0;
+}
+
+/* ---------- 5. Area styles ---------- */
 
 /* Feed (views/public/feed.ejs, public/js/public/feed.js). A card has the same classes
    whether the server rendered it or feed.js built it. */
@@ -198,43 +371,51 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm);
+  align-items: flex-start;
 }
+
 .feed-filter-row .form-field {
   /* Grow to share the row, but wrap to their own line on a narrow phone. */
   flex: 1 1 10rem;
   width: auto;
 }
+
 .article-card-title {
   margin: var(--spacing-sm) 0;
 }
+
 .article-card-title a {
   color: inherit;
   text-decoration: none;
 }
+
 .article-card-title a:hover,
 .article-card-title a:focus {
   text-decoration: underline;
 }
+
 .article-card-meta {
   font-size: 0.9rem;
-  color: #666;
+  color: var(--color-muted);
   margin-bottom: var(--spacing-sm);
 }
+
 .article-card-image {
   display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: var(--radius);
   margin-bottom: var(--spacing-sm);
 }
+
 /* The element the IntersectionObserver watches; 1px tall so it can be "seen" even when empty. */
 .feed-sentinel {
   min-height: 1px;
   text-align: center;
   padding: var(--spacing-md);
-  color: #666;
+  color: var(--color-muted);
 }
 
 /* Full article page (views/public/article.ejs) */
@@ -243,13 +424,48 @@ body {
   font-size: 1.8rem;
   line-height: 1.3;
 }
+
 .article-full figure {
   margin: 0 0 var(--spacing-md);
 }
+
 .article-body p {
   margin-bottom: var(--spacing-md);
   /* A single line break inside a paragraph is kept, as the reporter typed it. */
   white-space: pre-line;
+}
+
+/* Comments (views/public/article.ejs and the same markup from articleComments.js) */
+#comment-list {
+  list-style: none;
+  margin-bottom: var(--spacing-lg);
+}
+
+.comment {
+  border-bottom: 1px solid var(--color-border);
+  padding: var(--spacing-md) 0;
+}
+
+.comment:last-child {
+  border-bottom: none;
+}
+
+.comment-meta {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin-bottom: var(--spacing-xs);
+}
+
+.comment-author {
+  font-weight: bold;
+  color: var(--color-primary);
+  margin-right: var(--spacing-sm);
+}
+
+.comment-text {
+  /* Keeps the line breaks the reader typed, without turning them into HTML. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 /* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js) */
@@ -258,90 +474,98 @@ body {
   align-items: center;
   gap: var(--spacing-sm);
 }
+
+.weather-info p {
+  margin: 0;
+}
+
 .weather-updated {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--color-muted);
 }
 
-/* Comments Section */
-.comment {
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--spacing-md) 0;
-  list-style: none;
-}
-.comment:last-child {
-  border-bottom: none;
-}
-.comment-meta {
-  font-size: 0.85rem;
-  color: #666;
-  margin-bottom: var(--spacing-sm);
-}
-.comment-author {
-  font-weight: bold;
-  color: var(--color-primary);
-  margin-right: var(--spacing-sm);
-}
-.comment-text {
-  white-space: pre-line; /* Keeps line breaks as requested by OS */
-}
-#comment-list {
-  padding: 0;
-  margin-bottom: var(--spacing-lg);
-}
-/* Responsive wrapper for tables */
-.table-scroll {
-    overflow-x: auto;
-}
-/* Fixed: Forces data tables inside scroll wrappers to maintain width on mobile */
-.table-scroll .data-table { 
-    min-width: 48rem; 
-}
-/* --- Phase 2: Responsive & Shared Classes --- */
-
-/* 13. Responsive polish: Sidebar below content on phones & no side-scrolling */
-@media (max-width: 768px) {
-    .main-content-wrapper {
-        display: flex;
-        flex-direction: column; /* Stacks sidebar below main content */
-    }
-    body, html {
-        overflow-x: hidden;
-        max-width: 100vw;
-    }
+/* Login page (views/public/login.ejs) */
+.login-card {
+  max-width: 26rem;
+  margin: var(--spacing-lg) auto;
+  padding: var(--spacing-lg);
 }
 
-/* 14. Shared CSS classes for reporter and editor pages */
-.scroll-wrapper {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    width: 100%;
+.login-card h2,
+.login-intro {
+  text-align: center;
 }
 
-.two-column {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-lg);
-}
-@media (max-width: 768px) {
-    .two-column {
-        grid-template-columns: 1fr; /* Stacks on mobile */
-    }
+.login-intro {
+  color: var(--color-muted);
+  margin-bottom: var(--spacing-md);
 }
 
+.btn-block {
+  width: 100%;
+}
+
+/* Editor navigation (views/editor/partials/editorNav.ejs): a row of links; the current
+   page (aria-current="page") is highlighted, so the editor sees where they are. */
 .editor-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--spacing-md);
-    padding: var(--spacing-md);
-    background-color: #f9f9f9;
-    border-radius: 8px;
-    margin-bottom: var(--spacing-lg);
-    border: 1px solid #eee;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 var(--spacing-lg);
 }
 
-button:disabled, .btn:disabled, input:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
+.editor-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-lg);
+  list-style: none;
+  max-width: var(--content-width);
+  margin: 0 auto;
+}
+
+.editor-nav-link {
+  display: inline-block;
+  padding: var(--spacing-sm) 0;
+  color: var(--color-text);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+}
+
+.editor-nav-link:hover,
+.editor-nav-link[aria-current="page"] {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+/* An article's image on the editor's review page. */
+.review-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+/* ---------- 6. Narrow screens (phones and small tablets) ---------- */
+
+@media (max-width: 768px) {
+  .site-header,
+  .main-content-wrapper,
+  .page-container > .main-content {
+    padding: var(--spacing-md);
+  }
+
+  .site-title {
+    font-size: 1.4rem;
+  }
+
+  /* Flexbox: the sidebar moves below the content instead of beside it. */
+  .main-content-wrapper {
+    flex-direction: column;
+  }
+
+  .editor-nav {
+    padding: 0 var(--spacing-md);
+  }
+
+  .two-column {
+    grid-template-columns: 1fr;
+  }
 }
