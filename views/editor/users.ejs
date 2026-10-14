@@ -32,10 +32,15 @@
 
     <section class="card" aria-labelledby="add-user-title">
       <h3 id="add-user-title">Add a user</h3>
+      <%# The browser checks these attributes before sending (a quick answer); the server checks
+          the same rules again in userController.js, because a request can be sent without this page.
+          pattern is the same rule as USERNAME_PATTERN on the server, and title is the message the
+          browser shows when it doesn't match. %>
       <form id="add-user-form">
         <div class="form-field">
           <label for="new-username">Username</label>
-          <input id="new-username" name="username" type="text" autocomplete="off" minlength="3" maxlength="30" required>
+          <input id="new-username" name="username" type="text" autocomplete="off" minlength="3" maxlength="30" required
+            pattern="[A-Za-z0-9._\-]+" title="Letters, digits, dots, dashes and underscores only">
         </div>
         <div class="form-field">
           <label for="new-display-name">Display name</label>
