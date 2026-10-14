@@ -469,6 +469,11 @@ function publishWorkingCopy(article, editorId) {
  *   publishHistory entry and a chart marker, exactly like approving. The review page says
  *   so and asks for confirmation. Saving it with no change answers 409, so a click doesn't
  *   add an empty "update" to the history.
+ *   Why this still follows "an edited published article goes through the same approval
+ *   process, and readers see the new content only after an editor approves it" (p.4): the
+ *   approval process ends with an editor's approval, and here the editor is the one making
+ *   the change and confirming it. New content still reaches readers only through an editor's
+ *   decision; a reporter's edit of a live article always waits for the editor (pending).
  *
  * Validation:
  * - The fields are checked by readDraftFromRequestBody (services/draftValidation.js), the
