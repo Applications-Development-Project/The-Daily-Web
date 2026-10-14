@@ -479,6 +479,11 @@ nav[aria-label="User list pages"] {
   margin: 0;
 }
 
+.weather-icon {
+  font-size: 2.5rem;
+  line-height: 1;
+}
+
 .weather-updated {
   font-size: 0.8rem;
   color: var(--color-muted);
