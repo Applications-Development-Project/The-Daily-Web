@@ -1,60 +1,29 @@
-<aside class="sidebar">
-    <div id="weather-widget" class="card loading">
-        <h3>Weather</h3>
-        <div id="weather-content">Loading weather...</div>
-    </div>
-    
-    <script>
-    async function loadWeather() {
-        try {
-            const response = await fetch('/api/weather');
-            const result = await response.json();
-            const contentDiv = document.getElementById('weather-content');
-            contentDiv.textContent = ''; // Clear loading text safely
-            
-            if (result.success) {
-                const w = result.data;
-                
-                // Create wrapper
-                const wrapper = document.createElement('div');
-                wrapper.className = 'weather-info';
-                wrapper.style.display = 'flex';
-                wrapper.style.alignItems = 'center';
-                wrapper.style.gap = '10px';
-                
-                // Create image
-                const img = document.createElement('img');
-                img.src = `https://openweathermap.org/img/wn/${w.icon}.png`;
-                img.alt = w.description;
-                
-                // Create text container
-                const textDiv = document.createElement('div');
-                
-                const cityStrong = document.createElement('strong');
-                cityStrong.textContent = w.city;
-                
-                const br = document.createElement('br');
-                const descText = document.createTextNode(`${w.temperature}°C, ${w.description}`);
-                
-                // Append everything safely
-                textDiv.appendChild(cityStrong);
-                textDiv.appendChild(br);
-                textDiv.appendChild(descText);
-                
-                wrapper.appendChild(img);
-                wrapper.appendChild(textDiv);
-                
-                contentDiv.appendChild(wrapper);
-            } else {
-                contentDiv.textContent = 'Weather unavailable';
-            }
-        } catch (error) {
-            document.getElementById('weather-content').textContent = 'Weather unavailable';
-        }
-    }
-    
-    // Expose globally so public/js/public/feed.js can reuse it
-    window.loadWeather = loadWeather;
-    document.addEventListener('DOMContentLoaded', loadWeather);
-    </script>
+<%#
+  views/partials/sidebar.ejs
+
+  The sidebar of the public pages, with the weather widget (requirements: a weather
+  widget in the site's sidebar, from an external web service).
+
+  The widget arrives with "Loading weather..." and is filled in the browser by
+  public/js/public/weatherWidget.js from our own GET /api/weather. Why not render the
+  weather on the server with the page: the feed and article pages would then wait for the
+  weather before they could be sent, and a slow weather service would slow down the whole
+  site. Loading it separately keeps the article text fast, and the widget refreshes itself
+  while the page stays open (every 5 minutes, see weatherWidget.js).
+
+  The page that includes this partial must also load /js/shared/apiClient.js and then
+  /js/public/weatherWidget.js at the end of its body.
+
+  aside is the semantic HTML5 element for content beside the main content; on a narrow
+  screen the CSS moves it below the main content (public/css/main.css).
+
+  Included by: views/public/feed.ejs and views/public/article.ejs.
+  Owner: SH.
+%>
+<aside class="sidebar" aria-label="Sidebar">
+    <section id="weather-widget" class="card loading" aria-labelledby="weather-title">
+        <h3 id="weather-title">Weather</h3>
+        <%# aria-live="polite": screen readers announce the weather when it arrives or changes. %>
+        <div id="weather-content" aria-live="polite">Loading weather...</div>
+    </section>
 </aside>
