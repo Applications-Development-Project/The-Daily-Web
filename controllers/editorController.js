@@ -360,13 +360,15 @@ async function showArticleReview(request, response) {
  * - Only 20 rows per answer (paging), only the fields the table shows (.select),
  *   plain objects (.lean), and only the reporter's displayName (populate), so no
  *   article body or user data the page doesn't need is ever loaded.
- * - The status filter uses the { status: 1 } index.
+ * - Without a filter, the sort reads the { updatedAt: -1, _id: -1 } index in order, so
+ *   MongoDB never sorts the whole collection in memory; the status filter uses the
+ *   { status: 1 } index.
  * Known limits, fine for the thousands of articles the requirements mention:
  * - A case-insensitive search inside titles ('i' regex, any position) can't use an
- *   index, so MongoDB checks the titles one by one. A text index would avoid that.
- * - There is no index on updatedAt alone, so sorting the full list happens in
- *   memory, and skip() still passes over the earlier pages. An index on
- *   { updatedAt: -1, _id: -1 } in models/Article.js (a shared file) would remove both costs.
+ *   index, so MongoDB checks the titles one by one. A text index would avoid that, but
+ *   it matches whole words only.
+ * - skip() still passes over the earlier pages; an editor rarely goes deep enough for
+ *   that to matter.
  *
  * @param {import('express').Request} request - The query string holds the filters.
  * @param {import('express').Response} response - The JSON answer.
