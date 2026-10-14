@@ -1,75 +1,117 @@
+<%#
+  views/public/article.ejs
+
+  The full article page: the approved version of one article, and its comments.
+  Open to everyone.
+
+  Requirements this serves: the page shows the title, reporter's name, category, publish
+  date, main image and the full text, and a comments area with the list and a form for a
+  new comment. It must be readable by search engines, so EVERYTHING here, the full text and
+  the existing comments included, is in the HTML the server sends; nothing depends on
+  JavaScript. The only script for the article itself is articleComments.js, which adds a
+  NEW comment to the top of the list without reloading it.
+
+  Why it is written this way (questions a lecturer may ask):
+  - XSS: every text from the database (title, body, comments) is printed with the escaping
+    tag (the one with an equals sign). A comment like "<script>alert(1)</script>" is shown
+    as text and never runs. The tag with a minus sign is used only to include our own
+    partials, never for user text.
+  - The body is plain text split into paragraphs by the controller, so readers see real
+    paragraphs while no HTML from a reporter ever reaches the page.
+  - These notes are EJS comments: the server removes them, so they never reach the browser.
+  - The comments area is a contract with public/js/public/articleComments.js: the ids
+    comments (with data-article-id), comment-list, comment-form (fields authorName and
+    text) and comment-error, and the markup of one comment (li.comment with
+    p.comment-meta, span.comment-author, time.comment-date and p.comment-text). The script
+    builds new comments with exactly the same markup, so old and new ones look the same.
+  - Semantic HTML5: article for the article, header inside it for title and details, time
+    with a machine-readable datetime, figure for the image, section for the comments.
+
+  Rendered by: controllers/articlePageController.js (showArticlePage), for GET /articles/:id.
+  Locals: title, description (the summary, for the meta description; it isn't printed in
+  the page because a body usually opens with it), article ({ id, title, category, imageUrl,
+  paragraphs, reporterName, publishedAt }), comments (the newest, each
+  { authorName, text, createdAt }).
+  Includes: the shared head, header, sidebar and footer (views/partials).
+  Owner: SH (page). The comments script is OS's.
+%>
+<%
+  // The date format the whole site uses, for example "10 Oct 2026, 14:32".
+  const dateFormat = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+%>
 <!DOCTYPE html>
 <html lang="en">
-<!-- 
-  views/public/article.ejs
-  Single article page with full text and comments.
-  Owner: SH.
--->
-<!-- Load the head partial and pass the dynamic title from the controller -->
-<%- include('../partials/head', { title: title }) %>
+<%- include('../partials/head', { title: title, description: description }) %>
 
 <body class="page-container">
     <%- include('../partials/header') %>
 
     <div class="main-content-wrapper">
         <main class="main-content">
-            
-            <article class="card">
-                <span class="status-badge status-published"><%= article.published.category || 'News' %></span>
-                <h1 style="margin: var(--spacing-md) 0;"><%= article.published.title %></h1>
-                
-                <p style="color: #666; margin-bottom: var(--spacing-lg);">
-                    By <%= article.reporter && article.reporter.displayName ? article.reporter.displayName : 'Unknown' %> | Published: 
-                    <time datetime="<%= article.lastPublishedAt.toISOString() %>">
-                        <%= new Date(article.lastPublishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
-                    </time>
-                </p>
-                
-                <!-- Display an image only if the article has one -->
-                <% if (article.published.imageUrl) { %>
-                    <img src="<%= article.published.imageUrl %>" alt="<%= article.published.title %>" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-lg);">
+            <p><a href="/">&larr; Back to all news</a></p>
+
+            <article class="card article-full">
+                <header>
+                    <span class="status-badge status-published"><%= article.category %></span>
+                    <h2 class="article-full-title"><%= article.title %></h2>
+                    <p class="article-card-meta">
+                        By <%= article.reporterName %>
+                        <% if (article.publishedAt) { %>
+                            | Published <time datetime="<%= article.publishedAt.toISOString() %>"><%= article.publishedAt.toLocaleString('en-GB', dateFormat) %></time>
+                        <% } %>
+                    </p>
+                </header>
+
+                <% if (article.imageUrl) { %>
+                    <%# onerror: a broken link or a host that is down shows our own placeholder
+                        instead of a broken-image icon. The address was checked to be http(s)
+                        when it was saved, and escaping keeps it inside the attribute. %>
+                    <figure>
+                        <img class="article-card-image" src="<%= article.imageUrl %>" alt="<%= article.title %>"
+                            onerror="this.onerror=null; this.src='/images/placeholder.svg';">
+                    </figure>
                 <% } %>
-                
+
                 <div class="article-body">
-                    <!-- Defense Question - Security: Why use <%= %> here? -->
-                    <!-- Using <%= %> escapes HTML and prevents Stored XSS injection attacks. Even though content is approved by an editor, we enforce strict server-side escaping for public viewers. -->
-                    <%= article.published.body %>
+                    <% article.paragraphs.forEach(function (paragraph) { %>
+                        <p><%= paragraph %></p>
+                    <% }); %>
                 </div>
             </article>
 
-            <!-- Comments Section -->
-            <!-- Defense Question - Contracts: What is the comment markup contract with OS? -->
-            <!-- OS's client-side script (public/js/public/articleComments.js) relies strictly on the IDs (#comments, #comment-list, #comment-form, #comment-error) and the data-article-id attribute below to know exactly which article to attach new comments to. -->
-            <section id="comments" data-article-id="<%= article._id %>" class="card">
-                <h3>Comments</h3>
-                
+            <section id="comments" class="card" data-article-id="<%= article.id %>" aria-labelledby="comments-title">
+                <h3 id="comments-title">Comments</h3>
+
+                <%# Newest first, at most Comment.MAX_SHOWN_PER_ARTICLE (the same number as the API). %>
                 <ul id="comment-list">
-                    <% if (comments && comments.length > 0) { %>
-                        <% comments.forEach(function(comment) { %>
-                            <li class="comment">
-                                <p class="comment-meta">
-                                    <span class="comment-author"><%= comment.authorName %></span>
-                                    <time class="comment-date" datetime="<%= comment.createdAt.toISOString() %>">
-                                        <%= comment.createdAt.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
-                                    </time>
-                                </p>
-                                <p class="comment-text"><%= comment.text %></p>
-                            </li>
-                        <% }); %>
-                    <% } else { %>
+                    <% comments.forEach(function (comment) { %>
+                        <li class="comment">
+                            <p class="comment-meta">
+                                <span class="comment-author"><%= comment.authorName %></span>
+                                <time class="comment-date" datetime="<%= comment.createdAt.toISOString() %>"><%= comment.createdAt.toLocaleString('en-GB', dateFormat) %></time>
+                            </p>
+                            <p class="comment-text"><%= comment.text %></p>
+                        </li>
+                    <% }); %>
+                    <% if (comments.length === 0) { %>
                         <li class="empty-state">No comments yet.</li>
                     <% } %>
                 </ul>
 
-                <div id="comment-error" class="form-error" role="alert" hidden></div>
-
-                <form id="comment-form">
-                    <input type="text" name="authorName" class="form-field" placeholder="Your Name" required maxlength="50">
-                    <textarea name="text" class="form-field" placeholder="Write a comment..." rows="4" required maxlength="1000"></textarea>
-                    <button type="submit" class="btn btn-primary">Post Comment</button>
+                <%# The script sends this form with fetch. method="post" only matters if the script
+                    failed to load: the browser would otherwise send the form with GET and put the
+                    name and comment in the address bar. maxlength and required give a quick answer
+                    in the browser; the server checks the same rules again (and the 3-per-minute limit). %>
+                <form id="comment-form" method="post">
+                    <label for="comment-author-name">Your name</label>
+                    <input type="text" id="comment-author-name" name="authorName" class="form-field" maxlength="50" required>
+                    <label for="comment-text">Your comment</label>
+                    <textarea id="comment-text" name="text" class="form-field" rows="4" maxlength="1000" required></textarea>
+                    <%# role="alert": screen readers announce an error (for example the limit) as soon as it appears. %>
+                    <p id="comment-error" class="form-error" role="alert" hidden></p>
+                    <button type="submit" class="btn btn-primary">Post comment</button>
                 </form>
             </section>
-
         </main>
 
         <%- include('../partials/sidebar') %>
@@ -77,7 +119,7 @@
 
     <%- include('../partials/footer') %>
 
-    <!-- Required scripts for comments functionality -->
+    <%# Order matters: articleComments.js and weatherWidget.js call apiClient, so apiClient.js loads first. %>
     <script src="/js/shared/apiClient.js"></script>
     <script src="/js/public/articleComments.js"></script>
     <script src="/js/public/weatherWidget.js"></script>

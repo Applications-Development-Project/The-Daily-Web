@@ -237,6 +237,21 @@ body {
   color: #666;
 }
 
+/* Full article page (views/public/article.ejs) */
+.article-full-title {
+  margin: var(--spacing-sm) 0;
+  font-size: 1.8rem;
+  line-height: 1.3;
+}
+.article-full figure {
+  margin: 0 0 var(--spacing-md);
+}
+.article-body p {
+  margin-bottom: var(--spacing-md);
+  /* A single line break inside a paragraph is kept, as the reporter typed it. */
+  white-space: pre-line;
+}
+
 /* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js) */
 .weather-info {
   display: flex;

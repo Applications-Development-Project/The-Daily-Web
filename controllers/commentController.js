@@ -23,10 +23,6 @@ const logger = require('../services/logger');
 const { createHttpError } = require('../utils/httpErrors');
 const { isValidObjectId, escapeRegExp, readSearchText, readPageNumber } = require('../utils/requestValidation');
 
-// The most comments one request returns. An article page shows the newest ones; this
-// keeps the answer small and fast even for an article with thousands of comments.
-const MAX_COMMENTS_PER_ARTICLE = 100;
-
 // Length limits from the work plan, the same as in models/Comment.js. The model
 // checks them again as a safety net; here we give the reader a friendly message.
 const MAX_AUTHOR_NAME_LENGTH = 50;
@@ -172,7 +168,7 @@ async function findCommentById(commentId) {
 
 /**
  * GET /api/articles/:id/comments - the article's comments, newest first
- * (at most MAX_COMMENTS_PER_ARTICLE). Open to everyone.
+ * (at most Comment.MAX_SHOWN_PER_ARTICLE, the same number the article page shows). Open to everyone.
  * Answers 200 { success: true, data: { comments: [...] } }.
  *
  * The query matches the { article: 1, createdAt: -1 } index on Comment, so MongoDB
@@ -189,7 +185,7 @@ async function listArticleComments(request, response) {
 
   const comments = await Comment.find({ article: article._id })
     .sort({ createdAt: -1, _id: -1 })
-    .limit(MAX_COMMENTS_PER_ARTICLE)
+    .limit(Comment.MAX_SHOWN_PER_ARTICLE)
     .select('authorName text createdAt')
     .lean();
 

@@ -78,4 +78,13 @@ commentSchema.index({ article: 1, createdAt: -1 });
 // comments themselves, so the check stays fast with any number of comments.
 commentSchema.index({ deviceId: 1, createdAt: -1 });
 
-module.exports = mongoose.model('Comment', commentSchema);
+const Comment = mongoose.model('Comment', commentSchema);
+
+// How many of an article's newest comments are shown: on the article page rendered by the
+// server (controllers/articlePageController.js) and by GET /api/articles/:id/comments
+// (controllers/commentController.js). Written once here so the two can't disagree, the
+// same way Article.CATEGORIES is shared. It keeps the page and the answer small even for
+// an article with thousands of comments.
+Comment.MAX_SHOWN_PER_ARTICLE = 100;
+
+module.exports = Comment;
