@@ -11,17 +11,18 @@
  * After login, every permission check (requireLogin, requireRole) reads the role from
  * this server-side session, never from anything the browser sends.
  *
- * Known small leak (acceptable here): a login with an unknown username answers a little
- * faster than one with a known username and a wrong password, because no bcrypt
- * comparison runs. In theory, measuring that time could reveal which usernames exist.
- * The usual fix is to compare the password against a dummy hash when the user isn't
- * found, so both cases take the same time.
+ * Same answer AND same time for an unknown username and a wrong password: both get
+ * "Wrong username or password.", and for an unknown username we still run one bcrypt
+ * comparison (against DUMMY_PASSWORD_HASH). Without it, an unknown username would be
+ * answered faster (no bcrypt work), and measuring the time would reveal which usernames
+ * exist even though the message is the same.
  *
  * Used by: routes/pageRoutes/authPageRoutes.js, routes/apiRoutes/authApiRoutes.js.
  * Related: models/User.js, config/session.js, views/public/login.ejs, services/logger.js.
  * Owner: OS.
  */
 
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const logger = require('../services/logger');
@@ -37,6 +38,12 @@ const MAX_USERNAME_LENGTH = 30;
 // bcrypt only uses the first 72 bytes of a password anyway. Refusing very long input
 // stops anyone from making the server hash megabytes of text.
 const MAX_PASSWORD_LENGTH = 200;
+
+// A bcrypt hash of a random password that nobody knows, made once when the server starts
+// (about a tenth of a second). It is compared when the username doesn't exist, only so that
+// case takes as long as a wrong password (see the header); it can never match anything.
+// 10 rounds, the same cost as every real hash (userController.js and scripts/seed.js).
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(crypto.randomUUID(), 10);
 
 // Where each role lands after logging in (requirements: a reporter goes to their
 // work area, an editor to the management area). The server decides this from the
@@ -96,6 +103,9 @@ async function findUserWithPassword(username, password) {
   // This is the only query in the app that reads it.
   const user = await User.findOne({ username: username }).select('+passwordHash');
   if (!user) {
+    // Same bcrypt work as a real check, so the answer time doesn't reveal that the
+    // username doesn't exist. The result is ignored: the answer is "no" either way.
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     return null;
   }
 
