@@ -10,6 +10,7 @@
  * - GET  /api/editor/articles             the dashboard list: status filter, title search, paging
  * - POST /api/editor/articles/:id/approve publish the working copy
  * - POST /api/editor/articles/:id/return  return with a required note
+ * - PATCH /api/editor/articles/:id/draft  the editor's own edit of a pending article
  * - DELETE /api/editor/articles/:id       delete with its comments and statistics
  * - GET and DELETE /api/editor/articles/:id/views  the chart data and the reset
  * - GET /editor and GET /editor/articles/:id       the dashboard and review pages
@@ -53,8 +54,7 @@
  * Not tested here on purpose:
  * - Two editors deciding at the same instant (a race): the result is not the same every time,
  *   so it can't be a reliable check. It is listed as a known limit in editorController.js.
- * - PATCH /api/editor/articles/:id/draft: not built yet (it answers 501). The script prints a
- *   reminder line so the checks get written together with the feature.
+ * - The Edit form on the review page runs in the browser; its API is fully checked here.
  *
  * Used by: run by hand (SM's acceptance checks for the editor area).
  * Related: controllers/editorController.js, controllers/analyticsController.js,
@@ -378,8 +378,8 @@ async function testArticleList(fixtures, cookies) {
   const renamedRow = ourRows.find((row) => row.id === fixtures.renamedLiveId);
   check(renamedRow !== undefined && renamedRow.isLive === true, 'search should also match the live title of an article whose working title was renamed');
   // Our pending articles: newPending, pendingForReturn, incompletePending, livePending,
-  // livePendingForReturn and hostileTitle.
-  check((dataOf(await search(RUN_TAG, `&status=${STATUS.PENDING}`)).articles || []).length === 6, 'search together with status=pending should find our 6 pending articles');
+  // livePendingForReturn, hostileTitle and editPending.
+  check((dataOf(await search(RUN_TAG, `&status=${STATUS.PENDING}`)).articles || []).length === 7, 'search together with status=pending should find our 7 pending articles');
 
   // Regex characters are searched as plain text (escapeRegex): "C++ (" must find the one
   // title that really contains it, and ".*" must not mean "anything".
@@ -748,20 +748,74 @@ async function testDelete(fixtures, cookies) {
 }
 
 /**
- * PATCH /api/editor/articles/:id/draft is not built yet. Instead of a check that would be red
- * for a known reason, this prints a reminder, and tells us when the route starts answering.
+ * PATCH /api/editor/articles/:id/draft: the editor edits a pending article. Only pending is
+ * allowed (409 for every other status, and nothing changes); every invalid field gets 400 and
+ * nothing changes; a valid edit replaces only the working copy, keeps the status pending,
+ * ignores any other field in the body, and leaves the live version untouched; and the edited
+ * version is what an approval then publishes. (Guest 401 and reporter 403 are checked in
+ * testOnlyEditorsGetIn.)
  *
  * @param {Object} fixtures - The ids from setUp.
  * @param {Object} cookies - The login cookies from setUp.
  * @returns {Promise<void>}
  */
-async function remindAboutEditDraft(fixtures, cookies) {
-  const response = await request(cookies.editor, 'PATCH', `${API}/${fixtures.incompletePendingId}/draft`, GOOD_CONTENT);
-  if (response.status === 501) {
-    console.log('NOT BUILT YET: PATCH /api/editor/articles/:id/draft answers 501. Add its checks here when it is built.');
-  } else {
-    console.log(`PATCH /api/editor/articles/:id/draft now answers ${response.status}: replace remindAboutEditDraft with real checks.`);
+async function testEditDraft(fixtures, cookies) {
+  const edit = (id, body) => request(cookies.editor, 'PATCH', `${API}/${id}/draft`, body);
+  const id = fixtures.editPendingId;
+  const editedContent = { ...GOOD_CONTENT, title: `${RUN_TAG} edited by the editor`, body: 'Corrected first paragraph.\n\nSecond paragraph.' };
+
+  // Only pending: the reporter's work in progress and a plain live article are not the editor's to edit.
+  for (const [name, otherId] of [['a draft', fixtures.draftId], ['a returned article', fixtures.returnedId], ['a published article', fixtures.publishedId]]) {
+    const before = await readArticle(otherId);
+    checkStatus(`edit ${name}`, 409, await edit(otherId, editedContent));
+    const after = await readArticle(otherId);
+    check(after.draft.title === before.draft.title && after.status === before.status, `editing ${name} must change nothing`);
   }
+  checkStatus('edit, malformed id', 400, await edit('abc', editedContent));
+  checkStatus('edit, unknown id', 404, await edit(MISSING_ID, editedContent));
+
+  const beforeBadEdits = await readArticle(id);
+  const badBodies = [
+    ['no body at all', undefined],
+    ['a missing field', { title: 'Only a title' }],
+    ['a title that is a number', { ...editedContent, title: 5 }],
+    ['a title that is an object (NoSQL injection attempt)', { ...editedContent, title: { $ne: '' } }],
+    ['a title over 200 characters', { ...editedContent, title: 'x'.repeat(201) }],
+    ['an unknown category', { ...editedContent, category: 'Gossip' }],
+    ['a javascript: image address', { ...editedContent, imageUrl: 'javascript:alert(1)' }],
+    ['an empty summary (spaces only)', { ...editedContent, summary: '   ' }],
+    ['an empty category', { ...editedContent, category: '' }],
+    ['broken JSON', '{"title": '],
+  ];
+  for (const [name, body] of badBodies) {
+    checkStatus(`edit with ${name}`, 400, await edit(id, body));
+  }
+  const afterBadEdits = await readArticle(id);
+  check(afterBadEdits.draft.title === beforeBadEdits.draft.title && afterBadEdits.draft.body === beforeBadEdits.draft.body,
+    'the refused edits must leave the draft unchanged');
+
+  // A valid edit, with extra fields that must be ignored (they would change the status,
+  // publish directly, or change the owner if the controller read them).
+  const liveBefore = await readArticle(id);
+  const saved = await edit(id, { ...editedContent, status: STATUS.PUBLISHED, published: { title: 'HACKED' }, reporter: MISSING_ID });
+  checkStatus('a valid edit', 200, saved);
+  check(dataOf(saved).status === STATUS.PENDING, 'the answer should say the article is still pending');
+  const liveAfter = await readArticle(id);
+  check(liveAfter.status === STATUS.PENDING, 'after the edit the article should still await approval');
+  check(liveAfter.draft.title === editedContent.title && liveAfter.draft.body === editedContent.body, 'the draft should hold the editor\'s version');
+  check(liveAfter.published.title === liveBefore.published.title && +liveAfter.lastPublishedAt === +liveBefore.lastPublishedAt,
+    'readers must keep seeing the live version until an approval');
+  check(String(liveAfter.reporter) === String(liveBefore.reporter), 'the owner must not change');
+
+  const reviewPage = await request(cookies.editor, 'GET', `/editor/articles/${id}`);
+  check(reviewPage.text.includes(`${RUN_TAG} edited by the editor`) && reviewPage.text.includes('Edit the submitted version'),
+    'the review page should show the edited version and still offer the Edit form');
+  const publishedReview = await request(cookies.editor, 'GET', `/editor/articles/${fixtures.publishedId}`);
+  check(!publishedReview.text.includes('Edit the submitted version'), 'a published article with no update should not offer the Edit form');
+
+  // The point of the edit: approving now publishes the editor's version.
+  checkStatus('approve after the edit', 200, await request(cookies.editor, 'POST', `${API}/${id}/approve`));
+  check((await readArticle(id)).published.title === editedContent.title, 'approving after the edit should publish the editor\'s version');
 }
 
 /**
@@ -810,6 +864,11 @@ async function setUp() {
     // The reporter renamed the working copy: only the live title has the tag.
     renamedLiveId: await make(STATUS.DRAFT, { draft: { ...GOOD_CONTENT, title: 'Renamed working title' }, ...liveFields(liveContent('renamed live'), editor._id, twoDaysAgo) }),
     hostileTitleId: await make(STATUS.PENDING, { draft: { ...GOOD_CONTENT, title: HOSTILE_TITLE } }),
+    // A live article with a pending update, for the editor's edit: the live copy must not change.
+    editPendingId: await make(STATUS.PENDING, {
+      draft: liveContent('edit, submitted title'),
+      ...liveFields(liveContent('edit, live title'), editor._id, twoDaysAgo),
+    }),
   };
   return { fixtures, cookies, editorId: editor._id };
 }
@@ -832,12 +891,13 @@ async function main() {
     await testAnalyticsPage(fixtures, cookies);
     await testApprove({ ...fixtures, editorId }, cookies);
     await testReturn(fixtures, cookies);
+    // Before testDelete, which deletes the returned article this test also uses.
+    await testEditDraft(fixtures, cookies);
     // recordView first: the chart and reset checks count the views it adds.
     await testRecordView(fixtures);
     await testViewsChartData(fixtures, cookies);
     await testResetViews(fixtures, cookies);
     await testDelete(fixtures, cookies);
-    await remindAboutEditDraft(fixtures, cookies);
   } finally {
     // Safety guard 3: delete exactly the articles this script created, and everything that
     // points at them, so the test database is left as the seed made it.
