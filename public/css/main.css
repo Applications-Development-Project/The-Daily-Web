@@ -19,9 +19,9 @@
  * Why no inline style="" attributes in the views: styles written here can be changed in one
  * place for every page, and the views stay about structure and content only.
  *
- * Why Flexbox (and a small CSS grid for the two-column comparison): the course teaches
- * Flexbox, and it lets the sidebar move below the content on a phone by changing one line
- * (flex-direction), with no floats or fixed widths.
+ * Why Flexbox for every layout (no floats, no CSS grid): the course teaches Flexbox and the
+ * requirements name it, and it lets the sidebar move below the content on a phone by changing
+ * one line (flex-direction), with no fixed widths.
  *
  * Owner: SH (shared classes and public pages). Every area's views use it.
  */
@@ -347,11 +347,17 @@ div.form-field {
 .status-published { background-color: #1e8449; color: white; }
 .status-returned { background-color: var(--color-danger); color: white; }
 
-/* Two versions side by side (the editor's review page); one column on a phone (section 6). */
+/* Two versions side by side (the editor's review page): a Flexbox row of two equal columns;
+   one column on a phone (section 6). */
 .two-column {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: var(--spacing-lg);
+  align-items: flex-start;
+}
+
+.two-column > * {
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* Previous / Next under a paged list. */
@@ -380,26 +386,25 @@ nav[aria-label="User list pages"] {
   width: auto;
 }
 
-/* On a wide screen, a card with an image shows it on the left and the text beside it, so
-   a page of 20 cards is easy to scan. :has(img) applies the grid only to cards that have
-   an image. On a phone (section 6) everything stacks in one column again. */
-@media (min-width: 769px) {
-  .article-card:has(.article-card-image) {
-    display: grid;
-    grid-template-columns: 16rem 1fr;
-    grid-template-areas:
-      "image badge"
-      "image title"
-      "image meta"
-      "image summary";
-    grid-template-rows: auto auto auto 1fr;
-    column-gap: var(--spacing-md);
-  }
-  .article-card:has(.article-card-image) .category-badge { grid-area: badge; justify-self: start; }
-  .article-card:has(.article-card-image) .article-card-title { grid-area: title; }
-  .article-card:has(.article-card-image) .article-card-meta { grid-area: meta; }
-  .article-card:has(.article-card-image) .article-card-image { grid-area: image; margin-bottom: 0; }
-  .article-card:has(.article-card-image) > p:last-child { grid-area: summary; }
+/* A card with an image (article-card-with-image) is a Flexbox row on a wide screen: the image
+   on the left with a fixed width, the text taking the rest, so a page of 20 cards is easy to
+   scan. On a phone (section 6) the row becomes a column: the image above the text. */
+.article-card-with-image {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+}
+
+.article-card-with-image .article-card-image {
+  flex: 0 0 16rem;
+  width: 16rem;
+  margin-bottom: 0;
+}
+
+.article-card-text {
+  /* Takes the rest of the row; min-width: 0 lets long titles wrap instead of overflowing. */
+  flex: 1;
+  min-width: 0;
 }
 
 /* The article's category (feed cards and the article page). */
@@ -603,7 +608,14 @@ nav[aria-label="User list pages"] {
     padding: 0 var(--spacing-md);
   }
 
-  .two-column {
-    grid-template-columns: 1fr;
+  /* Flexbox: rows become columns. */
+  .two-column,
+  .article-card-with-image {
+    flex-direction: column;
+  }
+
+  .article-card-with-image .article-card-image {
+    flex-basis: auto;
+    width: 100%;
   }
 }
