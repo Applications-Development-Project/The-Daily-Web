@@ -36,10 +36,6 @@
  *   3. At the end it deletes every article it created.
  * (npm run seed wipes the database it is pointed at, which is why the "-test" name matters.)
  *
- * Known issue it reports without failing: see checkKnownIssue (the bad-URL 500 that belongs
- * to middleware/errorHandler.js, owned by OS). When OS fixes it, those checks start to pass
- * and the script tells you to turn them into normal checks.
- *
  * Not tested here on purpose: two requests at the same instant (a race between autosave and
  * submit). The result of a race is not the same every time, so it can't be a reliable check; it
  * is listed as a known limit in the pull request instead.
@@ -64,8 +60,6 @@ const API = '/api/reporter/articles';
 
 let checkCount = 0;
 let failedCount = 0;
-let knownIssueOpenCount = 0;
-let knownIssueFixedCount = 0;
 
 // Ids of every article this script created, so the end of the run can delete exactly those.
 const createdArticleIds = [];
@@ -110,28 +104,6 @@ function check(condition, description) {
 function checkStatus(description, expected, response) {
   const accepted = Array.isArray(expected) ? expected : [expected];
   check(accepted.includes(response.status), `${description}: expected ${accepted.join(' or ')}, got ${response.status}`);
-}
-
-/**
- * A check for a bug we already know about and that is NOT in the reporter's files. It
- * does not count as a failure while the bug is open (the script would then be red for a
- * reason that this branch can't fix), but it is printed so nobody forgets it. When the owner
- * fixes the bug the check passes, and the script says so, so it can become a normal check.
- *
- * @param {string} description - What was sent.
- * @param {number} expected - The status that is correct.
- * @param {{status: number}} response - What request() returned.
- * @param {string} owner - Who owns the file that has to change.
- * @returns {void}
- */
-function checkKnownIssue(description, expected, response, owner) {
-  if (response.status === expected) {
-    knownIssueFixedCount += 1;
-    console.log(`KNOWN ISSUE NOW FIXED: ${description} answers ${expected}. Change it to checkStatus.`);
-  } else {
-    knownIssueOpenCount += 1;
-    console.log(`KNOWN ISSUE (waiting for ${owner}): ${description}: expected ${expected}, got ${response.status}`);
-  }
 }
 
 /**
@@ -394,13 +366,13 @@ async function testBadIds(fixtures, cookies) {
   }
 
   // The URL "%E0%A4%A" has a broken percent-encoding. The router throws before any of our
-  // code runs, and middleware/errorHandler.js (OS) only reads error.statusCode, while the
-  // router sets error.status, so the answer is a 500 instead of a 400. Not fixable in the
-  // reporter's files, so it is reported as a known issue.
+  // code runs, and the error it creates must still reach the client as a 400, never a 500.
+  // (This used to answer 500 because middleware/errorHandler.js (OS) only read
+  // error.statusCode while the router sets error.status; OS fixed it, so it is a normal check now.)
   const brokenEncoding = '%E0%A4%A';
-  checkKnownIssue('PATCH draft with a broken percent-encoding in the id', 400, await request(cookies.reporter1, 'PATCH', `${API}/${brokenEncoding}/draft`, GOOD_DRAFT), 'OS (middleware/errorHandler.js)');
-  checkKnownIssue('POST submit with a broken percent-encoding in the id', 400, await request(cookies.reporter1, 'POST', `${API}/${brokenEncoding}/submit`, {}), 'OS (middleware/errorHandler.js)');
-  checkKnownIssue('edit page with a broken percent-encoding in the id', 400, await request(cookies.reporter1, 'GET', `/reporter/articles/${brokenEncoding}/edit`), 'OS (middleware/errorHandler.js)');
+  checkStatus('PATCH draft, id = a broken percent-encoding', 400, await request(cookies.reporter1, 'PATCH', `${API}/${brokenEncoding}/draft`, GOOD_DRAFT));
+  checkStatus('POST submit, id = a broken percent-encoding', 400, await request(cookies.reporter1, 'POST', `${API}/${brokenEncoding}/submit`, {}));
+  checkStatus('edit page, id = a broken percent-encoding', 400, await request(cookies.reporter1, 'GET', `/reporter/articles/${brokenEncoding}/edit`));
 
   checkStatus('PATCH draft, id that belongs to nobody', 404, await request(cookies.reporter1, 'PATCH', `${API}/${MISSING_ID}/draft`, GOOD_DRAFT));
   checkStatus('POST submit, id that belongs to nobody', 404, await request(cookies.reporter1, 'POST', `${API}/${MISSING_ID}/submit`, {}));
@@ -705,12 +677,6 @@ async function main() {
   }
 
   console.log(`${checkCount - failedCount} of ${checkCount} checks passed.`);
-  if (knownIssueOpenCount > 0) {
-    console.log(`${knownIssueOpenCount} known issue(s) still open (not counted as failures, see the KNOWN ISSUE lines above).`);
-  }
-  if (knownIssueFixedCount > 0) {
-    console.log(`${knownIssueFixedCount} known issue(s) are fixed now: change checkKnownIssue to checkStatus for them.`);
-  }
   if (failedCount > 0) {
     console.log(`${failedCount} FAILED.`);
     // Exit code 1 means "failed" to the shell. We set process.exitCode instead of calling

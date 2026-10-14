@@ -23,8 +23,9 @@
  *                          200; 400 (bad id, or required fields missing), 403, 404, 409 (status
  *                          does not allow it, or a live article has no changes).
  * The helpers below them do one small job each: findReporterArticles, findOwnedArticle,
- * readDraftFromRequestBody, isEmptyOrHttpUrl, findMissingRequiredFields,
- * hasNoChangesFromPublished and createHttpError.
+ * findMissingRequiredFields and hasNoChangesFromPublished. The rules for the content of a
+ * draft (readDraftFromRequestBody, isEmptyOrHttpUrl, the field lists) and createHttpError
+ * live in services/draftValidation.js, shared with the editor's route.
  *
  * Rules that apply to every function here:
  * - Only reporters get in: the route files use requireRole('reporter'), so the role is
@@ -69,13 +70,16 @@
  *
  * Used by: routes/pageRoutes/reporterPageRoutes.js, routes/apiRoutes/reporterApiRoutes.js.
  * Related: models/Article.js, services/articleWorkflow.js (STATUS, STATUS_LABELS),
- * views/reporter/dashboard.ejs, views/reporter/articleEditor.ejs.
+ * services/draftValidation.js (the draft rules and createHttpError), views/reporter/dashboard.ejs, views/reporter/articleEditor.ejs.
  * Owner: EZ.
  */
 
 const Article = require('../models/Article');
 const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWorkflow');
 const logger = require('../services/logger');
+// The draft rules and createHttpError live in a shared service, so the editor's edit of a
+// pending article (SM) follows exactly the same rules as the reporter's autosave.
+const { DRAFT_FIELDS, createHttpError, readDraftFromRequestBody } = require('../services/draftValidation');
 
 // An article id from the URL must be exactly 24 hexadecimal characters. We check the
 // shape ourselves ("Checking ids from the URL" in the plan) because
@@ -87,100 +91,6 @@ const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
 // article is allowed by the requirements; the new version goes through approval again).
 // "pending" is missing on purpose: while the editor reviews it, it is read-only.
 const EDITABLE_STATUSES = [STATUS.DRAFT, STATUS.RETURNED, STATUS.PUBLISHED];
-
-// The five fields of a draft (the "content object" in the plan), in the order the form shows them.
-const DRAFT_FIELDS = ['title', 'summary', 'category', 'imageUrl', 'body'];
-
-// Maximum lengths, the same numbers as the limits in models/Article.js. The controller
-// checks first so the reporter gets a clear 400 message; the model's own limits stay as a
-// second safety net for any other way of saving.
-const DRAFT_MAX_LENGTHS = { title: 200, summary: 500, imageUrl: 2000, body: 50000 };
-
-/**
- * Creates an Error that errorHandler turns into a clean answer with this HTTP status
- * (JSON for /api requests, the shared error page for pages). Only 4xx statuses are
- * shown to the user with their message; see middleware/errorHandler.js.
- *
- * @param {number} statusCode - A 4xx HTTP status, for example 404.
- * @param {string} message - A sentence the user can read.
- * @returns {Error} The error, with statusCode set, ready to be thrown.
- */
-function createHttpError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-/**
- * Checks that a text is empty or a web address starting with http:// or https://.
- * Images are stored as links, and a link such as "javascript:alert(1)" must never be
- * saved, because the public page will later use it as an image address.
- * The URL class does the parsing for us: it throws on text that is not an address at all,
- * and tells us the protocol (the part before "//") of the ones that are.
- *
- * @param {string} imageUrl - The text to check.
- * @returns {boolean} true if it is empty or a valid http(s) address.
- */
-function isEmptyOrHttpUrl(imageUrl) {
-  if (imageUrl === '') {
-    return true;
-  }
-  try {
-    const protocol = new URL(imageUrl).protocol;
-    return protocol === 'http:' || protocol === 'https:';
-  } catch (parseError) {
-    // new URL() throws when the text is not an address at all (for example "not a url"). That is
-    // not a program error: it is exactly the answer we want, "this is not a valid address".
-    return false;
-  }
-}
-
-/**
- * Reads the five draft fields out of a request body and checks every one of them.
- * It returns a NEW object that contains only the five known fields, so anything else the
- * browser sent (a "status", a "reporter", a "published") is dropped here and can never
- * reach the database.
- *
- * Why every field must be a string: a JSON body can hold objects, for example
- * { "title": { "$ne": "" } }. Passing such a value on would let the sender inject
- * MongoDB operators (a NoSQL injection). Checking typeof removes that whole risk.
- * We do NOT trim the text: this runs on every autosave while the reporter is typing, and
- * trimming would delete the space they just typed at the end of a word.
- *
- * @param {Object} [requestBody] - request.body. Express 5 leaves it undefined when the
- *   request has no body, so the caller passes request.body || {}.
- * @returns {{title: string, summary: string, category: string, imageUrl: string, body: string}}
- *   The checked draft.
- * @throws {Error} With statusCode 400 and a message that names the problem field.
- */
-function readDraftFromRequestBody(requestBody) {
-  const draft = {};
-
-  DRAFT_FIELDS.forEach(function (fieldName) {
-    const value = requestBody[fieldName];
-    if (typeof value !== 'string') {
-      throw createHttpError(400, `The field "${fieldName}" must be text.`);
-    }
-    // Only fields that have a limit are in DRAFT_MAX_LENGTHS (category is checked below).
-    const maxLength = DRAFT_MAX_LENGTHS[fieldName];
-    if (maxLength !== undefined && value.length > maxLength) {
-      throw createHttpError(400, `The field "${fieldName}" can be at most ${maxLength} characters.`);
-    }
-    draft[fieldName] = value;
-  });
-
-  // Empty is allowed while writing; the server requires a real category only when the
-  // article is submitted for approval (see submitArticleForApproval).
-  if (draft.category !== '' && !Article.CATEGORIES.includes(draft.category)) {
-    throw createHttpError(400, 'The field "category" must be empty or one of the known categories.');
-  }
-
-  if (!isEmptyOrHttpUrl(draft.imageUrl)) {
-    throw createHttpError(400, 'The field "imageUrl" must be empty or a web address starting with http:// or https://.');
-  }
-
-  return draft;
-}
 
 /**
  * Loads the article with this id, but only if it exists AND belongs to this reporter.
