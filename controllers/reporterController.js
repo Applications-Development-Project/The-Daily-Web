@@ -146,7 +146,7 @@ async function showReporterDashboard(request, response) {
   const articles = await findReporterArticles(request.session.user.id);
 
   response.render('reporter/dashboard', {
-    title: 'My articles - The Web Daily',
+    title: 'My articles - The Daily Web',
     articles,
     // The view compares item.status with these names instead of typing 'draft' etc.
     // (a typo in a string would silently show the wrong buttons; STATUS.PNDING is undefined).
@@ -185,7 +185,7 @@ async function showArticleEditor(request, response) {
   }
 
   response.render('reporter/articleEditor', {
-    title: 'Edit article - The Web Daily',
+    title: 'Edit article - The Daily Web',
     // A plain object with only what the view needs, instead of the whole Mongoose
     // document: the view can't accidentally depend on (or print) any other field.
     article: {

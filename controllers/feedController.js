@@ -225,7 +225,7 @@ async function showFeedPage(request, response) {
   );
 
   response.render('public/feed', {
-    title: 'The Web Daily - Latest News',
+    title: 'The Daily Web - Latest News',
     articles: firstPage.articles,
     hasMore: firstPage.hasMore,
     // The category list comes from the model, so the filter offers exactly the

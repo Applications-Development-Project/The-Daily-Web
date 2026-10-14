@@ -1,7 +1,7 @@
 {
   "name": "the-web-daily",
   "version": "1.0.0",
-  "description": "The Web Daily: a news site where reporters write articles, an editor approves them, and guests read and comment. Node.js, Express, EJS and MongoDB (MVC).",
+  "description": "The Daily Web: a news site where reporters write articles, an editor approves them, and guests read and comment. Node.js, Express, EJS and MongoDB (MVC).",
   "private": true,
   "main": "server.js",
   "engines": {

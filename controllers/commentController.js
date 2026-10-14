@@ -240,7 +240,7 @@ async function addComment(request, response) {
  * @returns {void}
  */
 function showCommentModerationPage(request, response) {
-  response.render('editor/comments', { title: 'Comments - The Web Daily' });
+  response.render('editor/comments', { title: 'Comments - The Daily Web' });
 }
 
 /**
