@@ -4,9 +4,8 @@
  * JSON API routes for the reporter area. Mounted at "/api" in app.js, so
  * "/reporter/articles" here is "/api/reporter/articles" in the browser.
  * Created by OS in phase 0 with the paths and access from the routes table in
- * "Shared contracts". GET /reporter/articles (list my articles) now runs real code
- * in the controller; create, autosave and submit are still PLACEHOLDERS that answer
- * 501 { success: false, error: "Not implemented yet" } until those branches are done.
+ * "Shared contracts". EZ replaced every placeholder with the real code: list my articles,
+ * create one, autosave its draft and submit it for approval.
  *
  * The routes follow REST: the URL names the thing (an article), the HTTP method says
  * the action (GET reads, POST creates or triggers a step, PATCH changes part of an

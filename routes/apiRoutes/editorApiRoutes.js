@@ -4,9 +4,9 @@
  * JSON API routes for the editor's article management. Mounted at "/api" in app.js,
  * so "/editor/articles" here is "/api/editor/articles" in the browser.
  * Created by OS in phase 0 with the paths and access from the routes table in
- * "Shared contracts". SM has replaced the placeholders with the real list, approve,
- * return and delete; editing a draft (PATCH .../draft) still answers 501 until it
- * is built (decided: allowed only while the article is pending).
+ * "Shared contracts". SM has replaced every placeholder with the real list, the editor's
+ * edit of a submitted draft (allowed only while the article is pending), approve, return
+ * and delete.
  * (The /editor/articles/:id/views routes live in analyticsApiRoutes.js. They never
  * clash with DELETE /editor/articles/:id below: Express matches whole path segments,
  * so ".../:id/views" and ".../:id" are different paths.)

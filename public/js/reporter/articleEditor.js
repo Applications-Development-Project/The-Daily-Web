@@ -77,7 +77,7 @@ function formatSavedTime(savedAt) {
 
 /**
  * Checks that a text is empty or a web address starting with http:// or https://.
- * This is the same rule the server applies (isEmptyOrHttpUrl in reporterController.js).
+ * This is the same rule the server applies (isEmptyOrHttpUrl in services/draftValidation.js).
  * We repeat it here ONLY as a convenience for the reporter: it lets us notice a half-typed
  * address before sending, instead of getting a 400 for the whole draft. It is not security,
  * because anyone can skip this script; the server checks again and stays strict.

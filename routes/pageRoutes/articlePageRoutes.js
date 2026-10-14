@@ -3,7 +3,13 @@
  *
  * Page route for a single article. Mounted at "/" in app.js.
  * Created by OS in phase 0 with the path and access from the routes table in
- * "Shared contracts"; the controller behind it is a PLACEHOLDER until SH replaces it.
+ * "Shared contracts"; SH wrote the real controller behind it, which renders the whole
+ * article on the server (for search engines) and counts the view.
+ *
+ * :id is any text here; the controller checks it and answers the 404 page for a malformed
+ * or unknown id, or an article that isn't live.
+ *
+ * Related: controllers/articlePageController.js, views/public/article.ejs.
  *
  * Owner: SH.
  */
