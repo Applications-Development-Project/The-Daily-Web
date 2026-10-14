@@ -2,8 +2,8 @@
  * services/viewTracker.js
  *
  * Records that an article was viewed, for the Impact Analytics chart and the feed's
- * "viewed / not viewed" filter. The article page is meant to call recordView() on
- * every visit (requirements: every visit to an article counts toward the statistics).
+ * "viewed / not viewed" filter. The article page calls recordView() on every visit
+ * (requirements: every visit to an article counts toward the statistics).
  * Its name, parameters and "Promise that never throws" are a shared contract
  * ("Functions that cross between students" in the work plan), so SH's article page
  * can call it without knowing how views are stored.
@@ -28,8 +28,8 @@
  *
  * Used by: controllers/articlePageController.js (SH, recordView),
  * controllers/analyticsController.js (SM, getViewsOverTime, DEFAULT_RANGE_DAYS,
- * MAX_RANGE_DAYS), and scripts/seed.js later (OS's full seed should build its
- * hourly statistics with getHourStart, so seeded and real views share the same hours).
+ * MAX_RANGE_DAYS), and scripts/seed.js (it builds its 30 days of hourly statistics with
+ * getHourStart, so seeded and real views share the same hours).
  * Related: models/ArticleViewStats.js, models/DeviceArticleView.js, models/Article.js.
  * Owner: SM.
  */

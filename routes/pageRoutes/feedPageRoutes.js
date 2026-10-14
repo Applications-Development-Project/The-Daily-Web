@@ -3,7 +3,10 @@
  *
  * Page route for the home page feed. Mounted at "/" in app.js.
  * Created by OS in phase 0 with the path and access from the routes table in
- * "Shared contracts"; the controller behind it is a PLACEHOLDER until SH replaces it.
+ * "Shared contracts"; SH wrote the real controller behind it (the first 20 articles are
+ * rendered on the server; public/js/public/feed.js loads the rest).
+ *
+ * Related: controllers/feedController.js, views/public/feed.ejs.
  *
  * Owner: SH.
  */
