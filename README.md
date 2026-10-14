@@ -4,6 +4,9 @@ A news site where reporters write articles, an editor reviews and publishes them
 and comment. Built with Node.js, Express, EJS and MongoDB (Mongoose) in the MVC pattern, with plain
 JavaScript and Ajax in the browser.
 
+New to the code? Read the [guide to the code](docs/PROJECT_GUIDE.md): what each folder and kind of file is
+for, the naming conventions, and how to follow a request from the browser to the database and back.
+
 <!--
   Shared file: every student adds or corrects the part about their own area in a small pull request.
 -->
@@ -250,6 +253,7 @@ The-Daily-Web/
 │       └── editor/               dashboard.js, articleReview.js, analytics.js (chart), users.js, comments.js
 ├── scripts/seed.js           Demo data (npm run seed)
 ├── tests/                    Self-check scripts (see below)
+├── docs/PROJECT_GUIDE.md     A guide to navigating the code
 ├── CONVENTIONS.md            The team's code conventions
 └── .env.example              Template for your own .env
 ```
