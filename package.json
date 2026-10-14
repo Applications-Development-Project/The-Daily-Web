@@ -10,7 +10,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "test:workflow": "node tests/testWorkflow.js",
+    "test:reporter": "node tests/testReporterApi.js",
+    "test:editor": "node tests/testEditorApi.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
