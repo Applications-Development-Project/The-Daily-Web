@@ -696,19 +696,20 @@ async function clearDatabase() {
 }
 
 /**
- * Makes sure every index defined in our models exists before we insert data.
- * On a brand-new database the collections don't exist yet; createIndexes()
- * creates them with their indexes, so for example the unique username rule
- * already applies to the users this script creates.
+ * Makes the database's indexes match the indexes defined in our models, before we insert data.
+ * On a brand-new database the collections don't exist yet; syncIndexes() creates them with
+ * their indexes, so for example the unique username rule already applies to the users this
+ * script creates. On an existing database it also removes an index a model no longer defines
+ * (createIndexes() would only add), so after a re-seed every computer has exactly our indexes.
  *
  * @returns {Promise<void>}
  */
 async function createAllIndexes() {
-  await User.createIndexes();
-  await Article.createIndexes();
-  await ArticleViewStats.createIndexes();
-  await DeviceArticleView.createIndexes();
-  await Comment.createIndexes();
+  await User.syncIndexes();
+  await Article.syncIndexes();
+  await ArticleViewStats.syncIndexes();
+  await DeviceArticleView.syncIndexes();
+  await Comment.syncIndexes();
 }
 
 /**

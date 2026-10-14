@@ -365,8 +365,8 @@ async function showArticleReview(request, response) {
  *   plain objects (.lean), and only the reporter's displayName (populate), so no
  *   article body or user data the page doesn't need is ever loaded.
  * - Without a filter, the sort reads the { updatedAt: -1, _id: -1 } index in order, so
- *   MongoDB never sorts the whole collection in memory; the status filter uses the
- *   { status: 1 } index.
+ *   MongoDB never sorts the whole collection in memory; with a status filter it reads the
+ *   { status: 1, updatedAt: -1, _id: -1 } index, again already in order.
  * Known limits, fine for the thousands of articles the requirements mention:
  * - A case-insensitive search inside titles ('i' regex, any position) can't use an
  *   index, so MongoDB checks the titles one by one. A text index would avoid that, but
