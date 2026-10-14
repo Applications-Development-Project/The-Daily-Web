@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450" role="img" aria-label="Image not available">
+  <!-- Shown instead of an article image that can't be loaded (a broken link, or its host is down).
+       Used by views/public/feed.ejs, views/public/article.ejs and public/js/public/feed.js.
+       A small SVG drawn in code, so it is ours to use and scales to any size. -->
+  <rect width="800" height="450" fill="#e9ecef"/>
+  <path d="M300 300 L370 210 L420 270 L460 230 L520 300 Z" fill="#adb5bd"/>
+  <circle cx="460" cy="170" r="22" fill="#adb5bd"/>
+  <text x="400" y="360" font-family="system-ui, sans-serif" font-size="24" fill="#6c757d" text-anchor="middle">Image not available</text>
+</svg>
