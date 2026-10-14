@@ -6,7 +6,7 @@
   20. Each row can be edited in place or deleted after a confirmation.
 
   The page is sent as an empty frame: the table body starts empty, and
-  public/js/commentModeration.js fills it from GET /api/comments and does every edit
+  public/js/editor/comments.js fills it from GET /api/comments and does every edit
   and delete with Ajax, so the page never reloads. Building the rows in one place (the
   script) means the first page and every later page look exactly the same.
   The element ids below are what that script uses.
@@ -83,8 +83,8 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: commentModeration.js uses it. %>
+  <%# apiClient first: public/js/editor/comments.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
-  <script src="/js/commentModeration.js"></script>
+  <script src="/js/editor/comments.js"></script>
 </body>
 </html>

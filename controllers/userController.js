@@ -16,7 +16,7 @@
  *
  * Used by: routes/pageRoutes/userPageRoutes.js, routes/apiRoutes/userApiRoutes.js.
  * Related: models/User.js, models/Article.js, views/editor/users.ejs,
- * public/js/userManagement.js, services/logger.js.
+ * public/js/editor/users.js, services/logger.js.
  * Owner: OS.
  */
 
@@ -268,7 +268,7 @@ function readPageNumber(pageValue) {
 
 /**
  * GET /editor/users - the user management page. It is sent empty; the browser script
- * (public/js/userManagement.js) loads the users from GET /api/users, so the list is
+ * (public/js/editor/users.js) loads the users from GET /api/users, so the list is
  * built in one place only. currentUser comes from res.locals (setCurrentUser).
  *
  * @param {import('express').Request} request - The page request (editor only).

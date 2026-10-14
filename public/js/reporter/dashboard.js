@@ -1,5 +1,5 @@
 /**
- * public/js/reporterDashboard.js
+ * public/js/reporter/dashboard.js
  *
  * The interactive parts of the reporter dashboard:
  *   1. The "New article" button. Clicking it asks the server to create an empty draft

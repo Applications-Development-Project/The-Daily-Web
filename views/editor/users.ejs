@@ -3,7 +3,7 @@
 
   The editor's user management page: search the users, add a reporter or editor, edit a
   user's display name, role or password in the table, and delete a user. The page is
-  sent as an empty frame; public/js/userManagement.js loads the users from the Users API
+  sent as an empty frame; public/js/editor/users.js loads the users from the Users API
   and does every change with Ajax, so the page never reloads.
 
   Locals: currentUser (set for every view by middleware/setCurrentUser.js). Its id goes
@@ -99,8 +99,8 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: userManagement.js uses it. %>
+  <%# apiClient first: public/js/editor/users.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
-  <script src="/js/userManagement.js"></script>
+  <script src="/js/editor/users.js"></script>
 </body>
 </html>

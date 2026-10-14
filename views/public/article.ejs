@@ -39,7 +39,7 @@
 
             <!-- Comments Section -->
             <!-- Defense Question - Contracts: What is the comment markup contract with OS? -->
-            <!-- OS's client-side script (articleComments.js) relies strictly on the IDs (#comments, #comment-list, #comment-form, #comment-error) and the data-article-id attribute below to know exactly which article to attach new comments to. -->
+            <!-- OS's client-side script (public/js/public/articleComments.js) relies strictly on the IDs (#comments, #comment-list, #comment-form, #comment-error) and the data-article-id attribute below to know exactly which article to attach new comments to. -->
             <section id="comments" data-article-id="<%= article._id %>" class="card">
                 <h3>Comments</h3>
                 
@@ -79,6 +79,6 @@
 
     <!-- Required scripts for comments functionality -->
     <script src="/js/shared/apiClient.js"></script>
-    <script src="/js/articleComments.js"></script>
+    <script src="/js/public/articleComments.js"></script>
 </body>
 </html>

@@ -5,7 +5,7 @@
  * filters and sorting, and resetting this device's "viewed" marks.
  * Owner: SH.
  *
- * Related files: views/public/feed.ejs, public/js/feed.js, models/DeviceArticleView.js
+ * Related files: views/public/feed.ejs, public/js/public/feed.js, models/DeviceArticleView.js
  */
 
 const Article = require('../models/Article');
