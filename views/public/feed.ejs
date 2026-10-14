@@ -1,85 +1,125 @@
+<%#
+  views/public/feed.ejs
+
+  The home page: the news feed of live articles, with search, filters, sorting and
+  infinite scroll. Open to everyone.
+
+  How it is built:
+  - The server renders the first 20 articles into this HTML (controllers/feedController.js,
+    showFeedPage), so the reader sees articles immediately and the links are in the page
+    source for search engines.
+  - public/js/public/feed.js loads the next pages when the reader nears the bottom
+    (IntersectionObserver), and reloads the list from page 1 when the search, a filter or
+    the sort changes, all through GET /api/articles, without reloading the page.
+  - A card here and a card built by feed.js have the same markup and classes (article-card),
+    so they look the same however they were loaded.
+
+  Why it is written this way (questions a lecturer may ask):
+  - Semantic HTML5: main for the feed, aside for the sidebar (partials/sidebar.ejs), one
+    article element per card, time with a machine-readable datetime, a form with role="search".
+    Screen readers and search engines understand the page structure from these elements.
+  - Flexbox layout: main-content-wrapper puts the feed and the sidebar side by side, and on a
+    narrow screen stacks the sidebar below the feed (public/css/main.css), so the page works on
+    a computer, a tablet and a phone (requirements: responsive).
+  - Every text from the database is printed with the escaping tag (the one with an equals
+    sign): a title containing "<script>" is shown as text and never runs (XSS). The tag with
+    a minus sign is used only to include our own partials.
+  - These notes are EJS comments (the tag with a hash sign): the server removes them, so
+    they never reach the browser. An HTML comment would be readable by anyone with
+    "View page source".
+  - autocomplete="off" on the filters: otherwise, after "Back", the browser could restore a
+    filter value that doesn't match the list the server rendered.
+  - Every label is a real label element (visually hidden where the placeholder says enough),
+    so screen readers announce each field.
+
+  Rendered by: controllers/feedController.js (showFeedPage), for GET /.
+  Locals: title, articles (feed cards: id, title, summary, imageUrl, category, reporterName,
+  publishedAt, totalViews), hasMore (whether there is a second page), categories
+  (Article.CATEGORIES).
+  Includes: the shared head, header, sidebar and footer (views/partials).
+  Owner: SH.
+%>
 <!DOCTYPE html>
 <html lang="en">
-<!-- 
-  views/public/feed.ejs
-  Main feed view with initial server-side rendering (SSR).
-  Owner: SH.
--->
-<%- include('../partials/head', { title: 'The Web Daily - Latest News' }) %>
+<%- include('../partials/head', { title: title }) %>
 
-<!-- 
-  Defense Question - Architecture: Why use semantic HTML5 (main, aside, article, time) and Flexbox?
-  Semantic HTML improves accessibility for screen readers and helps search engines understand the page structure. 
-  Flexbox (used in page-container and main-content-wrapper) allows the sidebar to effortlessly stack below the main content on mobile devices without relying on complex floats.
--->
 <body class="page-container">
     <%- include('../partials/header') %>
 
     <div class="main-content-wrapper">
         <main class="main-content">
-            
-            <!-- Filters & Search Section -->
-            <div class="filters-container card" style="margin-bottom: var(--spacing-lg);">
-                <!-- Defense Question - Accessibility: Why are there aria-labels here? -->
-                <!-- aria-labels ensure visually impaired users using screen readers know exactly what each input does, even without a visible <label> tag. -->
-                <input type="text" id="search-input" class="form-field" placeholder="Search articles..." aria-label="Search articles">
-                <div style="display: flex; gap: var(--spacing-sm); margin-top: var(--spacing-sm); flex-wrap: wrap;">
-                    <select id="category-filter" class="form-field" aria-label="Filter by category">
-                        <option value="">All Categories</option>
-                        <!-- Dynamically render categories from the Model -->
-                        <% if (typeof categories !== 'undefined') { %>
-                            <% categories.forEach(function(cat) { %>
-                                <option value="<%= cat %>"><%= cat %></option>
-                            <% }); %>
-                        <% } %>
-                    </select>
-                    
-                    <select id="viewed-filter" class="form-field" aria-label="Filter by viewed status">
-                        <option value="">All Articles</option>
-                        <option value="unviewed">Unviewed Only</option>
-                        <option value="viewed">Viewed Only</option>
-                    </select>
-                    
-                    <select id="sort-select" class="form-field" aria-label="Sort articles">
-                        <option value="newest">Newest First</option>
-                        <option value="popular">Most Popular</option>
-                    </select>
-                    
-                    <!-- Reset views button for Item 8 -->
-                    <button id="reset-views-btn" class="btn btn-secondary">Reset History</button>
-                </div>
-            </div>
+            <h2 class="visually-hidden">Latest news</h2>
 
-            <!-- Feed List -->
-            <div id="feed-list">
-                <!-- Server-side rendered initial 20 articles (Item 9) -->
-                <% if (typeof articles !== 'undefined' && articles.length > 0) { %>
-                    <% articles.forEach(function(article) { %>
-                        <article class="card" style="margin-bottom: var(--spacing-md);">
-                            <span class="status-badge status-published"><%= article.category || 'News' %></span>
-                            <h3 style="margin: var(--spacing-sm) 0;">
-                                <a href="/articles/<%= article.id %>" style="text-decoration: none; color: inherit;"><%= article.title %></a>
-                            </h3>
-                            <p style="font-size: 0.9rem; color: #666; margin-bottom: var(--spacing-sm);">
-                                By <%= article.reporterName %> | 
-                                <time datetime="<%= article.publishedAt.toISOString() %>">
-                                    <%= new Date(article.publishedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
-                                </time> | <%= article.totalViews || 0 %> views
-                            </p>
-                            <% if (article.imageUrl) { %>
-                                <!-- Defense Question - Edge cases: Why is onerror used here? -->
-                                <!-- If the image URL is broken or the external host is down, the onerror event replaces the broken image icon with a local fallback placeholder image. -->
-                                <img src="<%= article.imageUrl %>" alt="<%= article.title %>" onerror="this.onerror=null; this.src='/images/placeholder.jpg';" style="width: 100%; border-radius: 8px; margin-bottom: var(--spacing-sm);">
+            <%# Search, filters and sort. No action or submit button: feed.js reacts to every
+                change and the server is asked with fetch; Enter in the search box is handled
+                by the script too, so the page never reloads. %>
+            <form id="feed-filters" class="card feed-filters" role="search">
+                <label for="search-input" class="visually-hidden">Search articles</label>
+                <input type="search" id="search-input" name="search" class="form-field"
+                    placeholder="Search articles..." maxlength="500" autocomplete="off">
+
+                <div class="feed-filter-row">
+                    <label for="category-filter" class="visually-hidden">Category</label>
+                    <select id="category-filter" name="category" class="form-field" autocomplete="off">
+                        <option value="">All categories</option>
+                        <% categories.forEach(function (category) { %>
+                            <option value="<%= category %>"><%= category %></option>
+                        <% }); %>
+                    </select>
+
+                    <%# Viewed means opened from this browser (the deviceId cookie): readers don't log in. %>
+                    <label for="viewed-filter" class="visually-hidden">Viewed or not</label>
+                    <select id="viewed-filter" name="viewed" class="form-field" autocomplete="off">
+                        <option value="">Viewed and not viewed</option>
+                        <option value="unviewed">Not viewed yet</option>
+                        <option value="viewed">Viewed</option>
+                    </select>
+
+                    <label for="sort-select" class="visually-hidden">Sort</label>
+                    <select id="sort-select" name="sort" class="form-field" autocomplete="off">
+                        <option value="newest">Newest first</option>
+                        <option value="popular">Most popular</option>
+                    </select>
+
+                    <%# type="button": it must never submit the form. feed.js calls
+                        DELETE /api/articles/viewed, then reloads the list (not the page). %>
+                    <button type="button" id="reset-views-btn" class="btn btn-secondary">Reset viewed marks</button>
+                </div>
+                <p id="feed-action-message" class="form-error" role="alert" hidden></p>
+            </form>
+
+            <%# The list. data-has-more tells feed.js whether the server has a second page.
+                aria-live="polite": screen readers announce new cards and messages. %>
+            <div id="feed-list" data-has-more="<%= hasMore ? 'true' : 'false' %>" aria-live="polite">
+                <% articles.forEach(function (article) { %>
+                    <article class="card article-card" data-article-id="<%= article.id %>">
+                        <span class="status-badge status-published"><%= article.category %></span>
+                        <h3 class="article-card-title">
+                            <a href="/articles/<%= article.id %>"><%= article.title %></a>
+                        </h3>
+                        <p class="article-card-meta">
+                            By <%= article.reporterName %> |
+                            <% if (article.publishedAt) { %>
+                                <time datetime="<%= article.publishedAt.toISOString() %>"><%= article.publishedAt.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %></time> |
                             <% } %>
-                            
-                            <!-- Defense Question - Security: Why use <%= %> instead of <%- %> for the summary? -->
-                            <!-- <%= %> automatically HTML-escapes the text. If a malicious reporter saved a <script> tag in the summary, it will be rendered as harmless text rather than executed (XSS prevention). -->
-                            <p><%= article.summary %></p>
-                        </article>
-                    <% }); %>
+                            <%= article.totalViews %> views
+                        </p>
+                        <% if (article.imageUrl) { %>
+                            <%# loading="lazy": images further down load only when the reader scrolls to them.
+                                onerror: if the image's host is down or the link is broken, show our own
+                                placeholder instead of a broken-image icon (this.onerror = null stops a loop
+                                if the placeholder itself failed). The address was checked to be http(s)
+                                when it was saved, and escaping keeps it inside the attribute. %>
+                            <img class="article-card-image" src="<%= article.imageUrl %>" alt="<%= article.title %>"
+                                loading="lazy" onerror="this.onerror=null; this.src='/images/placeholder.svg';">
+                        <% } %>
+                        <p><%= article.summary %></p>
+                    </article>
+                <% }); %>
+                <% if (articles.length === 0) { %>
+                    <p class="empty-state">No articles have been published yet.</p>
                 <% } %>
             </div>
-
         </main>
 
         <%- include('../partials/sidebar') %>
@@ -87,7 +127,7 @@
 
     <%- include('../partials/footer') %>
 
-    <!-- Required scripts -->
+    <%# Order matters: feed.js and weatherWidget.js call apiClient, so apiClient.js loads first. %>
     <script src="/js/shared/apiClient.js"></script>
     <script src="/js/public/feed.js"></script>
     <script src="/js/public/weatherWidget.js"></script>

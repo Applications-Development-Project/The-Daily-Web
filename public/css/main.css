@@ -114,6 +114,24 @@ body {
   color: white;
 }
 
+.btn-secondary {
+  background-color: #e9ecef;
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+}
+
+/* Hidden on the screen but still read by screen readers: for labels whose meaning the
+   placeholder already shows, and headings that only structure the page. (display: none
+   would hide them from screen readers too.) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .form-field {
   width: 100%;
   padding: 0.5rem;
@@ -172,6 +190,51 @@ body {
   .sidebar {
     order: 2; /* Moves sidebar below main content on mobile */
   }
+}
+
+/* Feed (views/public/feed.ejs, public/js/public/feed.js). A card has the same classes
+   whether the server rendered it or feed.js built it. */
+.feed-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+.feed-filter-row .form-field {
+  /* Grow to share the row, but wrap to their own line on a narrow phone. */
+  flex: 1 1 10rem;
+  width: auto;
+}
+.article-card-title {
+  margin: var(--spacing-sm) 0;
+}
+.article-card-title a {
+  color: inherit;
+  text-decoration: none;
+}
+.article-card-title a:hover,
+.article-card-title a:focus {
+  text-decoration: underline;
+}
+.article-card-meta {
+  font-size: 0.9rem;
+  color: #666;
+  margin-bottom: var(--spacing-sm);
+}
+.article-card-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: 8px;
+  margin-bottom: var(--spacing-sm);
+}
+/* The element the IntersectionObserver watches; 1px tall so it can be "seen" even when empty. */
+.feed-sentinel {
+  min-height: 1px;
+  text-align: center;
+  padding: var(--spacing-md);
+  color: #666;
 }
 
 /* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js) */
