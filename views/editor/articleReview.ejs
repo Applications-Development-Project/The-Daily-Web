@@ -22,8 +22,9 @@
 
   When the workflow allows a decision (only for an article awaiting approval), the
   page also shows "Approve and publish" and "Return for corrections" with a required
-  note, and an "Edit the submitted version" form, so the editor can fix the article
-  before deciding. public/js/editor/articleReview.js sends them to the editor API with
+  note. Every article also has an Edit form (the editor can edit all articles): it
+  changes the working copy, and for a live article with no update in progress, saving
+  publishes the edit at once (see editArticleDraft in the controller). public/js/editor/articleReview.js sends them to the editor API with
   apiClient (every page's browser code lives in public/js/<area>/).
 
   Rendered by: controllers/editorController.js (showArticleReview), for GET /editor/articles/:id.
@@ -91,10 +92,12 @@
       <% } %>
 
       <%#
-        The editor's own edit of the submitted version (requirements p.5), only while the
-        article awaits approval (review.canEdit; the server checks it again and answers 409
-        otherwise). details/summary is plain HTML that folds the form away until the editor
-        opens it, without any script. The limits (maxlength, required, the category list)
+        The editor's own edit (requirements: the editor can edit every article). What saving
+        does depends on the status, and the summary line says it: for a live article with no
+        update in progress it publishes at once (data-publishes-on-save makes the script ask
+        for confirmation); otherwise only the working copy changes and the status stays.
+        details/summary is plain HTML that folds the form away until the editor opens it,
+        without any script. The limits (maxlength, required, the category list)
         match the server's checks, but they are only a quick answer in the browser: the
         server checks everything again, because a request can be sent without this page.
         The values are printed with the escaping tag, so a title like "<b>" fills the field
@@ -102,8 +105,12 @@
       %>
       <% if (review.canEdit) { %>
         <details class="card" id="edit-section">
-          <summary><strong>Edit the submitted version</strong> (the status stays "Awaiting approval")</summary>
-          <form id="edit-form">
+          <% if (review.editPublishesOnSave) { %>
+            <summary><strong>Edit the live article</strong> (saving publishes your changes to readers at once)</summary>
+          <% } else { %>
+            <summary><strong>Edit the working version</strong> (the status stays "<%= review.statusLabel %>")</summary>
+          <% } %>
+          <form id="edit-form" data-publishes-on-save="<%= review.editPublishesOnSave ? 'true' : 'false' %>">
             <label for="edit-title">Title</label>
             <input type="text" id="edit-title" name="title" class="form-field" maxlength="200" required value="<%= review.editableDraft.title %>">
 
@@ -125,7 +132,7 @@
             <textarea id="edit-body" name="body" class="form-field" rows="14" maxlength="50000" required><%= review.editableDraft.body %></textarea>
 
             <p id="edit-message" aria-live="polite" hidden></p>
-            <button type="submit" class="btn btn-primary">Save changes</button>
+            <button type="submit" class="btn btn-primary"><%= review.editPublishesOnSave ? 'Save and publish' : 'Save changes' %></button>
           </form>
         </details>
       <% } %>

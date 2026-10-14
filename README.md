@@ -45,8 +45,9 @@ JavaScript and Ajax in the browser.
 ### Editor
 - A **dashboard** with every article, a status filter, title search and pages of 20, without page reloads.
 - A **review page**: the live version and the submitted changes side by side, with the changed fields
-  marked, the publish history, an **Edit** form, and **Approve and publish** or **Return for corrections**
-  (with a required note).
+  marked, the publish history, and **Approve and publish** or **Return for corrections** (with a required note).
+- **Edit any article**: a submitted or in-progress version keeps its status; editing a live article with no
+  update in progress publishes the correction at once (the editor is the approver), with a chart marker.
 - **Delete** an article together with its comments and statistics.
 - **Comment moderation**: search, edit and delete comments.
 - **User management**: search, create, edit and delete reporters and editors, with safety rules
@@ -341,7 +342,7 @@ JSON API (all under `/api`, used by the browser scripts):
 | `GET /api/reporter/articles`, `POST /api/reporter/articles` | My articles, create one | Reporter |
 | `PATCH /api/reporter/articles/:id/draft`, `POST /api/reporter/articles/:id/submit` | Autosave, submit | Reporter (owner) |
 | `GET /api/editor/articles?status=&search=&page=` | All articles, 20 per page | Editor |
-| `PATCH /api/editor/articles/:id/draft` | Edit a pending article | Editor |
+| `PATCH /api/editor/articles/:id/draft` | Edit any article (a live one is published at once) | Editor |
 | `POST /api/editor/articles/:id/approve`, `POST /api/editor/articles/:id/return` | Publish; return with a note | Editor |
 | `DELETE /api/editor/articles/:id` | Delete with its comments and statistics | Editor |
 | `GET /api/editor/articles/:id/views?from=&to=`, `DELETE /api/editor/articles/:id/views` | Chart data; reset statistics | Editor |

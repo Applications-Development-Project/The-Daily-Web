@@ -2,7 +2,7 @@
  * controllers/editorController.js
  *
  * Everything the editor does with articles: the dashboard of all articles and the
- * review page, editing a submitted draft, approving (draft copied into published),
+ * review page, editing any article, approving (draft copied into published),
  * returning with a note, and deleting an article with its comments and statistics.
  *
  * Every route that reaches these functions is protected with requireRole('editor')
@@ -152,8 +152,12 @@ function toReviewView(article, role) {
     // checks again when a button is used; hiding a button protects nothing.
     canApprove: canTransition(article.status, STATUS.PUBLISHED, role),
     canReturn: canTransition(article.status, STATUS.RETURNED, role),
-    // The Edit form appears under the same rule editArticleDraft checks (pending only).
-    canEdit: role === 'editor' && article.status === STATUS.PENDING,
+    // The editor may edit every article (requirements: "the editor can view and edit all
+    // the articles in the system"); editArticleDraft checks the role again on the server.
+    canEdit: role === 'editor',
+    // Saving an edit of a live article with no update in progress publishes it at once
+    // (see editArticleDraft), so the form says so and asks for confirmation.
+    editPublishesOnSave: article.status === STATUS.PUBLISHED,
     // The draft as stored (the body with its blank lines, not split into paragraphs),
     // to fill the Edit form, so the editor starts from exactly what was submitted.
     editableDraft: {
@@ -420,35 +424,69 @@ async function listAllArticles(request, response) {
 }
 
 /**
- * PATCH /api/editor/articles/:id/draft - the editor edits the submitted version of an
- * article that awaits approval, before deciding (requirements p.5: "for an article
- * awaiting approval, the editor can edit it himself"; p.6: "the editor can edit all
- * articles").
+ * Makes the article's working copy (draft) the version readers see: the step shared by
+ * approving (approveArticle) and by the editor's own edit of a live article
+ * (editArticleDraft). Changes the document in memory only; the caller saves it.
  *
- * The rules, agreed with EZ (open question 4 in the work plan):
- * - Only while the article is pending; any other status answers 409. A draft or a
- *   returned article is the reporter's work in progress, and a published one without a
- *   pending update has nothing submitted to edit.
- * - The status stays pending: editing is not a decision. The editor still approves or
- *   returns it afterwards, and canTransition isn't asked because nothing moves.
- * - Only the working copy (draft) changes. For a live article, readers keep seeing the
- *   published version until the editor approves, exactly as with a reporter's update.
- * - The fields are checked by EZ's readDraftFromRequestBody (services/draftValidation.js),
- *   the same function the reporter's autosave uses, so a draft is held to the same rules
- *   whoever saves it: every field must be text (no objects, so no NoSQL injection), the
- *   same maximum lengths, a known category, and an http(s) image address or none.
- *   Anything else in the body (a "status", a "published") is dropped by that function.
- * - One extra rule here: title, summary, body and category can't be empty. The reporter
- *   may save an empty field while writing, but this article was already submitted as
- *   complete, and the editor's edit must keep it ready to approve.
+ * - toObject() makes a separate plain copy of the draft, so later edits to the draft can't
+ *   change what readers see until the next publish.
+ * - One "now" for all the dates, so lastPublishedAt and the new publishHistory entry are
+ *   exactly the same moment (the chart marker and the feed date agree).
+ * - Every publish is added to publishHistory: the analytics chart draws a marker for it.
  *
- * Known limit: if the reporter's article were saved by someone else between the editor
- * opening the page and saving, the editor's version would replace it. That can't happen
- * here (a pending article is read-only for the reporter), and the requirements say
- * simultaneous editing doesn't need to be supported.
+ * @param {import('mongoose').Document} article - The article to publish.
+ * @param {string} editorId - The logged-in editor's id, from the session.
+ * @returns {void}
+ */
+function publishWorkingCopy(article, editorId) {
+  const now = new Date();
+  article.published = article.draft.toObject();
+  article.status = STATUS.PUBLISHED;
+  article.editorNote = '';
+  if (!article.firstPublishedAt) {
+    article.firstPublishedAt = now;
+  }
+  article.lastPublishedAt = now;
+  article.publishHistory.push({ publishedAt: now, editor: editorId });
+}
+
+/**
+ * PATCH /api/editor/articles/:id/draft - the editor edits an article, in any status.
  *
- * Answers 200 { success: true, data: { id, status, updatedAt } }, 400 for a malformed
- * id or an invalid field, 404 if the article doesn't exist, 409 if it isn't pending.
+ * Requirements: "for an article awaiting approval, the editor can edit it himself" (p.5)
+ * and "the editor can view and edit all the articles in the system" (p.6). The team first
+ * allowed only pending articles; where the work plan and the requirements disagree, the
+ * requirements win, so every article can be edited.
+ *
+ * Editing is not a status change (the requirements allow only the listed transitions), so
+ * the status never changes here. What happens depends on the status:
+ * - pending (awaiting approval): only the submitted version (draft) changes. The editor then
+ *   approves or returns it as usual; readers keep the live version until then.
+ * - draft or returned: the reporter's work in progress (draft) changes; the reporter sees the
+ *   editor's version the next time they open it.
+ * - published, with no update in progress: the editor is the one who approves, so saving IS
+ *   the approval: the edited version is published at once (publishWorkingCopy), with a
+ *   publishHistory entry and a chart marker, exactly like approving. The review page says
+ *   so and asks for confirmation. Saving it with no change answers 409, so a click doesn't
+ *   add an empty "update" to the history.
+ *
+ * Validation:
+ * - The fields are checked by readDraftFromRequestBody (services/draftValidation.js), the
+ *   same function the reporter's autosave uses, so a draft is held to the same rules
+ *   whoever saves it: every field must be text (no objects, so no NoSQL injection), the same
+ *   maximum lengths, a known category, and an http(s) image address or none. Anything else
+ *   in the body (a "status", a "published", a "reporter") is dropped by that function.
+ * - For a pending or published article, title, summary, body and category can't be empty:
+ *   that version is submitted as complete or goes live. A draft or returned article is
+ *   still being written, so empty fields are allowed there, as in the reporter's autosave.
+ *
+ * Known limit: if the reporter saved the same article between the editor opening the page
+ * and saving, the editor's version would replace it. The requirements say simultaneous
+ * editing of one article doesn't need to be supported.
+ *
+ * Answers 200 { success: true, data: { id, status, published, updatedAt } } (published:
+ * true when the edit went live), 400 for a malformed id or an invalid field, 404 if the
+ * article doesn't exist, 409 when a live article is saved without any change.
  *
  * @param {import('express').Request} request - params.id; body { title, summary,
  *   category, imageUrl, body }; session.user is the editor.
@@ -463,28 +501,36 @@ async function editArticleDraft(request, response) {
     return;
   }
 
-  if (article.status !== STATUS.PENDING) {
-    sendError(response, 409, `An article that is "${STATUS_LABELS[article.status]}" can't be edited by the editor; only articles awaiting approval can`);
-    return;
-  }
-
   // Express 5 leaves request.body undefined when the request has no body.
   const draft = readDraftFromRequestBody(request.body || {});
 
+  const mustBeComplete = article.status === STATUS.PENDING || article.status === STATUS.PUBLISHED;
   const emptyFields = REQUIRED_CONTENT_FIELDS.filter((field) => draft[field].trim() === '');
-  if (emptyFields.length > 0) {
+  if (mustBeComplete && emptyFields.length > 0) {
     const labels = emptyFields.map((field) => CONTENT_FIELD_LABELS[field]);
-    sendError(response, 400, `These fields can't be empty in a submitted article: ${labels.join(', ')}`);
+    sendError(response, 400, `These fields can't be empty in an article that is "${STATUS_LABELS[article.status]}": ${labels.join(', ')}`);
+    return;
+  }
+
+  const publishesNow = article.status === STATUS.PUBLISHED;
+  if (publishesNow && findChangedFields(draft, article.published).length === 0) {
+    sendError(response, 409, 'There are no changes to publish: the text is the same as the published version');
     return;
   }
 
   article.draft = draft;
+  if (publishesNow) {
+    publishWorkingCopy(article, request.session.user.id);
+  }
+  // save() runs the model's validation (lengths, category) before writing.
   await article.save();
 
-  logger.info(`Draft of article ${article._id} edited by editor "${request.session.user.displayName}" (still awaiting approval)`);
+  logger.info(publishesNow
+    ? `Live article ${article._id} edited and published by editor "${request.session.user.displayName}"`
+    : `Draft of article ${article._id} edited by editor "${request.session.user.displayName}" (status stays ${article.status})`);
   response.json({
     success: true,
-    data: { id: article._id.toString(), status: article.status, updatedAt: article.updatedAt },
+    data: { id: article._id.toString(), status: article.status, published: publishesNow, updatedAt: article.updatedAt },
   });
 }
 
@@ -535,20 +581,8 @@ async function approveArticle(request, response) {
     return;
   }
 
-  // One "now" for all three dates, so lastPublishedAt and the new publishHistory
-  // entry are exactly the same moment (the chart marker and the feed date agree).
-  const now = new Date();
-
-  // toObject() makes a separate plain copy of the draft. Later edits to the draft
-  // then can't change what readers see until the next approval.
-  article.published = article.draft.toObject();
-  article.status = STATUS.PUBLISHED;
-  article.editorNote = '';
-  if (!article.firstPublishedAt) {
-    article.firstPublishedAt = now;
-  }
-  article.lastPublishedAt = now;
-  article.publishHistory.push({ publishedAt: now, editor: request.session.user.id });
+  // Copies the draft into published, sets the dates and adds the publish to the history.
+  publishWorkingCopy(article, request.session.user.id);
 
   // save() runs the model's validation (lengths, category) before writing.
   await article.save();
