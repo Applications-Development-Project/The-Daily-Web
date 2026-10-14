@@ -4,7 +4,7 @@
   The reporter's dashboard: a table of the logged-in reporter's own articles, newest
   update first, each with its status label and the actions allowed for that status.
   The whole table is rendered on the server, so no browser script is needed for it. The
-  only script is public/js/reporterDashboard.js, for the "New article" button and the
+  only script is public/js/reporter/dashboard.js, for the "New article" button and the
   "Submit for approval" buttons.
 
   Rendered by: controllers/reporterController.js (showReporterDashboard), for GET /reporter.
@@ -31,7 +31,7 @@
     are only allowed along the defined process). The server enforces this too (409 on a
     pending article, and canTransition on submit); hiding a button is never the real permission.
   - The "New article" button and the "Submit for approval" buttons are handled by
-    public/js/reporterDashboard.js. Edit leads to the editor page (articleEditor.ejs).
+    public/js/reporter/dashboard.js. Edit leads to the editor page (articleEditor.ejs).
   - The editor's note is shown while an article is returned or pending again, so it is
     still readable after the reporter resubmits.
 %>
@@ -47,7 +47,7 @@
     <h2>My articles</h2>
 
     <%# The button is outside the if below, so a reporter with no articles can still create the first one.
-        public/js/reporterDashboard.js finds these two elements by id: it sends the request when the
+        public/js/reporter/dashboard.js finds these two elements by id: it sends the request when the
         button is clicked and writes any error message into the empty paragraph (role="alert" makes
         screen readers announce it). %>
     <p>
@@ -128,7 +128,7 @@
                         it back to "In preparation". The server checks all of this again, and also that a
                         live article really differs from its published version: if not it answers 409
                         "There are no changes to submit", which the script shows in this row.
-                        public/js/reporterDashboard.js handles the click for every such button, using
+                        public/js/reporter/dashboard.js handles the click for every such button, using
                         data-article-id, and writes errors into the paragraph with class "submit-error". %>
                     <% if (article.status === STATUS.DRAFT || article.status === STATUS.RETURNED) { %>
                       <button type="button" class="btn btn-primary submit-article-button" data-article-id="<%= article.id %>">Submit for approval</button>
@@ -146,8 +146,8 @@
 
   <%- include('../partials/footer') %>
 
-  <%# Order matters: reporterDashboard.js calls apiClient, so apiClient.js must load first. %>
+  <%# Order matters: public/js/reporter/dashboard.js calls apiClient, so apiClient.js must load first. %>
   <script src="/js/shared/apiClient.js"></script>
-  <script src="/js/reporterDashboard.js"></script>
+  <script src="/js/reporter/dashboard.js"></script>
 </body>
 </html>

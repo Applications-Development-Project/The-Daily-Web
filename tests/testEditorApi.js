@@ -456,7 +456,7 @@ function readAttribute(html, attributeName) {
  * attributes, escaped); a malformed, unknown or repeated ?article= gives a notice, never an
  * error page; and only a live article's review page links to its chart.
  *
- * Only the server side is checked here. The chart itself is drawn by public/js/analyticsChart.js
+ * Only the server side is checked here. The chart itself is drawn by public/js/editor/analytics.js
  * in the browser, which a Node script can't run; it was checked in a real browser (see the pull
  * request of the analytics page).
  *
@@ -471,7 +471,7 @@ async function testAnalyticsPage(fixtures, cookies) {
 
   const plainPage = await analyticsPage('');
   checkStatus('analytics page', 200, plainPage);
-  check(plainPage.text.includes('id="views-chart"') && plainPage.text.includes('/js/analyticsChart.js'), 'the analytics page should have the chart canvas and its script');
+  check(plainPage.text.includes('id="views-chart"') && plainPage.text.includes('/js/editor/analytics.js'), 'the analytics page should have the chart canvas and its script');
   check(/chart\.umd\.min\.js"\s+integrity="sha512-/.test(plainPage.text), 'Chart.js should be loaded with an integrity hash');
   check(readAttribute(plainPage.text, 'data-initial-article-id') === '', 'without ?article= no article should be preselected');
 

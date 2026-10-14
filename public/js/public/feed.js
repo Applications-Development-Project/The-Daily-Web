@@ -1,5 +1,5 @@
 /**
- * public/js/feed.js
+ * public/js/public/feed.js
  * 
  * Client-side logic for the news feed.
  * Handles infinite scrolling, search, filtering, and rendering articles safely.

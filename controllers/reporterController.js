@@ -157,7 +157,7 @@ async function showReporterDashboard(request, response) {
 
 /**
  * GET /reporter/articles/:id/edit - the article editor page: a form filled with the
- * article's draft. The autosave script (public/js/reporterEditor.js) saves what the
+ * article's draft. The autosave script (public/js/reporter/articleEditor.js) saves what the
  * reporter types. The dashboard's "Edit" link leads here. Before showing anything,
  * findOwnedArticle checks that the article belongs to the logged-in reporter.
  *
@@ -343,7 +343,7 @@ async function createArticle(request, response) {
 /**
  * PATCH /api/reporter/articles/:id/draft - autosave: replaces the article's whole draft
  * with the five fields in the request body. The browser calls it a couple of seconds
- * after the reporter stops typing (public/js/reporterEditor.js).
+ * after the reporter stops typing (public/js/reporter/articleEditor.js).
  *
  * Requirements served (in our own words):
  *   - Continuity: the reporter's work is saved all the time without pressing "Save", and

@@ -84,7 +84,7 @@ function createPageError(statusCode, message) {
  *
  * Known limit: this runs on the server, so the time is in the server's time zone.
  * That is right while the server and the editor are in the same country. The
- * dashboard instead formats dates in the browser (editorDashboard.js), in the
+ * dashboard instead formats dates in the browser (public/js/editor/dashboard.js), in the
  * editor's own time zone.
  *
  * @param {Date|null|undefined} date
@@ -321,7 +321,7 @@ function toArticleRow(article) {
 /**
  * GET /editor - the editor dashboard: a table of every article in the system.
  *
- * The page arrives with an empty table; public/js/editorDashboard.js fills it from
+ * The page arrives with an empty table; public/js/editor/dashboard.js fills it from
  * GET /api/editor/articles and refills it when the editor filters, searches or
  * changes page, without reloading. That way the table is built in one place only.
  *
@@ -387,7 +387,7 @@ async function showArticleReview(request, response) {
  * Answers 200 { success: true, data: { articles, page, totalPages, totalArticles } },
  * or 400 with a message if a parameter is invalid. Database errors go to errorHandler
  * (Express 5 passes a rejected promise from an async controller on by itself).
- * The response shape is SM's own contract with public/js/editorDashboard.js.
+ * The response shape is SM's own contract with public/js/editor/dashboard.js.
  *
  * Performance with thousands of articles:
  * - Only 20 rows per answer (paging), only the fields the table shows (.select),

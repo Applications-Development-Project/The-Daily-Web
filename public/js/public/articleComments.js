@@ -1,5 +1,5 @@
 /**
- * public/js/articleComments.js
+ * public/js/public/articleComments.js
  *
  * The comment form on the article page. When a reader posts a comment, this script
  * sends it with Ajax (apiClient.post) and adds it to the top of the list right away,
@@ -28,7 +28,7 @@
  *
  * Load after apiClient.js:
  *   <script src="/js/shared/apiClient.js"></script>
- *   <script src="/js/articleComments.js"></script>
+ *   <script src="/js/public/articleComments.js"></script>
  *
  * Security: everything a reader typed is put on the page with textContent, never
  * innerHTML, so a comment containing <script> or other HTML is shown as plain text

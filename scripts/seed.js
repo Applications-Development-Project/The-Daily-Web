@@ -206,7 +206,7 @@ const COMMENT_TEXTS = [
 // One seeded comment contains HTML on purpose, so the defense can show that text
 // typed by readers is always displayed as plain text and never runs: the article page
 // prints comments with the escaping <%= %> tag, and the browser scripts use
-// textContent (public/js/articleComments.js, public/js/commentModeration.js).
+// textContent (public/js/public/articleComments.js, public/js/editor/comments.js).
 const XSS_DEMO_COMMENT = {
   authorName: '<b>Test reader</b>',
   text: '<script>alert("hacked")</script> If you can read this tag, the page is safe.',

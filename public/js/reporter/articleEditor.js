@@ -1,5 +1,5 @@
 /**
- * public/js/reporterEditor.js
+ * public/js/reporter/articleEditor.js
  *
  * The autosave client of the reporter's article editor. There is no "Save" button:
  * a moment after the reporter stops typing, this script sends the whole draft to the

@@ -6,14 +6,14 @@
  *   (guests are limited to 3 per minute by middleware/commentRateLimiter.js, which runs
  *   before addComment).
  * - For the editor: the comment moderation page and API (search, edit, delete).
- *   The page is views/editor/comments.ejs; public/js/commentModeration.js runs it.
+ *   The page is views/editor/comments.ejs; public/js/editor/comments.js runs it.
  *
  * Every comment sent to the browser has the shape { id, authorName, text, createdAt }.
  * deviceId is never sent: it identifies a reader's browser and is only for the server.
  *
  * Used by: routes/pageRoutes/commentPageRoutes.js, routes/apiRoutes/commentApiRoutes.js.
- * Related: models/Comment.js, models/Article.js, public/js/articleComments.js,
- * views/editor/comments.ejs, public/js/commentModeration.js.
+ * Related: models/Comment.js, models/Article.js, public/js/public/articleComments.js,
+ * views/editor/comments.ejs, public/js/editor/comments.js.
  * Owner: OS.
  */
 
@@ -272,7 +272,7 @@ async function listArticleComments(request, response) {
  * attach a comment to a different article by editing the request.
  *
  * Text is saved exactly as typed, HTML included. It is made safe when shown:
- * articleComments.js uses textContent and EJS uses the escaping <%= %> tag.
+ * public/js/public/articleComments.js uses textContent and EJS uses the escaping <%= %> tag.
  *
  * @param {import('express').Request} request - The new comment.
  * @param {import('express').Response} response - The JSON answer.
@@ -299,7 +299,7 @@ async function addComment(request, response) {
  * GET /editor/comments - the comment moderation page (editor only).
  *
  * It sends only the page frame, with no comments in it. The browser script
- * (public/js/commentModeration.js) loads them from GET /api/comments, so the rows are
+ * (public/js/editor/comments.js) loads them from GET /api/comments, so the rows are
  * built in one place only and the first page works exactly like every later page.
  * This page doesn't need to be found by search engines (it is behind a login), so
  * unlike the article page there is no reason to render the list on the server.

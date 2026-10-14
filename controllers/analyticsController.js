@@ -129,7 +129,7 @@ const RANGE_OPTIONS = [
  * GET /editor/analytics?article= - the Impact Analytics page: the editor picks an article
  * by title, chooses a range, and sees a chart of its views with a mark at every publish.
  *
- * The page itself is only the frame. public/js/analyticsChart.js finds articles through
+ * The page itself is only the frame. public/js/editor/analytics.js finds articles through
  * GET /api/editor/articles?search= (the dashboard's list API, reused) and loads the chart
  * data from GET /api/editor/articles/:id/views, so changing the article or the range never
  * reloads the page.

@@ -1,5 +1,5 @@
 /**
- * public/js/commentModeration.js
+ * public/js/editor/comments.js
  *
  * Runs the editor's comment moderation page (views/editor/comments.ejs). Everything
  * happens with Ajax through apiClient, so the page never reloads:
@@ -74,7 +74,7 @@ function findCommentTextError(text) {
 
 /**
  * Formats a comment's date like "10 Oct 2026, 13:51", the same format as the
- * comments on the article page (public/js/articleComments.js).
+ * comments on the article page (public/js/public/articleComments.js).
  *
  * @param {string} isoDate - A date from the API.
  * @returns {string} The date in the editor's own time zone.
