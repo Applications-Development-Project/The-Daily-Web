@@ -25,11 +25,11 @@
  * Owner: SM.
  */
 
-const mongoose = require('mongoose');
 const Article = require('../models/Article');
 const ArticleViewStats = require('../models/ArticleViewStats');
 const { getViewsOverTime, DEFAULT_RANGE_DAYS, MAX_RANGE_DAYS } = require('../services/viewTracker');
 const logger = require('../services/logger');
+const { isValidObjectId } = require('../utils/requestValidation');
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
@@ -148,8 +148,8 @@ async function showAnalyticsPage(request, response) {
 
   const articleId = request.query.article;
   if (articleId !== undefined) {
-    // typeof check first: ?article=a&article=b arrives as an array, never a valid id.
-    const article = typeof articleId === 'string' && mongoose.isValidObjectId(articleId)
+    // isValidObjectId also checks the type: ?article=a&article=b arrives as an array, never a valid id.
+    const article = isValidObjectId(articleId)
       ? await Article.findById(articleId).select({ 'draft.title': 1, 'published.title': 1 }).lean()
       : null;
     if (article) {
@@ -191,7 +191,7 @@ async function showAnalyticsPage(request, response) {
  * @returns {Promise<void>}
  */
 async function getArticleViews(request, response) {
-  if (!mongoose.isValidObjectId(request.params.id)) {
+  if (!isValidObjectId(request.params.id)) {
     sendError(response, 400, 'Invalid article id');
     return;
   }
@@ -234,7 +234,7 @@ async function getArticleViews(request, response) {
  * @returns {Promise<void>}
  */
 async function resetArticleViews(request, response) {
-  if (!mongoose.isValidObjectId(request.params.id)) {
+  if (!isValidObjectId(request.params.id)) {
     sendError(response, 400, 'Invalid article id');
     return;
   }

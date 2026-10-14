@@ -17,7 +17,7 @@
  *   (a JSON or query value can be an object or array, not only text).
  * - Errors: APIs answer with sendError() as { success: false, error } and a status
  *   code (400 invalid input, 404 not found, 409 not allowed in the current status).
- *   Pages throw createPageError() and errorHandler shows the shared error page.
+ *   Pages throw createHttpError() and errorHandler shows the shared error page.
  *   Database failures need no try/catch: Express 5 sends a rejected promise from an
  *   async function to errorHandler, which answers 500 and logs it.
  * - The article model has two copies of the content: draft (worked on) and
@@ -33,7 +33,6 @@
  * Owner: SM.
  */
 
-const mongoose = require('mongoose');
 const Article = require('../models/Article');
 const Comment = require('../models/Comment');
 const ArticleViewStats = require('../models/ArticleViewStats');
@@ -41,6 +40,8 @@ const DeviceArticleView = require('../models/DeviceArticleView');
 const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWorkflow');
 const { readDraftFromRequestBody } = require('../services/draftValidation');
 const logger = require('../services/logger');
+const { createHttpError } = require('../utils/httpErrors');
+const { isValidObjectId, escapeRegExp } = require('../utils/requestValidation');
 
 // The dashboard shows 20 articles per page ("Shared contracts").
 const ARTICLES_PER_PAGE = 20;
@@ -60,24 +61,6 @@ const CONTENT_FIELD_LABELS = {
   imageUrl: 'Main image',
   body: 'Body',
 };
-
-/**
- * Creates an error for errorHandler with a 4xx status. On a page (not /api) it shows
- * the shared error page with this status and message.
- *
- * The page controllers throw it. In Express 5 an error thrown inside an async function
- * reaches errorHandler by itself, so no try/catch or next(error) is needed. This is
- * the team's "Errors from controllers" contract in the work plan.
- *
- * @param {number} statusCode - For example 404.
- * @param {string} message - What the editor reads on the error page.
- * @returns {Error}
- */
-function createPageError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
 
 /**
  * Formats a date for the page, or returns '' when there is no date.
@@ -200,17 +183,15 @@ function sendError(response, statusCode, message) {
  * 400 for an id that isn't a valid MongoDB id, 404 if no such article exists.
  * Checking the format first gives a clear message instead of a database CastError.
  *
- * mongoose.isValidObjectId: in our Mongoose (9) it accepts only real ids (24 hex
- * characters or an ObjectId). We tested that 12-character strings like
- * "hello world!" are rejected; accepting them was older Mongoose 6 behaviour, which
- * is why the work plan suggests a regular expression. Both checks give the same result here.
+ * isValidObjectId (utils/requestValidation.js) accepts only a string of exactly 24
+ * hexadecimal characters, the one id rule the whole project shares.
  *
  * @param {import('express').Request} request - request.params.id is the article id.
  * @param {import('express').Response} response - Used only to send the 400 or 404.
  * @returns {Promise<Object|null>} The article document, or null if an error was sent.
  */
 async function findArticleFromUrl(request, response) {
-  if (!mongoose.isValidObjectId(request.params.id)) {
+  if (!isValidObjectId(request.params.id)) {
     sendError(response, 400, 'Invalid article id');
     return null;
   }
@@ -242,20 +223,6 @@ function readQueryText(value) {
     return null;
   }
   return value.trim();
-}
-
-/**
- * Makes user text safe to put inside a regular expression, so a search for "C++"
- * or "(draft)" looks for those exact characters instead of breaking the regex or
- * changing its meaning. Without it, ".*" would match every title and "(" would make
- * the query fail. Escaped text is only plain characters, so it also can't build a
- * slow, catastrophic pattern.
- *
- * @param {string} text - What the user typed.
- * @returns {string} The same text with every regex special character escaped.
- */
-function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 /**
@@ -353,8 +320,8 @@ function showEditorDashboard(request, response) {
  */
 async function showArticleReview(request, response) {
   // For a page, "not a valid id" and "no such article" mean the same to the editor.
-  if (!mongoose.isValidObjectId(request.params.id)) {
-    throw createPageError(404, 'Article not found');
+  if (!isValidObjectId(request.params.id)) {
+    throw createHttpError(404, 'Article not found');
   }
 
   // populate replaces the stored user ids with the users' display names.
@@ -363,7 +330,7 @@ async function showArticleReview(request, response) {
     .populate('publishHistory.editor', 'displayName')
     .lean();
   if (!article) {
-    throw createPageError(404, 'Article not found');
+    throw createHttpError(404, 'Article not found');
   }
 
   const review = toReviewView(article, request.session.user.role);
@@ -419,7 +386,7 @@ async function listAllArticles(request, response) {
   if (listQuery.search !== '') {
     // 'i' = ignore capitals. We search both titles, so a live article whose
     // working copy was renamed can be found by either name.
-    const titlePattern = new RegExp(escapeRegex(listQuery.search), 'i');
+    const titlePattern = new RegExp(escapeRegExp(listQuery.search), 'i');
     filter.$or = [{ 'draft.title': titlePattern }, { 'published.title': titlePattern }];
   }
 

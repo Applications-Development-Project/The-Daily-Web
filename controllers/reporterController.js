@@ -79,12 +79,11 @@ const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWor
 const logger = require('../services/logger');
 // The draft rules and createHttpError live in a shared service, so the editor's edit of a
 // pending article (SM) follows exactly the same rules as the reporter's autosave.
-const { DRAFT_FIELDS, createHttpError, readDraftFromRequestBody } = require('../services/draftValidation');
-
-// An article id from the URL must be exactly 24 hexadecimal characters. We check the
-// shape ourselves ("Checking ids from the URL" in the plan) because
-// mongoose.isValidObjectId() also accepts any 12-character string.
-const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
+const { DRAFT_FIELDS, readDraftFromRequestBody } = require('../services/draftValidation');
+const { createHttpError } = require('../utils/httpErrors');
+// An article id from the URL must be exactly 24 hexadecimal characters; the rule is
+// written once, in utils/requestValidation.js.
+const { isValidObjectId } = require('../utils/requestValidation');
 
 // The statuses in which a reporter may open and change the working copy (the draft):
 // "In preparation", "Returned for corrections", and "Published" (editing a live
@@ -111,7 +110,7 @@ const EDITABLE_STATUSES = [STATUS.DRAFT, STATUS.RETURNED, STATUS.PUBLISHED];
  * @throws {Error} With statusCode 400, 404 or 403 (see above). Database errors pass through.
  */
 async function findOwnedArticle(articleId, reporterId) {
-  if (!OBJECT_ID_PATTERN.test(articleId)) {
+  if (!isValidObjectId(articleId)) {
     throw createHttpError(400, 'Invalid article id.');
   }
 
