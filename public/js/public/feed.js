@@ -197,11 +197,4 @@ document.addEventListener('DOMContentLoaded', () => {
         loadArticles(true);
     }
 
-    // Item 10: Weather Widget Logic (Reuse sidebar loadWeather)
-    // Refresh every 5 minutes (300,000 milliseconds)
-    setInterval(() => {
-        if (typeof window.loadWeather === 'function') {
-            window.loadWeather();
-        }
-    }, 5 * 60 * 1000);
 });
