@@ -380,6 +380,39 @@ nav[aria-label="User list pages"] {
   width: auto;
 }
 
+/* On a wide screen, a card with an image shows it on the left and the text beside it, so
+   a page of 20 cards is easy to scan. :has(img) applies the grid only to cards that have
+   an image. On a phone (section 6) everything stacks in one column again. */
+@media (min-width: 769px) {
+  .article-card:has(.article-card-image) {
+    display: grid;
+    grid-template-columns: 16rem 1fr;
+    grid-template-areas:
+      "image badge"
+      "image title"
+      "image meta"
+      "image summary";
+    grid-template-rows: auto auto auto 1fr;
+    column-gap: var(--spacing-md);
+  }
+  .article-card:has(.article-card-image) .category-badge { grid-area: badge; justify-self: start; }
+  .article-card:has(.article-card-image) .article-card-title { grid-area: title; }
+  .article-card:has(.article-card-image) .article-card-meta { grid-area: meta; }
+  .article-card:has(.article-card-image) .article-card-image { grid-area: image; margin-bottom: 0; }
+  .article-card:has(.article-card-image) > p:last-child { grid-area: summary; }
+}
+
+/* The article's category (feed cards and the article page). */
+.category-badge {
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+  background-color: #e3eef8;
+  color: var(--color-primary);
+}
+
 .article-card-title {
   margin: var(--spacing-sm) 0;
 }
