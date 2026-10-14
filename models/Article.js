@@ -174,7 +174,9 @@ const articleSchema = new mongoose.Schema(
 // every article to answer each query; with 500+ articles (thousands in real life)
 // the feed and dashboards must stay fast (requirements: performance).
 // The number is the sort direction: 1 ascending, -1 descending.
-articleSchema.index({ status: 1 }); // editor dashboard: filter by status
+// Editor dashboard filtered by status, last change first: the filter and the sort are both in
+// the index, so MongoDB reads only one page of rows instead of sorting every article of that status.
+articleSchema.index({ status: 1, updatedAt: -1, _id: -1 });
 articleSchema.index({ reporter: 1, updatedAt: -1 }); // reporter dashboard: my articles, newest first
 // Feed: one category, newest first. _id at the end gives the same tie-breaker as the sort
 // below, so this index also returns the articles already in the feed's exact order.
