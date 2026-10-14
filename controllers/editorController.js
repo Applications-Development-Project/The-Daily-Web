@@ -24,12 +24,12 @@
  *   published (what readers see); see models/Article.js. "Live" means published is
  *   not null, whatever the status.
  *
- * Built step by step from OS's phase 0 placeholders. Only editArticleDraft is still
- * a PLACEHOLDER answering 501 { success: false, error: "Not implemented yet" }. The
- * function names must stay the same, because the route files call them.
+ * Built step by step from OS's phase 0 placeholders; none is left. The function names
+ * stayed the same, because the route files call them.
  *
  * Used by: routes/pageRoutes/editorPageRoutes.js, routes/apiRoutes/editorApiRoutes.js.
- * Related: models/Article.js, services/articleWorkflow.js (STATUS, canTransition).
+ * Related: models/Article.js, services/articleWorkflow.js (STATUS, canTransition),
+ * services/draftValidation.js (EZ's field checks, shared with the reporter's autosave).
  * Owner: SM.
  */
 
@@ -39,6 +39,7 @@ const Comment = require('../models/Comment');
 const ArticleViewStats = require('../models/ArticleViewStats');
 const DeviceArticleView = require('../models/DeviceArticleView');
 const { STATUS, STATUS_LABELS, canTransition } = require('../services/articleWorkflow');
+const { readDraftFromRequestBody } = require('../services/draftValidation');
 const logger = require('../services/logger');
 
 // The dashboard shows 20 articles per page ("Shared contracts").
@@ -168,6 +169,17 @@ function toReviewView(article, role) {
     // checks again when a button is used; hiding a button protects nothing.
     canApprove: canTransition(article.status, STATUS.PUBLISHED, role),
     canReturn: canTransition(article.status, STATUS.RETURNED, role),
+    // The Edit form appears under the same rule editArticleDraft checks (pending only).
+    canEdit: role === 'editor' && article.status === STATUS.PENDING,
+    // The draft as stored (the body with its blank lines, not split into paragraphs),
+    // to fill the Edit form, so the editor starts from exactly what was submitted.
+    editableDraft: {
+      title: article.draft.title || '',
+      summary: article.draft.summary || '',
+      category: article.draft.category || '',
+      imageUrl: article.draft.imageUrl || '',
+      body: article.draft.body || '',
+    },
   };
 }
 
@@ -358,6 +370,9 @@ async function showArticleReview(request, response) {
   response.render('editor/articleReview', {
     title: `Review: ${review.title} - Editor - The Web Daily`,
     review: review,
+    // The categories the Edit form offers: the model's list, so the form can never offer
+    // a category the server would refuse.
+    categories: Article.CATEGORIES,
   });
 }
 
@@ -436,19 +451,72 @@ async function listAllArticles(request, response) {
 }
 
 /**
- * PATCH /api/editor/articles/:id/draft - the editor edits a submitted draft. PLACEHOLDER.
+ * PATCH /api/editor/articles/:id/draft - the editor edits the submitted version of an
+ * article that awaits approval, before deciding (requirements p.5: "for an article
+ * awaiting approval, the editor can edit it himself"; p.6: "the editor can edit all
+ * articles").
  *
- * Decided with EZ (open question 4 in the work plan): the editor may edit the draft
- * only while the article is pending (requirements: "for an article awaiting approval
- * the editor can edit it"). The status stays pending; any other status will answer 409.
- * Still to build, with the same field rules as the reporter's autosave.
+ * The rules, agreed with EZ (open question 4 in the work plan):
+ * - Only while the article is pending; any other status answers 409. A draft or a
+ *   returned article is the reporter's work in progress, and a published one without a
+ *   pending update has nothing submitted to edit.
+ * - The status stays pending: editing is not a decision. The editor still approves or
+ *   returns it afterwards, and canTransition isn't asked because nothing moves.
+ * - Only the working copy (draft) changes. For a live article, readers keep seeing the
+ *   published version until the editor approves, exactly as with a reporter's update.
+ * - The fields are checked by EZ's readDraftFromRequestBody (services/draftValidation.js),
+ *   the same function the reporter's autosave uses, so a draft is held to the same rules
+ *   whoever saves it: every field must be text (no objects, so no NoSQL injection), the
+ *   same maximum lengths, a known category, and an http(s) image address or none.
+ *   Anything else in the body (a "status", a "published") is dropped by that function.
+ * - One extra rule here: title, summary, body and category can't be empty. The reporter
+ *   may save an empty field while writing, but this article was already submitted as
+ *   complete, and the editor's edit must keep it ready to approve.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * Known limit: if the reporter's article were saved by someone else between the editor
+ * opening the page and saving, the editor's version would replace it. That can't happen
+ * here (a pending article is read-only for the reporter), and the requirements say
+ * simultaneous editing doesn't need to be supported.
+ *
+ * Answers 200 { success: true, data: { id, status, updatedAt } }, 400 for a malformed
+ * id or an invalid field, 404 if the article doesn't exist, 409 if it isn't pending.
+ *
+ * @param {import('express').Request} request - params.id; body { title, summary,
+ *   category, imageUrl, body }; session.user is the editor.
+ * @param {import('express').Response} response - The JSON answer.
+ * @returns {Promise<void>}
+ * @throws {Error} 400 from readDraftFromRequestBody for an invalid field; errorHandler
+ *   turns it into { success: false, error } (Express 5 passes it on from async code).
  */
-function editArticleDraft(request, response) {
-  response.status(501).json({ success: false, error: 'Not implemented yet' });
+async function editArticleDraft(request, response) {
+  const article = await findArticleFromUrl(request, response);
+  if (!article) {
+    return;
+  }
+
+  if (article.status !== STATUS.PENDING) {
+    sendError(response, 409, `An article that is "${STATUS_LABELS[article.status]}" can't be edited by the editor; only articles awaiting approval can`);
+    return;
+  }
+
+  // Express 5 leaves request.body undefined when the request has no body.
+  const draft = readDraftFromRequestBody(request.body || {});
+
+  const emptyFields = REQUIRED_CONTENT_FIELDS.filter((field) => draft[field].trim() === '');
+  if (emptyFields.length > 0) {
+    const labels = emptyFields.map((field) => CONTENT_FIELD_LABELS[field]);
+    sendError(response, 400, `These fields can't be empty in a submitted article: ${labels.join(', ')}`);
+    return;
+  }
+
+  article.draft = draft;
+  await article.save();
+
+  logger.info(`Draft of article ${article._id} edited by editor "${request.session.user.displayName}" (still awaiting approval)`);
+  response.json({
+    success: true,
+    data: { id: article._id.toString(), status: article.status, updatedAt: article.updatedAt },
+  });
 }
 
 /**
