@@ -67,6 +67,7 @@ The folders follow MVC, and the browser code mirrors the views, so every feature
 | Styles | `public/css/main.css` only: no `style=""` attributes and no `<style>` blocks in views |
 | Demo data and one-off scripts | `scripts/` |
 | Self-check scripts | `tests/` (`npm run test:workflow`, `test:reporter`, `test:editor`) |
+| Documentation for the team | `docs/` (`docs/PROJECT_GUIDE.md` explains the structure) |
 
 No inline `<script>` blocks in views: every script is a file in `public/js/`, loaded after `/js/shared/apiClient.js`.
 
