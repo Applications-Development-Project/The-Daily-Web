@@ -2,7 +2,7 @@
   views/partials/head.ejs
 
   The head element shared by every page: character set, the viewport for phones, the
-  page title and the one shared stylesheet.
+  page title, the site icon and the one shared stylesheet.
 
   Locals (both optional):
     title       - the page title shown in the browser tab and in search results.
@@ -27,5 +27,7 @@
     <% if (locals.description) { %>
     <meta name="description" content="<%= locals.description %>">
     <% } %>
+    <%# Declaring the icon stops browsers from asking for /favicon.ico, which doesn't exist. %>
+    <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/main.css">
 </head>

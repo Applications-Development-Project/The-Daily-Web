@@ -75,7 +75,7 @@ function createArticleCard(card) {
   article.dataset.articleId = card.id;
 
   const badge = document.createElement('span');
-  badge.className = 'status-badge status-published';
+  badge.className = 'category-badge';
   badge.textContent = card.category;
 
   const heading = document.createElement('h3');

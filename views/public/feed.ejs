@@ -93,7 +93,7 @@
             <div id="feed-list" data-has-more="<%= hasMore ? 'true' : 'false' %>" aria-live="polite">
                 <% articles.forEach(function (article) { %>
                     <article class="card article-card" data-article-id="<%= article.id %>">
-                        <span class="status-badge status-published"><%= article.category %></span>
+                        <span class="category-badge"><%= article.category %></span>
                         <h3 class="article-card-title">
                             <a href="/articles/<%= article.id %>"><%= article.title %></a>
                         </h3>
