@@ -20,11 +20,8 @@
 const Comment = require('../models/Comment');
 const Article = require('../models/Article');
 const logger = require('../services/logger');
-
-// A MongoDB id is exactly 24 hexadecimal characters. We check the shape ourselves
-// to give a clear 400 message. (mongoose.isValidObjectId also accepts any 12-character
-// string, so "hello world!" would pass it.)
-const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
+const { createHttpError } = require('../utils/httpErrors');
+const { isValidObjectId, escapeRegExp, readSearchText, readPageNumber } = require('../utils/requestValidation');
 
 // The most comments one request returns. An article page shows the newest ones; this
 // keeps the answer small and fast even for an article with thousands of comments.
@@ -90,68 +87,6 @@ function toModerationCommentResponse(comment) {
 }
 
 /**
- * Builds the error passed to errorHandler, which answers with this status and message.
- *
- * @param {number} statusCode - A 4xx status.
- * @param {string} message - What the user is told.
- * @returns {Error}
- */
-function createClientError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-/**
- * Puts a backslash before every character that has a special meaning in a regular
- * expression. Without this, searching for "a.b" would also match "axb" (the dot means
- * "any character"), and a search like "(((" would make the regular expression invalid.
- * (The same helper as in userController.js.)
- *
- * @param {string} text - What the editor typed.
- * @returns {string} The same text, safe to use inside a RegExp.
- */
-function escapeRegExp(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Reads ?search= from the URL. Missing means "no search".
- *
- * @param {*} searchValue - request.query.search. Express gives an array if the
- *   parameter appears twice (?search=a&search=b), so we check the type.
- * @returns {string} The trimmed search text, or '' for none.
- * @throws {Error} 400 if it isn't a single text value or is too long.
- */
-function readSearchText(searchValue) {
-  if (searchValue === undefined) {
-    return '';
-  }
-  if (typeof searchValue !== 'string' || searchValue.length > MAX_SEARCH_LENGTH) {
-    throw createClientError(400, 'Invalid search.');
-  }
-  return searchValue.trim();
-}
-
-/**
- * Reads ?page= from the URL. Missing means page 1.
- *
- * @param {*} pageValue - request.query.page.
- * @returns {number} A whole number, 1 or more.
- * @throws {Error} 400 for anything else, like "0", "-2", "1.5" or "abc".
- */
-function readPageNumber(pageValue) {
-  if (pageValue === undefined) {
-    return 1;
-  }
-  const page = Number(pageValue);
-  if (typeof pageValue !== 'string' || !Number.isInteger(page) || page < 1) {
-    throw createClientError(400, 'Page must be a whole number, 1 or more.');
-  }
-  return page;
-}
-
-/**
  * Finds a live article by its id from the URL. "Live" means it has a published
  * version (published is not null); readers can't see or comment on drafts.
  *
@@ -160,14 +95,14 @@ function readPageNumber(pageValue) {
  * @throws {Error} 400 if the id is malformed, 404 if there is no live article with it.
  */
 async function findLiveArticle(articleId) {
-  if (!OBJECT_ID_PATTERN.test(articleId)) {
-    throw createClientError(400, 'Invalid article id.');
+  if (!isValidObjectId(articleId)) {
+    throw createHttpError(400, 'Invalid article id.');
   }
 
   // We only need to know that it exists, so we load just its _id.
   const article = await Article.findOne({ _id: articleId, published: { $ne: null } }).select('_id').lean();
   if (!article) {
-    throw createClientError(404, 'Article not found.');
+    throw createHttpError(404, 'Article not found.');
   }
   return article;
 }
@@ -187,10 +122,10 @@ async function findLiveArticle(articleId) {
 function readCommentText(value) {
   const text = typeof value === 'string' ? value.trim() : '';
   if (text === '') {
-    throw createClientError(400, 'Please write a comment.');
+    throw createHttpError(400, 'Please write a comment.');
   }
   if (text.length > MAX_COMMENT_TEXT_LENGTH) {
-    throw createClientError(400, `A comment can be at most ${MAX_COMMENT_TEXT_LENGTH.toLocaleString('en-US')} characters.`);
+    throw createHttpError(400, `A comment can be at most ${MAX_COMMENT_TEXT_LENGTH.toLocaleString('en-US')} characters.`);
   }
   return text;
 }
@@ -208,10 +143,10 @@ function readNewCommentFields(body) {
   const authorName = typeof fields.authorName === 'string' ? fields.authorName.trim() : '';
 
   if (authorName === '') {
-    throw createClientError(400, 'Please enter your name.');
+    throw createHttpError(400, 'Please enter your name.');
   }
   if (authorName.length > MAX_AUTHOR_NAME_LENGTH) {
-    throw createClientError(400, `Your name can be at most ${MAX_AUTHOR_NAME_LENGTH} characters.`);
+    throw createHttpError(400, `Your name can be at most ${MAX_AUTHOR_NAME_LENGTH} characters.`);
   }
 
   return { authorName: authorName, text: readCommentText(fields.text) };
@@ -225,12 +160,12 @@ function readNewCommentFields(body) {
  * @throws {Error} 400 if the id is malformed, 404 if there is no such comment.
  */
 async function findCommentById(commentId) {
-  if (!OBJECT_ID_PATTERN.test(commentId)) {
-    throw createClientError(400, 'Invalid comment id.');
+  if (!isValidObjectId(commentId)) {
+    throw createHttpError(400, 'Invalid comment id.');
   }
   const comment = await Comment.findById(commentId);
   if (!comment) {
-    throw createClientError(404, 'Comment not found.');
+    throw createHttpError(404, 'Comment not found.');
   }
   return comment;
 }
@@ -329,7 +264,7 @@ function showCommentModerationPage(request, response) {
  * @throws {Error} 400 for an invalid search or page (passed on to errorHandler).
  */
 async function searchComments(request, response) {
-  const searchText = readSearchText(request.query.search);
+  const searchText = readSearchText(request.query.search, MAX_SEARCH_LENGTH);
   const page = readPageNumber(request.query.page);
 
   // An empty filter {} matches every comment. With a search, $or matches either field.

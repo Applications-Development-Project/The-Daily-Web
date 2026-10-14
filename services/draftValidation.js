@@ -3,8 +3,8 @@
  *
  * The rules for the content of an article draft: which five fields a draft has, how long
  * each may be, that every field is text, that the category is a known one and that the
- * image address is empty or an http(s) link. It also holds createHttpError, the small helper
- * that builds an error carrying an HTTP status, because these rules throw such errors.
+ * image address is empty or an http(s) link. A broken rule throws a 400 error built with
+ * createHttpError (utils/httpErrors.js), which errorHandler turns into a clean answer.
  *
  * Why this is its own file and not part of a controller: two different routes save a draft.
  * The reporter's autosave (PATCH /api/reporter/articles/:id/draft) and the editor's edit of a
@@ -18,13 +18,15 @@
  * The code was moved here unchanged from controllers/reporterController.js (a pure refactor,
  * no behavior change).
  *
- * Used by: controllers/reporterController.js and, soon, controllers/editorController.js (SM).
+ * Used by: controllers/reporterController.js (autosaveDraft) and controllers/editorController.js
+ * (editArticleDraft).
  * Related: models/Article.js (the category list and the model's own length limits),
- * middleware/errorHandler.js (turns the errors created here into clean answers).
+ * utils/httpErrors.js, middleware/errorHandler.js (turns the errors created here into clean answers).
  * Owner: EZ.
  */
 
 const Article = require('../models/Article');
+const { createHttpError } = require('../utils/httpErrors');
 
 // The five fields of a draft (the "content object" in the plan), in the order the form shows them.
 const DRAFT_FIELDS = ['title', 'summary', 'category', 'imageUrl', 'body'];
@@ -33,21 +35,6 @@ const DRAFT_FIELDS = ['title', 'summary', 'category', 'imageUrl', 'body'];
 // checks first so the reporter gets a clear 400 message; the model's own limits stay as a
 // second safety net for any other way of saving.
 const DRAFT_MAX_LENGTHS = { title: 200, summary: 500, imageUrl: 2000, body: 50000 };
-
-/**
- * Creates an Error that errorHandler turns into a clean answer with this HTTP status
- * (JSON for /api requests, the shared error page for pages). Only 4xx statuses are
- * shown to the user with their message; see middleware/errorHandler.js.
- *
- * @param {number} statusCode - A 4xx HTTP status, for example 404.
- * @param {string} message - A sentence the user can read.
- * @returns {Error} The error, with statusCode set, ready to be thrown.
- */
-function createHttpError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
 
 /**
  * Checks that a text is empty or a web address starting with http:// or https://.
@@ -123,7 +110,6 @@ function readDraftFromRequestBody(requestBody) {
 module.exports = {
   DRAFT_FIELDS,
   DRAFT_MAX_LENGTHS,
-  createHttpError,
   isEmptyOrHttpUrl,
   readDraftFromRequestBody,
 };

@@ -24,10 +24,8 @@ const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const Article = require('../models/Article');
 const logger = require('../services/logger');
-
-// A MongoDB id is exactly 24 hexadecimal characters; we check the shape to give a
-// clear 400 message instead of a database error.
-const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
+const { createHttpError } = require('../utils/httpErrors');
+const { isValidObjectId, escapeRegExp, readSearchText, readPageNumber } = require('../utils/requestValidation');
 
 // The user list is shown 20 at a time, like every other list in the project.
 const USERS_PER_PAGE = 20;
@@ -52,19 +50,6 @@ const MAX_PASSWORD_LENGTH = 200;
 const USER_ROLES = ['reporter', 'editor'];
 
 /**
- * Builds the error passed to errorHandler, which answers with this status and message.
- *
- * @param {number} statusCode - A 4xx status.
- * @param {string} message - What the editor is told.
- * @returns {Error}
- */
-function createClientError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-/**
  * Turns a user from the database into the shape we send to the browser. Picking the
  * fields one by one means passwordHash can never leak, even by mistake.
  *
@@ -82,18 +67,6 @@ function toUserResponse(user) {
 }
 
 /**
- * Puts a backslash before every character that has a special meaning in a regular
- * expression. Without this, searching for "a.b" would also match "axb" (the dot means
- * "any character"), and a search like "(((" would make the regular expression invalid.
- *
- * @param {string} text - What the editor typed.
- * @returns {string} The same text, safe to use inside a RegExp.
- */
-function escapeRegExp(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
  * Checks a new username. It is stored lowercase (see models/User.js), so we compare
  * and save the lowercase form.
  *
@@ -104,10 +77,10 @@ function escapeRegExp(text) {
 function readUsername(value) {
   const username = typeof value === 'string' ? value.trim().toLowerCase() : '';
   if (username.length < MIN_USERNAME_LENGTH || username.length > MAX_USERNAME_LENGTH) {
-    throw createClientError(400, `Username must be ${MIN_USERNAME_LENGTH} to ${MAX_USERNAME_LENGTH} characters.`);
+    throw createHttpError(400, `Username must be ${MIN_USERNAME_LENGTH} to ${MAX_USERNAME_LENGTH} characters.`);
   }
   if (!USERNAME_PATTERN.test(username)) {
-    throw createClientError(400, 'Username can only contain letters, digits, dots, dashes and underscores.');
+    throw createHttpError(400, 'Username can only contain letters, digits, dots, dashes and underscores.');
   }
   return username;
 }
@@ -122,7 +95,7 @@ function readUsername(value) {
 function readDisplayName(value) {
   const displayName = typeof value === 'string' ? value.trim() : '';
   if (displayName === '' || displayName.length > MAX_DISPLAY_NAME_LENGTH) {
-    throw createClientError(400, `Display name must be 1 to ${MAX_DISPLAY_NAME_LENGTH} characters.`);
+    throw createHttpError(400, `Display name must be 1 to ${MAX_DISPLAY_NAME_LENGTH} characters.`);
   }
   return displayName;
 }
@@ -136,7 +109,7 @@ function readDisplayName(value) {
  */
 function readRole(value) {
   if (!USER_ROLES.includes(value)) {
-    throw createClientError(400, 'Role must be "reporter" or "editor".');
+    throw createHttpError(400, 'Role must be "reporter" or "editor".');
   }
   return value;
 }
@@ -154,7 +127,7 @@ function readRole(value) {
  */
 async function hashNewPassword(value) {
   if (typeof value !== 'string' || value.length < MIN_PASSWORD_LENGTH || value.length > MAX_PASSWORD_LENGTH) {
-    throw createClientError(400, `Password must be ${MIN_PASSWORD_LENGTH} to ${MAX_PASSWORD_LENGTH} characters.`);
+    throw createHttpError(400, `Password must be ${MIN_PASSWORD_LENGTH} to ${MAX_PASSWORD_LENGTH} characters.`);
   }
   return bcrypt.hash(value, BCRYPT_ROUNDS);
 }
@@ -167,12 +140,12 @@ async function hashNewPassword(value) {
  * @throws {Error} 400 if the id is malformed, 404 if there is no such user.
  */
 async function findUserById(userId) {
-  if (!OBJECT_ID_PATTERN.test(userId)) {
-    throw createClientError(400, 'Invalid user id.');
+  if (!isValidObjectId(userId)) {
+    throw createHttpError(400, 'Invalid user id.');
   }
   const user = await User.findById(userId);
   if (!user) {
-    throw createClientError(404, 'User not found.');
+    throw createHttpError(404, 'User not found.');
   }
   return user;
 }
@@ -197,7 +170,7 @@ async function findUserById(userId) {
 async function ensureAnotherEditorRemains() {
   const editorCount = await User.countDocuments({ role: 'editor' });
   if (editorCount <= 1) {
-    throw createClientError(409, 'The system must keep at least one editor.');
+    throw createHttpError(409, 'The system must keep at least one editor.');
   }
 }
 
@@ -215,7 +188,7 @@ async function ensureReporterHasNoArticles(user, actionDescription) {
   // exists() stops at the first match instead of counting them all.
   const hasArticles = await Article.exists({ reporter: user._id });
   if (hasArticles) {
-    throw createClientError(409, `This reporter still has articles, so they can't ${actionDescription}.`);
+    throw createHttpError(409, `This reporter still has articles, so they can't ${actionDescription}.`);
   }
 }
 
@@ -228,42 +201,6 @@ async function ensureReporterHasNoArticles(user, actionDescription) {
  */
 function isOwnAccount(request, user) {
   return request.session.user.id === user._id.toString();
-}
-
-/**
- * Reads ?search= from the URL. Missing means "no search".
- *
- * @param {*} searchValue - request.query.search. Express gives an array if the
- *   parameter appears twice (?search=a&search=b), so we check the type.
- * @returns {string} The trimmed search text, or '' for none.
- * @throws {Error} 400 if it isn't a single text value or is too long.
- */
-function readSearchText(searchValue) {
-  if (searchValue === undefined) {
-    return '';
-  }
-  if (typeof searchValue !== 'string' || searchValue.length > MAX_SEARCH_LENGTH) {
-    throw createClientError(400, 'Invalid search.');
-  }
-  return searchValue.trim();
-}
-
-/**
- * Reads ?page= from the URL. Missing means page 1.
- *
- * @param {*} pageValue - request.query.page.
- * @returns {number} A whole number, 1 or more.
- * @throws {Error} 400 for anything else, like "0", "-2", "1.5" or "abc".
- */
-function readPageNumber(pageValue) {
-  if (pageValue === undefined) {
-    return 1;
-  }
-  const page = Number(pageValue);
-  if (typeof pageValue !== 'string' || !Number.isInteger(page) || page < 1) {
-    throw createClientError(400, 'Page must be a whole number, 1 or more.');
-  }
-  return page;
 }
 
 /**
@@ -291,7 +228,7 @@ function showUserManagementPage(request, response) {
  * @throws {Error} 400 for an invalid search or page (passed on to errorHandler).
  */
 async function searchUsers(request, response) {
-  const searchText = readSearchText(request.query.search);
+  const searchText = readSearchText(request.query.search, MAX_SEARCH_LENGTH);
   const page = readPageNumber(request.query.page);
 
   // An empty filter {} matches every user. With a search, $or matches either field,
@@ -368,7 +305,7 @@ async function changeRole(request, user, newRole) {
 
   if (newRole === 'reporter') {
     if (isOwnAccount(request, user)) {
-      throw createClientError(409, "You can't remove your own editor role.");
+      throw createHttpError(409, "You can't remove your own editor role.");
     }
     await ensureAnotherEditorRemains();
   } else {
@@ -391,10 +328,10 @@ async function changeRole(request, user, newRole) {
 async function updateUser(request, response) {
   const body = request.body || {};
   if (body.username !== undefined) {
-    throw createClientError(400, "The username can't be changed.");
+    throw createHttpError(400, "The username can't be changed.");
   }
   if (body.displayName === undefined && body.role === undefined && body.password === undefined) {
-    throw createClientError(400, 'Nothing to change: send displayName, role or password.');
+    throw createHttpError(400, 'Nothing to change: send displayName, role or password.');
   }
 
   // Why findById + save() and not findByIdAndUpdate(): the safety rules in changeRole
@@ -439,7 +376,7 @@ async function deleteUser(request, response) {
   const user = await findUserById(request.params.id);
 
   if (isOwnAccount(request, user)) {
-    throw createClientError(409, "You can't delete your own account.");
+    throw createHttpError(409, "You can't delete your own account.");
   }
   if (user.role === 'editor') {
     await ensureAnotherEditorRemains();
