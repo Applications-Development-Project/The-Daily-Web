@@ -4,10 +4,9 @@
  * Fills the weather widget in the sidebar (views/partials/sidebar.ejs) from our own
  * GET /api/weather, and refreshes it every 5 minutes while the page stays open.
  *
- * Why the browser asks OUR server and never OpenWeatherMap directly: the API key stays on
- * the server (it is never sent to the browser), and every reader shares the server's one
- * cached copy, so thousands of readers cause at most one call to OpenWeatherMap every
- * 5 minutes (services/weatherService.js).
+ * Why the browser asks OUR server and never the weather service (Open-Meteo) directly:
+ * every reader shares the server's one cached copy, so thousands of readers cause at most
+ * one call to Open-Meteo every 5 minutes (services/weatherService.js).
  *
  * Why refresh every 5 minutes: the requirements allow the weather a reader sees to be at
  * most 15 minutes old. The server never hands out a copy older than 10 minutes, and this
@@ -16,13 +15,13 @@
  * tab, so we also refresh as soon as the tab is shown again if the last load is too old.
  *
  * What the reader sees in each case:
- * - success: the city, temperature, description, the service's icon and "Updated 14:32";
- * - any failure (no API key, the service is down, our server can't be reached):
+ * - success: a weather symbol, the city, temperature, description and "Updated 14:32";
+ * - any failure (the service is down, our server can't be reached):
  *   "Weather unavailable". The old weather is removed rather than left on the screen,
  *   because it might be older than the 15 minutes allowed. The page itself is not affected.
  *
- * Every value is put on the page with textContent or as a property (img.src, img.alt),
- * never with innerHTML, so nothing in the answer can run as HTML.
+ * Every value is put on the page with textContent, never with innerHTML, so nothing in the
+ * answer can run as HTML.
  *
  * Loaded by: views/public/feed.ejs and views/public/article.ejs (the pages with the
  * sidebar), after public/js/shared/apiClient.js.
@@ -31,10 +30,6 @@
  */
 
 const WEATHER_REFRESH_MS = 5 * 60 * 1000;
-
-// OpenWeatherMap icon codes look like "04d". Checking the shape before building the image
-// address means a strange value can never point the image somewhere else.
-const WEATHER_ICON_PATTERN = /^[0-9a-z]{2,4}$/i;
 
 /**
  * Connects the widget once the page has loaded: loads it now, then every 5 minutes.
@@ -63,14 +58,13 @@ function setUpWeatherWidget() {
     const wrapper = document.createElement('div');
     wrapper.className = 'weather-info';
 
-    if (WEATHER_ICON_PATTERN.test(weather.icon)) {
-      const icon = document.createElement('img');
-      icon.src = `https://openweathermap.org/img/wn/${weather.icon}.png`;
-      icon.alt = weather.description;
-      icon.width = 50;
-      icon.height = 50;
-      wrapper.append(icon);
-    }
+    // The icon is a symbol such as a sun or a cloud (chosen on the server). aria-hidden: the
+    // description below already says it in words, so screen readers don't read it twice.
+    const icon = document.createElement('span');
+    icon.className = 'weather-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.textContent = weather.icon;
+    wrapper.append(icon);
 
     const text = document.createElement('div');
     const city = document.createElement('strong');

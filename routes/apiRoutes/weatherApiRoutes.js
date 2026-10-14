@@ -6,8 +6,8 @@
  * Created by OS in phase 0 with the path and access from the routes table in
  * "Shared contracts"; SH wrote the real controller and service behind it.
  *
- * Open to everyone, with no login check: the widget is in the public sidebar. The API key
- * stays on the server; the browser only ever calls this route.
+ * Open to everyone, with no login check: the widget is in the public sidebar. The browser
+ * only ever calls this route, never the weather service itself.
  *
  * Related: controllers/weatherController.js, services/weatherService.js.
  *

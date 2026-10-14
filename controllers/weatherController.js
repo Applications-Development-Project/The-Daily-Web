@@ -2,7 +2,7 @@
  * controllers/weatherController.js
  *
  * The JSON API behind the sidebar's weather widget: GET /api/weather. All the real work
- * (calling OpenWeatherMap, the shared in-memory copy, the freshness rules) is in
+ * (calling Open-Meteo, the shared in-memory copy, the freshness rules) is in
  * services/weatherService.js; this file only turns its result into an HTTP answer
  * (the conventions: controllers handle request and response, logic lives in services).
  *
@@ -17,8 +17,8 @@ const { getWeather } = require('../services/weatherService');
  * GET /api/weather - the current weather for the widget. Open to everyone.
  *
  * Answers 200 { success: true, data: { city, temperature, description, icon, updatedAt } },
- * or 503 { success: false, error: 'Weather unavailable' } when there is no API key or no
- * copy young enough to show (see weatherService.js).
+ * or 503 { success: false, error: 'Weather unavailable' } when the service can't be reached
+ * and there is no copy young enough to show (see weatherService.js).
  *
  * Why 503 here, and not next(error): 503 "Service Unavailable" says exactly what happened
  * (an outside service we depend on can't be used right now), and it is an expected

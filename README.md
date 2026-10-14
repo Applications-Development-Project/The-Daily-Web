@@ -31,7 +31,8 @@ JavaScript and Ajax in the browser.
 - **Article page** with the full text, rendered on the server (so search engines see it), and
   guest comments. A new comment appears at once without reloading the list. A guest can post at most
   3 comments per minute from the same device; the server blocks the fourth with a clear message.
-- **Weather widget** in the sidebar (OpenWeatherMap). What a reader sees is never more than 15 minutes old.
+- **Weather widget** in the sidebar (Open-Meteo, a free service that needs no API key). What a reader sees
+  is never more than 15 minutes old.
 
 ### Reporters
 - A **dashboard** with only their own articles and the status of each one, and the editor's note
@@ -145,8 +146,7 @@ You need **Node.js 20.6 or newer** and **MongoDB** running on your computer
    | `MONGODB_URI` | `mongodb://127.0.0.1:27017/the-web-daily` |
    | `SESSION_SECRET` | A long random text. Generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
    | `PORT` | Optional. Empty means 3000 |
-   | `WEATHER_API_KEY` | A free OpenWeatherMap API key (no credit card needed). Optional: without it everything else works, and the widget shows "Weather unavailable" |
-   | `WEATHER_CITY` | For example `Tel Aviv` |
+   | `WEATHER_CITY`, `WEATHER_LATITUDE`, `WEATHER_LONGITUDE` | Optional: the city shown in the weather widget and its coordinates. Empty means Tel Aviv. The weather comes from Open-Meteo, which needs no API key |
    | `SEED_DEMO_PASSWORD` | The password every demo user will get (choose any) |
 
    `.env` holds secrets, so it is in `.gitignore` and never committed. Only `.env.example`, with empty values, is in the repository.
@@ -228,7 +228,7 @@ The-Daily-Web/
 │   ├── articleWorkflow.js    Status names, labels and canTransition() (the transition table)
 │   ├── draftValidation.js    The rules for an article's content (reporter and editor share them)
 │   ├── viewTracker.js        recordView() and the chart data
-│   ├── weatherService.js     OpenWeatherMap with a shared in-memory copy
+│   ├── weatherService.js     Open-Meteo weather with a shared in-memory copy
 │   └── logger.js             Console, logs/app.log and logs/error.log
 ├── utils/                    Small helpers every controller uses
 │   ├── httpErrors.js         createHttpError(status, message)
@@ -304,10 +304,11 @@ The questions we expect, and where the answer is written in the code.
 - **Comment limit.** Counting the device's comments of the last 60 seconds in MongoDB (with an index) keeps
   the limit correct after a restart without extra storage. Known limits: two comments sent at the very same
   moment could both pass, and clearing cookies gives a new device id. (`middleware/commentRateLimiter.js`)
-- **Weather freshness.** The server refreshes its one shared copy after 5 minutes and never serves a copy older
-  than 10 minutes, even when OpenWeatherMap is down; the widget asks again every 5 minutes. So a reader sees
-  data at most 15 minutes old, and thousands of readers cause at most one call to OpenWeatherMap every
-  5 minutes. (`services/weatherService.js`, `public/js/public/weatherWidget.js`)
+- **Weather.** Open-Meteo needs no API key, so the widget works on any computer (our `.env` is never in the
+  repository). The server refreshes its one shared copy after 5 minutes and never serves a copy older than
+  10 minutes, even when the service is down; the widget asks again every 5 minutes. So a reader sees data at
+  most 15 minutes old, and thousands of readers cause at most one outside call every 5 minutes.
+  (`services/weatherService.js`, `public/js/public/weatherWidget.js`)
 - **Performance with thousands of articles.** Paging (20 per page), `.select()` of only the shown fields,
   `.lean()` plain objects, and indexes that match each list's filter and sort, with `_id` as a tie-breaker so
   pages never repeat or skip a row. (`models/Article.js`, the controllers)
