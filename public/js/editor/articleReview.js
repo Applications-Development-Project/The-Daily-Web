@@ -4,7 +4,8 @@
  * Runs the buttons and forms of the editor's review page (views/editor/articleReview.ejs):
  * - "Approve and publish"      POST /api/editor/articles/:id/approve
  * - "Return for corrections"   POST /api/editor/articles/:id/return with { note }
- * - "Edit the submitted version" PATCH /api/editor/articles/:id/draft with the five fields
+ * - The Edit form               PATCH /api/editor/articles/:id/draft with the five fields
+ *   (any article; for a live article with no update in progress, saving publishes it)
  * Everything else on the page (the two versions side by side, the history) is rendered on
  * the server, so it needs no script.
  *
@@ -144,6 +145,11 @@ function setUpArticleReview() {
   async function saveEdit(event) {
     // Stop the normal form submit, which would load a new page.
     event.preventDefault();
+    // Editing a live article publishes the change to readers at once, so ask first.
+    const publishesOnSave = event.target.dataset.publishesOnSave === 'true';
+    if (publishesOnSave && !window.confirm('Publish these changes? Readers will see them immediately.')) {
+      return;
+    }
     const editMessage = document.getElementById('edit-message');
     const saveButton = event.target.querySelector('button[type="submit"]');
     // All five fields are sent, as the server expects the whole draft (like the reporter's autosave).
@@ -164,7 +170,7 @@ function setUpArticleReview() {
 
     if (result.success) {
       editMessage.className = '';
-      editMessage.textContent = 'Saved. Reloading...';
+      editMessage.textContent = result.data.published ? 'Published. Reloading...' : 'Saved. Reloading...';
       window.location.reload();
       return;
     }
@@ -172,7 +178,7 @@ function setUpArticleReview() {
     editMessage.className = 'form-error';
     editMessage.textContent = result.status === 401
       ? 'Your session has ended. Please log in again in another tab, then save again.'
-      // For example 400 (a field is invalid or empty) or 409 (no longer awaiting approval).
+      // For example 400 (a field is invalid or empty) or 409 (a live article saved without changes).
       : result.error;
   }
 

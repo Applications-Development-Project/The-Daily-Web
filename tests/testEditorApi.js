@@ -10,7 +10,7 @@
  * - GET  /api/editor/articles             the dashboard list: status filter, title search, paging
  * - POST /api/editor/articles/:id/approve publish the working copy
  * - POST /api/editor/articles/:id/return  return with a required note
- * - PATCH /api/editor/articles/:id/draft  the editor's own edit of a pending article
+ * - PATCH /api/editor/articles/:id/draft  the editor's own edit of any article
  * - DELETE /api/editor/articles/:id       delete with its comments and statistics
  * - GET and DELETE /api/editor/articles/:id/views  the chart data and the reset
  * - GET /editor and GET /editor/articles/:id       the dashboard and review pages
@@ -748,12 +748,14 @@ async function testDelete(fixtures, cookies) {
 }
 
 /**
- * PATCH /api/editor/articles/:id/draft: the editor edits a pending article. Only pending is
- * allowed (409 for every other status, and nothing changes); every invalid field gets 400 and
- * nothing changes; a valid edit replaces only the working copy, keeps the status pending,
- * ignores any other field in the body, and leaves the live version untouched; and the edited
- * version is what an approval then publishes. (Guest 401 and reporter 403 are checked in
- * testOnlyEditorsGetIn.)
+ * PATCH /api/editor/articles/:id/draft: the editor edits any article (requirements: the editor
+ * can edit all articles). A draft or returned article: only the working copy changes, the status
+ * stays, and empty fields are allowed (it is still being written). A pending article: every
+ * invalid field gets 400 and nothing changes; a valid edit replaces only the working copy, keeps
+ * the status pending, ignores any other field in the body, and leaves the live version untouched;
+ * and the edited version is what an approval then publishes. A live article with no update in
+ * progress: saving publishes the edit at once (with a history entry), saving it unchanged gets
+ * 409, and empty fields get 400. (Guest 401 and reporter 403 are checked in testOnlyEditorsGetIn.)
  *
  * @param {Object} fixtures - The ids from setUp.
  * @param {Object} cookies - The login cookies from setUp.
@@ -764,13 +766,31 @@ async function testEditDraft(fixtures, cookies) {
   const id = fixtures.editPendingId;
   const editedContent = { ...GOOD_CONTENT, title: `${RUN_TAG} edited by the editor`, body: 'Corrected first paragraph.\n\nSecond paragraph.' };
 
-  // Only pending: the reporter's work in progress and a plain live article are not the editor's to edit.
-  for (const [name, otherId] of [['a draft', fixtures.draftId], ['a returned article', fixtures.returnedId], ['a published article', fixtures.publishedId]]) {
+  // Work in progress: only the working copy changes, and the status stays.
+  for (const [name, otherId] of [['a draft', fixtures.draftId], ['a returned article', fixtures.returnedId]]) {
     const before = await readArticle(otherId);
-    checkStatus(`edit ${name}`, 409, await edit(otherId, editedContent));
+    const content = { ...editedContent, title: `${RUN_TAG} ${name}, edited by the editor` };
+    checkStatus(`edit ${name}`, 200, await edit(otherId, content));
     const after = await readArticle(otherId);
-    check(after.draft.title === before.draft.title && after.status === before.status, `editing ${name} must change nothing`);
+    check(after.draft.title === content.title && after.status === before.status && after.published === null,
+      `editing ${name} should change only its working copy, not its status`);
   }
+  checkStatus('edit a draft with an empty summary (still being written)', 200, await edit(fixtures.draftId, { ...editedContent, summary: '' }));
+
+  // A live article with no update in progress: saving publishes the edit at once.
+  const liveId = fixtures.editLiveId;
+  const liveBeforeEdit = await readArticle(liveId);
+  const { title, summary, category, imageUrl, body } = liveBeforeEdit.published;
+  checkStatus('save a live article without any change', 409, await edit(liveId, { title, summary, category, imageUrl, body }));
+  checkStatus('edit a live article with an empty summary', 400, await edit(liveId, { ...editedContent, summary: ' ' }));
+  const correctedContent = { ...GOOD_CONTENT, title: `${RUN_TAG} live, corrected by the editor` };
+  const publishedEdit = await edit(liveId, correctedContent);
+  checkStatus('edit a live article', 200, publishedEdit);
+  check(dataOf(publishedEdit).published === true && dataOf(publishedEdit).status === STATUS.PUBLISHED, 'the answer should say the edit was published');
+  const liveAfterEdit = await readArticle(liveId);
+  check(liveAfterEdit.published.title === correctedContent.title && liveAfterEdit.status === STATUS.PUBLISHED
+    && liveAfterEdit.publishHistory.length === liveBeforeEdit.publishHistory.length + 1,
+    'editing a live article should publish it at once and add a publish to its history');
   checkStatus('edit, malformed id', 400, await edit('abc', editedContent));
   checkStatus('edit, unknown id', 404, await edit(MISSING_ID, editedContent));
 
@@ -808,10 +828,11 @@ async function testEditDraft(fixtures, cookies) {
   check(String(liveAfter.reporter) === String(liveBefore.reporter), 'the owner must not change');
 
   const reviewPage = await request(cookies.editor, 'GET', `/editor/articles/${id}`);
-  check(reviewPage.text.includes(`${RUN_TAG} edited by the editor`) && reviewPage.text.includes('Edit the submitted version'),
+  check(reviewPage.text.includes(`${RUN_TAG} edited by the editor`) && reviewPage.text.includes('Edit the working version'),
     'the review page should show the edited version and still offer the Edit form');
   const publishedReview = await request(cookies.editor, 'GET', `/editor/articles/${fixtures.publishedId}`);
-  check(!publishedReview.text.includes('Edit the submitted version'), 'a published article with no update should not offer the Edit form');
+  check(publishedReview.text.includes('Edit the live article') && publishedReview.text.includes('Save and publish'),
+    'a published article should offer an Edit form that says it publishes at once');
 
   // The point of the edit: approving now publishes the editor's version.
   checkStatus('approve after the edit', 200, await request(cookies.editor, 'POST', `${API}/${id}/approve`));
@@ -869,6 +890,8 @@ async function setUp() {
       draft: liveContent('edit, submitted title'),
       ...liveFields(liveContent('edit, live title'), editor._id, twoDaysAgo),
     }),
+    // A live article with no update in progress, for the editor's edit that publishes at once.
+    editLiveId: await make(STATUS.PUBLISHED, { draft: liveContent('edit live'), ...liveFields(liveContent('edit live'), editor._id, twoDaysAgo) }),
   };
   return { fixtures, cookies, editorId: editor._id };
 }
