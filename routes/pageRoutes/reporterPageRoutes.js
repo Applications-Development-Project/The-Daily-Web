@@ -3,9 +3,8 @@
  *
  * Page routes for the reporter area. Mounted at "/" in app.js.
  * Created by OS in phase 0 with the paths and access from the routes table in
- * "Shared contracts". The dashboard route (GET /reporter) now runs real code in
- * the controller; the edit page route is still a PLACEHOLDER that answers 501
- * until the article editor page is built.
+ * "Shared contracts". EZ replaced both placeholders with the real dashboard and article
+ * editor pages.
  *
  * A route file only says WHICH URL goes to WHICH controller function and WHO may
  * use it. It holds no logic, so the access rules can be read in one glance.
@@ -33,8 +32,8 @@ const router = express.Router();
 // A guest is redirected to /login; a logged-in editor gets a 403 error page.
 // GET /reporter takes no id: the controller uses the logged-in reporter's own id
 // from the session, so there is no URL a reporter could change to see another list.
-// Only /reporter/articles/:id/edit has an :id, and that is where the ownership
-// check will be needed once the editor page is real.
+// Only /reporter/articles/:id/edit has an :id; there the controller's findOwnedArticle
+// checks that the article belongs to this reporter (403 otherwise).
 router.get('/reporter', requireRole('reporter'), reporterController.showReporterDashboard);
 router.get('/reporter/articles/:id/edit', requireRole('reporter'), reporterController.showArticleEditor);
 

@@ -1,8 +1,8 @@
 /**
- * scripts/testWorkflow.js
+ * tests/testWorkflow.js
  *
  * A small self-check for services/articleWorkflow.js. Run it with:
- *   node scripts/testWorkflow.js
+ *   node tests/testWorkflow.js
  * It needs no database and no test library (the work plan allows only plain
  * console.assert). It prints one line per failed check and a summary, and exits
  * with a non-zero code if anything failed, so it is easy to see in a terminal.
@@ -23,7 +23,7 @@
  * only the first one. At the end the script sets the exit code to 1 if any check
  * failed, so a terminal or a CI tool can tell "passed" from "failed".
  *
- * Used by: run by hand (EZ's acceptance check "node scripts/testWorkflow.js passes").
+ * Used by: run by hand (EZ's acceptance check "node tests/testWorkflow.js passes").
  * Related: services/articleWorkflow.js.
  * Owner: EZ.
  */

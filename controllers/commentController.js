@@ -6,29 +6,22 @@
  *   (guests are limited to 3 per minute by middleware/commentRateLimiter.js, which runs
  *   before addComment).
  * - For the editor: the comment moderation page and API (search, edit, delete).
- *   The page is views/editor/comments.ejs; public/js/commentModeration.js runs it.
+ *   The page is views/editor/comments.ejs; public/js/editor/comments.js runs it.
  *
  * Every comment sent to the browser has the shape { id, authorName, text, createdAt }.
  * deviceId is never sent: it identifies a reader's browser and is only for the server.
  *
  * Used by: routes/pageRoutes/commentPageRoutes.js, routes/apiRoutes/commentApiRoutes.js.
- * Related: models/Comment.js, models/Article.js, public/js/articleComments.js,
- * views/editor/comments.ejs, public/js/commentModeration.js.
+ * Related: models/Comment.js, models/Article.js, public/js/public/articleComments.js,
+ * views/editor/comments.ejs, public/js/editor/comments.js.
  * Owner: OS.
  */
 
 const Comment = require('../models/Comment');
 const Article = require('../models/Article');
 const logger = require('../services/logger');
-
-// A MongoDB id is exactly 24 hexadecimal characters. We check the shape ourselves
-// to give a clear 400 message. (mongoose.isValidObjectId also accepts any 12-character
-// string, so "hello world!" would pass it.)
-const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
-
-// The most comments one request returns. An article page shows the newest ones; this
-// keeps the answer small and fast even for an article with thousands of comments.
-const MAX_COMMENTS_PER_ARTICLE = 100;
+const { createHttpError } = require('../utils/httpErrors');
+const { isValidObjectId, escapeRegExp, readSearchText, readPageNumber } = require('../utils/requestValidation');
 
 // Length limits from the work plan, the same as in models/Comment.js. The model
 // checks them again as a safety net; here we give the reader a friendly message.
@@ -90,68 +83,6 @@ function toModerationCommentResponse(comment) {
 }
 
 /**
- * Builds the error passed to errorHandler, which answers with this status and message.
- *
- * @param {number} statusCode - A 4xx status.
- * @param {string} message - What the user is told.
- * @returns {Error}
- */
-function createClientError(statusCode, message) {
-  const error = new Error(message);
-  error.statusCode = statusCode;
-  return error;
-}
-
-/**
- * Puts a backslash before every character that has a special meaning in a regular
- * expression. Without this, searching for "a.b" would also match "axb" (the dot means
- * "any character"), and a search like "(((" would make the regular expression invalid.
- * (The same helper as in userController.js.)
- *
- * @param {string} text - What the editor typed.
- * @returns {string} The same text, safe to use inside a RegExp.
- */
-function escapeRegExp(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-/**
- * Reads ?search= from the URL. Missing means "no search".
- *
- * @param {*} searchValue - request.query.search. Express gives an array if the
- *   parameter appears twice (?search=a&search=b), so we check the type.
- * @returns {string} The trimmed search text, or '' for none.
- * @throws {Error} 400 if it isn't a single text value or is too long.
- */
-function readSearchText(searchValue) {
-  if (searchValue === undefined) {
-    return '';
-  }
-  if (typeof searchValue !== 'string' || searchValue.length > MAX_SEARCH_LENGTH) {
-    throw createClientError(400, 'Invalid search.');
-  }
-  return searchValue.trim();
-}
-
-/**
- * Reads ?page= from the URL. Missing means page 1.
- *
- * @param {*} pageValue - request.query.page.
- * @returns {number} A whole number, 1 or more.
- * @throws {Error} 400 for anything else, like "0", "-2", "1.5" or "abc".
- */
-function readPageNumber(pageValue) {
-  if (pageValue === undefined) {
-    return 1;
-  }
-  const page = Number(pageValue);
-  if (typeof pageValue !== 'string' || !Number.isInteger(page) || page < 1) {
-    throw createClientError(400, 'Page must be a whole number, 1 or more.');
-  }
-  return page;
-}
-
-/**
  * Finds a live article by its id from the URL. "Live" means it has a published
  * version (published is not null); readers can't see or comment on drafts.
  *
@@ -160,14 +91,14 @@ function readPageNumber(pageValue) {
  * @throws {Error} 400 if the id is malformed, 404 if there is no live article with it.
  */
 async function findLiveArticle(articleId) {
-  if (!OBJECT_ID_PATTERN.test(articleId)) {
-    throw createClientError(400, 'Invalid article id.');
+  if (!isValidObjectId(articleId)) {
+    throw createHttpError(400, 'Invalid article id.');
   }
 
   // We only need to know that it exists, so we load just its _id.
   const article = await Article.findOne({ _id: articleId, published: { $ne: null } }).select('_id').lean();
   if (!article) {
-    throw createClientError(404, 'Article not found.');
+    throw createHttpError(404, 'Article not found.');
   }
   return article;
 }
@@ -187,10 +118,10 @@ async function findLiveArticle(articleId) {
 function readCommentText(value) {
   const text = typeof value === 'string' ? value.trim() : '';
   if (text === '') {
-    throw createClientError(400, 'Please write a comment.');
+    throw createHttpError(400, 'Please write a comment.');
   }
   if (text.length > MAX_COMMENT_TEXT_LENGTH) {
-    throw createClientError(400, `A comment can be at most ${MAX_COMMENT_TEXT_LENGTH.toLocaleString('en-US')} characters.`);
+    throw createHttpError(400, `A comment can be at most ${MAX_COMMENT_TEXT_LENGTH.toLocaleString('en-US')} characters.`);
   }
   return text;
 }
@@ -208,10 +139,10 @@ function readNewCommentFields(body) {
   const authorName = typeof fields.authorName === 'string' ? fields.authorName.trim() : '';
 
   if (authorName === '') {
-    throw createClientError(400, 'Please enter your name.');
+    throw createHttpError(400, 'Please enter your name.');
   }
   if (authorName.length > MAX_AUTHOR_NAME_LENGTH) {
-    throw createClientError(400, `Your name can be at most ${MAX_AUTHOR_NAME_LENGTH} characters.`);
+    throw createHttpError(400, `Your name can be at most ${MAX_AUTHOR_NAME_LENGTH} characters.`);
   }
 
   return { authorName: authorName, text: readCommentText(fields.text) };
@@ -225,19 +156,19 @@ function readNewCommentFields(body) {
  * @throws {Error} 400 if the id is malformed, 404 if there is no such comment.
  */
 async function findCommentById(commentId) {
-  if (!OBJECT_ID_PATTERN.test(commentId)) {
-    throw createClientError(400, 'Invalid comment id.');
+  if (!isValidObjectId(commentId)) {
+    throw createHttpError(400, 'Invalid comment id.');
   }
   const comment = await Comment.findById(commentId);
   if (!comment) {
-    throw createClientError(404, 'Comment not found.');
+    throw createHttpError(404, 'Comment not found.');
   }
   return comment;
 }
 
 /**
  * GET /api/articles/:id/comments - the article's comments, newest first
- * (at most MAX_COMMENTS_PER_ARTICLE). Open to everyone.
+ * (at most Comment.MAX_SHOWN_PER_ARTICLE, the same number the article page shows). Open to everyone.
  * Answers 200 { success: true, data: { comments: [...] } }.
  *
  * The query matches the { article: 1, createdAt: -1 } index on Comment, so MongoDB
@@ -254,7 +185,7 @@ async function listArticleComments(request, response) {
 
   const comments = await Comment.find({ article: article._id })
     .sort({ createdAt: -1, _id: -1 })
-    .limit(MAX_COMMENTS_PER_ARTICLE)
+    .limit(Comment.MAX_SHOWN_PER_ARTICLE)
     .select('authorName text createdAt')
     .lean();
 
@@ -272,7 +203,7 @@ async function listArticleComments(request, response) {
  * attach a comment to a different article by editing the request.
  *
  * Text is saved exactly as typed, HTML included. It is made safe when shown:
- * articleComments.js uses textContent and EJS uses the escaping <%= %> tag.
+ * public/js/public/articleComments.js uses textContent and EJS uses the escaping <%= %> tag.
  *
  * @param {import('express').Request} request - The new comment.
  * @param {import('express').Response} response - The JSON answer.
@@ -299,7 +230,7 @@ async function addComment(request, response) {
  * GET /editor/comments - the comment moderation page (editor only).
  *
  * It sends only the page frame, with no comments in it. The browser script
- * (public/js/commentModeration.js) loads them from GET /api/comments, so the rows are
+ * (public/js/editor/comments.js) loads them from GET /api/comments, so the rows are
  * built in one place only and the first page works exactly like every later page.
  * This page doesn't need to be found by search engines (it is behind a login), so
  * unlike the article page there is no reason to render the list on the server.
@@ -309,7 +240,7 @@ async function addComment(request, response) {
  * @returns {void}
  */
 function showCommentModerationPage(request, response) {
-  response.render('editor/comments', { title: 'Comments - The Web Daily' });
+  response.render('editor/comments', { title: 'Comments - The Daily Web' });
 }
 
 /**
@@ -329,7 +260,7 @@ function showCommentModerationPage(request, response) {
  * @throws {Error} 400 for an invalid search or page (passed on to errorHandler).
  */
 async function searchComments(request, response) {
-  const searchText = readSearchText(request.query.search);
+  const searchText = readSearchText(request.query.search, MAX_SEARCH_LENGTH);
   const page = readPageNumber(request.query.page);
 
   // An empty filter {} matches every comment. With a search, $or matches either field.

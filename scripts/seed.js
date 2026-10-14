@@ -53,7 +53,7 @@ const BCRYPT_ROUNDS = 10;
 
 // The demo accounts. Usernames are simple so they're easy to type in a demo;
 // display names are what readers see on articles. The requirements ask for one
-// editor and several reporters. scripts/testReporterApi.js (EZ) logs in as editor,
+// editor and several reporters. tests/testReporterApi.js (EZ) logs in as editor,
 // reporter1 and reporter2, so those three usernames must stay.
 const DEMO_USERS = [
   { username: 'editor', displayName: 'Maya Cohen', role: 'editor' },
@@ -206,7 +206,7 @@ const COMMENT_TEXTS = [
 // One seeded comment contains HTML on purpose, so the defense can show that text
 // typed by readers is always displayed as plain text and never runs: the article page
 // prints comments with the escaping <%= %> tag, and the browser scripts use
-// textContent (public/js/articleComments.js, public/js/commentModeration.js).
+// textContent (public/js/public/articleComments.js, public/js/editor/comments.js).
 const XSS_DEMO_COMMENT = {
   authorName: '<b>Test reader</b>',
   text: '<script>alert("hacked")</script> If you can read this tag, the page is safe.',
@@ -696,19 +696,20 @@ async function clearDatabase() {
 }
 
 /**
- * Makes sure every index defined in our models exists before we insert data.
- * On a brand-new database the collections don't exist yet; createIndexes()
- * creates them with their indexes, so for example the unique username rule
- * already applies to the users this script creates.
+ * Makes the database's indexes match the indexes defined in our models, before we insert data.
+ * On a brand-new database the collections don't exist yet; syncIndexes() creates them with
+ * their indexes, so for example the unique username rule already applies to the users this
+ * script creates. On an existing database it also removes an index a model no longer defines
+ * (createIndexes() would only add), so after a re-seed every computer has exactly our indexes.
  *
  * @returns {Promise<void>}
  */
 async function createAllIndexes() {
-  await User.createIndexes();
-  await Article.createIndexes();
-  await ArticleViewStats.createIndexes();
-  await DeviceArticleView.createIndexes();
-  await Comment.createIndexes();
+  await User.syncIndexes();
+  await Article.syncIndexes();
+  await ArticleViewStats.syncIndexes();
+  await DeviceArticleView.syncIndexes();
+  await Comment.syncIndexes();
 }
 
 /**

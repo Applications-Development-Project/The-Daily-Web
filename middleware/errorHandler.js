@@ -18,12 +18,12 @@
  *   return next(error);
  *
  * Used by: app.js (registered last).
- * Related: middleware/isApiRequest.js, middleware/notFoundHandler.js,
+ * Related: utils/isApiRequest.js, middleware/notFoundHandler.js,
  * views/public/error.ejs, services/logger.js.
  * Owner: OS.
  */
 
-const isApiRequest = require('./isApiRequest');
+const isApiRequest = require('../utils/isApiRequest');
 const logger = require('../services/logger');
 
 // Shown for every unexpected (500) error. We never send the real error message to

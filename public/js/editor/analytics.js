@@ -1,5 +1,5 @@
 /**
- * public/js/analyticsChart.js
+ * public/js/editor/analytics.js
  *
  * Runs the Impact Analytics page (views/editor/analytics.ejs): the editor searches an
  * article by title, picks it, chooses a period, and sees a Chart.js line chart of its

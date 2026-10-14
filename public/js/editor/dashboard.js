@@ -1,5 +1,5 @@
 /**
- * public/js/editorDashboard.js
+ * public/js/editor/dashboard.js
  *
  * Fills the editor dashboard's table (views/editor/dashboard.ejs) with articles from
  * GET /api/editor/articles, 20 per page. Changing the status filter, typing in the title

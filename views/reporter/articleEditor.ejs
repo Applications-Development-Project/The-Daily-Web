@@ -4,7 +4,7 @@
   The reporter's article editor: a form with the five fields of an article's draft
   (title, summary, category, image URL, body), filled from the draft stored on the
   server. There is deliberately NO Save button: the requirements say work must be saved
-  continuously, so public/js/reporterEditor.js sends the form to the server a moment
+  continuously, so public/js/reporter/articleEditor.js sends the form to the server a moment
   after the reporter stops typing, and shows the result in the status line. The page has
   one button, "Submit for approval", which sends the finished article to the editor. A hidden
   notice (session-expired-notice) tells the reporter if the login session ends while editing.
@@ -59,7 +59,7 @@
         shown until the first save and is then replaced by the script (with textContent). %>
     <p id="save-status" role="status">Your work is saved automatically.</p>
 
-    <%# Shown by reporterEditor.js only when the server answers 401, which means the login session
+    <%# Shown by public/js/reporter/articleEditor.js only when the server answers 401, which means the login session
         has ended (it expired, or the reporter logged out in another tab). It is written here as
         normal HTML (hidden until needed) and not built in the script, so no text is ever turned
         into HTML. The link opens the login page in a NEW tab (target="_blank"): going to the
@@ -116,7 +116,7 @@
     <%# The only button of the page. It sits OUTSIDE the form and has type="button", so it never
         submits the form in the browser's normal way (that would reload the page). Autosave keeps
         the text safe while writing; this button is the reporter's decision "I am finished, send
-        it to the editor". public/js/reporterEditor.js first saves the latest text, and only then
+        it to the editor". public/js/reporter/articleEditor.js first saves the latest text, and only then
         asks the server to submit. The server checks everything again (required fields, status).
         The paragraph below the button receives the server's message when something is wrong
         (role="alert" makes screen readers announce it). %>
@@ -129,8 +129,8 @@
 
   <%- include('../partials/footer') %>
 
-  <%# Order matters: reporterEditor.js calls apiClient, so apiClient.js must load first. %>
+  <%# Order matters: public/js/reporter/articleEditor.js calls apiClient, so apiClient.js must load first. %>
   <script src="/js/shared/apiClient.js"></script>
-  <script src="/js/reporterEditor.js"></script>
+  <script src="/js/reporter/articleEditor.js"></script>
 </body>
 </html>

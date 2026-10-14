@@ -3,7 +3,7 @@
 
   The editor's user management page: search the users, add a reporter or editor, edit a
   user's display name, role or password in the table, and delete a user. The page is
-  sent as an empty frame; public/js/userManagement.js loads the users from the Users API
+  sent as an empty frame; public/js/editor/users.js loads the users from the Users API
   and does every change with Ajax, so the page never reloads.
 
   Locals: currentUser (set for every view by middleware/setCurrentUser.js). Its id goes
@@ -20,7 +20,7 @@
 %>
 <!DOCTYPE html>
 <html lang="en">
-<%- include('../partials/head', { title: 'Users - The Web Daily' }) %>
+<%- include('../partials/head', { title: 'Users - The Daily Web' }) %>
 
 <body class="page-container">
   <%- include('../partials/header') %>
@@ -32,10 +32,15 @@
 
     <section class="card" aria-labelledby="add-user-title">
       <h3 id="add-user-title">Add a user</h3>
+      <%# The browser checks these attributes before sending (a quick answer); the server checks
+          the same rules again in userController.js, because a request can be sent without this page.
+          pattern is the same rule as USERNAME_PATTERN on the server, and title is the message the
+          browser shows when it doesn't match. %>
       <form id="add-user-form">
         <div class="form-field">
           <label for="new-username">Username</label>
-          <input id="new-username" name="username" type="text" autocomplete="off" minlength="3" maxlength="30" required>
+          <input id="new-username" name="username" type="text" autocomplete="off" minlength="3" maxlength="30" required
+            pattern="[A-Za-z0-9._\-]+" title="Letters, digits, dots, dashes and underscores only">
         </div>
         <div class="form-field">
           <label for="new-display-name">Display name</label>
@@ -63,7 +68,7 @@
 
       <form id="user-search-form" role="search">
         <label for="user-search">Search by username or display name</label>
-        <input id="user-search" name="search" type="search" maxlength="100">
+        <input id="user-search" name="search" type="search" class="form-field" maxlength="100" autocomplete="off">
       </form>
 
       <p id="user-list-error" class="form-error" role="alert" hidden></p>
@@ -99,8 +104,8 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: userManagement.js uses it. %>
+  <%# apiClient first: public/js/editor/users.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
-  <script src="/js/userManagement.js"></script>
+  <script src="/js/editor/users.js"></script>
 </body>
 </html>

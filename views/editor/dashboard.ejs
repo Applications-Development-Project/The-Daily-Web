@@ -4,7 +4,7 @@
   The editor dashboard: every article in the system, with a status filter, a title
   search and pages of 20. Each row links to the article's review page.
 
-  The table body starts empty. public/js/editorDashboard.js fills it from
+  The table body starts empty. public/js/editor/dashboard.js fills it from
   GET /api/editor/articles and refills it after every filter, search or page change,
   without reloading the page (Ajax). The element ids below are what that script uses.
   Why not render the first page here too: then the row layout would exist twice (here
@@ -97,8 +97,8 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: editorDashboard.js uses it. %>
+  <%# apiClient first: public/js/editor/dashboard.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
-  <script src="/js/editorDashboard.js"></script>
+  <script src="/js/editor/dashboard.js"></script>
 </body>
 </html>
