@@ -71,8 +71,10 @@ function formatFeedDate(isoDate) {
  */
 function createArticleCard(card) {
   const article = document.createElement('article');
-  article.className = 'card article-card';
+  article.className = card.imageUrl ? 'card article-card article-card-with-image' : 'card article-card';
   article.dataset.articleId = card.id;
+  const text = document.createElement('div');
+  text.className = 'article-card-text';
 
   const badge = document.createElement('span');
   badge.className = 'category-badge';
@@ -93,8 +95,6 @@ function createArticleCard(card) {
   time.textContent = formatFeedDate(card.publishedAt);
   meta.append(`By ${card.reporterName} | `, time, ` | ${card.totalViews} views`);
 
-  article.append(badge, heading, meta);
-
   if (card.imageUrl) {
     const image = document.createElement('img');
     image.className = 'article-card-image';
@@ -112,7 +112,8 @@ function createArticleCard(card) {
 
   const summary = document.createElement('p');
   summary.textContent = card.summary;
-  article.append(summary);
+  text.append(badge, heading, meta, summary);
+  article.append(text);
 
   return article;
 }

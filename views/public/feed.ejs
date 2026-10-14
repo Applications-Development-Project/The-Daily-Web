@@ -92,18 +92,9 @@
                 aria-live="polite": screen readers announce new cards and messages. %>
             <div id="feed-list" data-has-more="<%= hasMore ? 'true' : 'false' %>" aria-live="polite">
                 <% articles.forEach(function (article) { %>
-                    <article class="card article-card" data-article-id="<%= article.id %>">
-                        <span class="category-badge"><%= article.category %></span>
-                        <h3 class="article-card-title">
-                            <a href="/articles/<%= article.id %>"><%= article.title %></a>
-                        </h3>
-                        <p class="article-card-meta">
-                            By <%= article.reporterName %> |
-                            <% if (article.publishedAt) { %>
-                                <time datetime="<%= article.publishedAt.toISOString() %>"><%= article.publishedAt.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %></time> |
-                            <% } %>
-                            <%= article.totalViews %> views
-                        </p>
+                    <%# A card with an image gets article-card-with-image: on a wide screen the image
+                        sits beside the text (a Flexbox row), on a phone above it (main.css). %>
+                    <article class="card article-card<%= article.imageUrl ? ' article-card-with-image' : '' %>" data-article-id="<%= article.id %>">
                         <% if (article.imageUrl) { %>
                             <%# loading="lazy": images further down load only when the reader scrolls to them.
                                 onerror: if the image's host is down or the link is broken, show our own
@@ -113,7 +104,20 @@
                             <img class="article-card-image" src="<%= article.imageUrl %>" alt="<%= article.title %>"
                                 loading="lazy" onerror="this.onerror=null; this.src='/images/placeholder.svg';">
                         <% } %>
-                        <p><%= article.summary %></p>
+                        <div class="article-card-text">
+                            <span class="category-badge"><%= article.category %></span>
+                            <h3 class="article-card-title">
+                                <a href="/articles/<%= article.id %>"><%= article.title %></a>
+                            </h3>
+                            <p class="article-card-meta">
+                                By <%= article.reporterName %> |
+                                <% if (article.publishedAt) { %>
+                                    <time datetime="<%= article.publishedAt.toISOString() %>"><%= article.publishedAt.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %></time> |
+                                <% } %>
+                                <%= article.totalViews %> views
+                            </p>
+                            <p><%= article.summary %></p>
+                        </div>
                     </article>
                 <% }); %>
                 <% if (articles.length === 0) { %>
