@@ -163,7 +163,7 @@ async function showAnalyticsPage(request, response) {
   }
 
   response.render('editor/analytics', {
-    title: 'Impact Analytics - Editor - The Web Daily',
+    title: 'Impact Analytics - Editor - The Daily Web',
     rangeOptions: RANGE_OPTIONS,
     defaultRangeDays: DEFAULT_RANGE_DAYS,
     initialArticle: initialArticle,

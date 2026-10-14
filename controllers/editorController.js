@@ -301,7 +301,7 @@ function showEditorDashboard(request, response) {
   // always offers exactly the statuses the API accepts.
   const statusOptions = Object.values(STATUS).map((status) => ({ value: status, label: STATUS_LABELS[status] }));
   response.render('editor/dashboard', {
-    title: 'Articles - Editor - The Web Daily',
+    title: 'Articles - Editor - The Daily Web',
     statusOptions: statusOptions,
   });
 }
@@ -335,7 +335,7 @@ async function showArticleReview(request, response) {
 
   const review = toReviewView(article, request.session.user.role);
   response.render('editor/articleReview', {
-    title: `Review: ${review.title} - Editor - The Web Daily`,
+    title: `Review: ${review.title} - Editor - The Daily Web`,
     review: review,
     // The categories the Edit form offers: the model's list, so the form can never offer
     // a category the server would refuse.

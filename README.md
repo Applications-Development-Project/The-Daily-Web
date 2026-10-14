@@ -1,4 +1,4 @@
-# The Web Daily
+# The Daily Web
 
 A news site where reporters write articles, an editor reviews and publishes them, and guests read
 and comment. Built with Node.js, Express, EJS and MongoDB, following the MVC structure taught in the course.

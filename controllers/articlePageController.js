@@ -97,7 +97,7 @@ async function showArticlePage(request, response) {
 
   const published = article.published;
   response.render('public/article', {
-    title: `${published.title} - The Web Daily`,
+    title: `${published.title} - The Daily Web`,
     // The summary becomes the page's meta description, the text search engines show
     // under the link in their results.
     description: published.summary,
