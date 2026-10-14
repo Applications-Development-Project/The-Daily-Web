@@ -168,9 +168,9 @@ that use `console.assert` and print a summary.
 
 | Script | Checks | Needs |
 |---|---|---|
-| `node scripts/testWorkflow.js` | The status rules (which role may move an article from which status to which) | Nothing |
-| `node scripts/testReporterApi.js` | The reporter routes: permissions, ownership, statuses, invalid input | A running server and a test database |
-| `node scripts/testEditorApi.js` | The editor routes and view counting: permissions, list, approve, return, delete, statistics, invalid input | A running server and a test database |
+| `node tests/testWorkflow.js` | The status rules (which role may move an article from which status to which) | Nothing |
+| `node tests/testReporterApi.js` | The reporter routes: permissions, ownership, statuses, invalid input | A running server and a test database |
+| `node tests/testEditorApi.js` | The editor routes and view counting: permissions, list, approve, return, delete, statistics, invalid input | A running server and a test database |
 
 The two API scripts create and delete articles, so they **refuse to run** unless the database name ends
 with `-test`. Each script's header has the exact steps; in short (PowerShell):
@@ -178,7 +178,7 @@ with `-test`. Each script's header has the exact steps; in short (PowerShell):
 ```
 $env:MONGODB_URI='mongodb://127.0.0.1:27017/the-web-daily-test'; $env:PORT='3098'; npm run seed
 npm start                                   (in a second terminal, with the same two values)
-node scripts/testEditorApi.js               (back in the first terminal)
+node tests/testEditorApi.js               (back in the first terminal)
 ```
 
 ## Team

@@ -1,5 +1,5 @@
 /**
- * scripts/testEditorApi.js
+ * tests/testEditorApi.js
  *
  * A self-check for the editor's routes and the view counting, run against a REAL running
  * server. It sends many requests, a lot of them deliberately wrong, and checks that each one
@@ -31,14 +31,14 @@
  *        MONGODB_URI=mongodb://127.0.0.1:27017/the-web-daily-test PORT=3098 npm run seed
  *   2. In a second terminal start the server with the SAME two values (npm start).
  *   3. In the first terminal (the two values are still set there) run:
- *        node scripts/testEditorApi.js
+ *        node tests/testEditorApi.js
  * The logins use the seeded users editor and reporter1, with the password SEED_DEMO_PASSWORD
  * from your .env (it is never written in this file).
  * It needs no test library (the work plan allows only plain console.assert). It prints one line
  * per failed check and a summary, and exits with a non-zero code if anything failed.
  *
  * Safety (why this script can't damage real data). It approves, returns and deletes articles,
- * so it follows the same three guards as EZ's scripts/testReporterApi.js:
+ * so it follows the same three guards as EZ's tests/testReporterApi.js:
  *   1. It refuses to start unless the database name in MONGODB_URI ends with "-test".
  *   2. It writes a marker article and asks the server (a read-only request) whether it can see
  *      it. If not, the server uses a different database, and the script stops before writing more.

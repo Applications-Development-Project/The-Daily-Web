@@ -53,7 +53,7 @@ const BCRYPT_ROUNDS = 10;
 
 // The demo accounts. Usernames are simple so they're easy to type in a demo;
 // display names are what readers see on articles. The requirements ask for one
-// editor and several reporters. scripts/testReporterApi.js (EZ) logs in as editor,
+// editor and several reporters. tests/testReporterApi.js (EZ) logs in as editor,
 // reporter1 and reporter2, so those three usernames must stay.
 const DEMO_USERS = [
   { username: 'editor', displayName: 'Maya Cohen', role: 'editor' },
