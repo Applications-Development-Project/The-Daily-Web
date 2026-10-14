@@ -1,15 +1,40 @@
+<%#
+  views/partials/header.ejs
+
+  The site header on every page: the site name (a link to the home page) and the login
+  state on the right.
+  - A guest sees "Log in".
+  - A logged-in user sees their name, a link to their own area (/reporter or /editor,
+    chosen by their role) and a "Log out" button.
+
+  Where currentUser comes from: middleware/setCurrentUser.js puts the session user
+  ({ id, role, displayName }, or null for a guest) in res.locals.currentUser on every request,
+  so every view has it without each controller passing it. The role shown here only decides
+  which link to show; it protects nothing. Every protected page and API checks the role
+  again on the server (requireLogin / requireRole), so a hidden link is never the protection.
+
+  Logging out is a plain HTML form that POSTs to /logout: it works on every page even with
+  JavaScript turned off, and POST (not a GET link) means another website can't log a reader
+  out just by linking to us (see controllers/authController.js, logOut).
+
+  The display name is printed with the escaping tag, so a name containing HTML is shown as text.
+  The site name is the page's h1; each page's own title is an h2 below it.
+
+  Included by: every page view. Styles: site-header, site-title, site-nav, inline-form in
+  public/css/main.css.
+  Owner: SH (layout). The login state and the logout form are a contract with OS.
+%>
 <header class="site-header">
-    <h1><a href="/" style="color: white; text-decoration: none;">The Web Daily</a></h1>
-    <nav>
+    <h1 class="site-title"><a href="/">The Web Daily</a></h1>
+    <nav class="site-nav" aria-label="Account">
         <% if (currentUser) { %>
             <span>Welcome, <%= currentUser.displayName %></span>
             <% if (currentUser.role === 'reporter') { %>
-                <a href="/reporter" class="btn btn-primary">My Articles</a>
+                <a href="/reporter" class="btn btn-primary">My articles</a>
             <% } else if (currentUser.role === 'editor') { %>
-                <a href="/editor" class="btn btn-primary">Dashboard</a>
+                <a href="/editor" class="btn btn-primary">Editor area</a>
             <% } %>
-            <!-- Logout button as a POST form without JS, as required -->
-            <form method="post" action="/logout" style="display: inline;">
+            <form method="post" action="/logout" class="inline-form">
                 <button type="submit" class="btn btn-danger">Log out</button>
             </form>
         <% } else { %>

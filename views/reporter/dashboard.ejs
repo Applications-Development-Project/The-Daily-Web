@@ -59,10 +59,9 @@
     <% if (articles.length === 0) { %>
       <p class="empty-state">You have no articles yet.</p>
     <% } else { %>
-      <%# On a narrow screen the table scrolls sideways inside this box, not the whole page. %>
-      <%# TEMP: inline style until SH adds a shared scroll-wrapper class to main.css.
-          Open question 5 in the plan: styles belong in main.css. %>
-      <div style="overflow-x: auto;">
+      <%# On a narrow screen the table scrolls sideways inside this box, not the whole page
+          (table-scroll is the shared class in public/css/main.css, used by every table). %>
+      <div class="table-scroll">
         <table class="data-table">
           <thead>
             <tr>

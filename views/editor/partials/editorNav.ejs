@@ -18,10 +18,9 @@
   Included by: views/editor/dashboard.ejs and articleReview.ejs (SM; the review page
   passes 'dashboard', because reviewing an article is part of the Articles area),
   views/editor/analytics.ejs (SM), views/editor/users.ejs and comments.ejs (OS).
-  Styling: the classes editor-nav, editor-nav-list and editor-nav-link, and the
-  current link's aria-current="page", are for the shared stylesheet
-  public/css/main.css (SH). Until SH styles them, the nav shows as a plain list,
-  which still works.
+  Styling: the classes editor-nav, editor-nav-list and editor-nav-link in
+  public/css/main.css show the links as one row; the current link (aria-current="page")
+  is underlined, so the editor sees where they are.
   Owner: SM.
 
   This block is an EJS comment (it opens with a # sign), so it is never sent to the browser.

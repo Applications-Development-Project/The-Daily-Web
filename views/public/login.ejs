@@ -12,47 +12,41 @@
   The page's script is public/js/public/login.js (every page's browser code lives in
   public/js/<area>/, so there are no inline scripts).
 
-  Owner: OS (Logic) / SH (Layout & Partials).
+  Styles: login-card, login-intro and btn-block in public/css/main.css (no inline styles).
+  Owner: OS (logic) / SH (layout and partials).
 %>
 <!DOCTYPE html>
 <html lang="en">
-<!-- Load the head partial and pass a dynamic title -->
 <%- include('../partials/head', { title: 'Log in - The Web Daily' }) %>
 
 <body class="page-container">
     <%- include('../partials/header') %>
 
-    <div class="main-content-wrapper login-container" style="max-width: 400px; margin: var(--spacing-lg) auto;">
-        <main class="main-content">
-            <section class="card login-card" aria-labelledby="login-title" style="padding: var(--spacing-lg);">
-                <h1 id="login-title" style="margin-bottom: var(--spacing-md); text-align: center;">Log in</h1>
-                <p style="text-align: center; margin-bottom: var(--spacing-md); color: #666;">For reporters and editors. Readers don't need an account.</p>
+    <main class="main-content">
+        <section class="card login-card" aria-labelledby="login-title">
+            <%# h2: the shared header already holds the page's h1 (the site name). %>
+            <h2 id="login-title">Log in</h2>
+            <p class="login-intro">For reporters and editors. Readers don't need an account.</p>
 
-                <%# method="post" matters even though the script sends the form itself: if the
-                    script ever fails to load, the browser would otherwise send the form with GET
-                    and put the password in the address bar and the browser history. %>
-                <%# autocomplete="username" and "current-password" let the browser's password
-                    manager fill in and save the login. %>
-                <form id="login-form" method="post" action="/api/auth/login">
-                    
-                    <div style="margin-bottom: var(--spacing-md);">
-                        <label for="username" style="display: block; margin-bottom: var(--spacing-sm);">Username</label>
-                        <input id="username" name="username" type="text" class="form-field" autocomplete="username" maxlength="30" required autofocus>
-                    </div>
+            <%# method="post" matters even though the script sends the form itself: if the
+                script ever fails to load, the browser would otherwise send the form with GET
+                and put the password in the address bar and the browser history. %>
+            <%# autocomplete="username" and "current-password" let the browser's password
+                manager fill in and save the login. %>
+            <form id="login-form" method="post" action="/api/auth/login">
+                <label for="username">Username</label>
+                <input id="username" name="username" type="text" class="form-field" autocomplete="username" maxlength="30" required autofocus>
 
-                    <div style="margin-bottom: var(--spacing-md);">
-                        <label for="password" style="display: block; margin-bottom: var(--spacing-sm);">Password</label>
-                        <input id="password" name="password" type="password" class="form-field" autocomplete="current-password" maxlength="200" required>
-                    </div>
+                <label for="password">Password</label>
+                <input id="password" name="password" type="password" class="form-field" autocomplete="current-password" maxlength="200" required>
 
-                    <%# role="alert" makes screen readers announce the error as soon as it appears. %>
-                    <p id="login-error" class="form-error" role="alert" hidden></p>
+                <%# role="alert" makes screen readers announce the error as soon as it appears. %>
+                <p id="login-error" class="form-error" role="alert" hidden></p>
 
-                    <button id="login-button" class="btn btn-primary" type="submit" style="width: 100%;">Log in</button>
-                </form>
-            </section>
-        </main>
-    </div>
+                <button id="login-button" class="btn btn-primary btn-block" type="submit">Log in</button>
+            </form>
+        </section>
+    </main>
 
     <%- include('../partials/footer') %>
 

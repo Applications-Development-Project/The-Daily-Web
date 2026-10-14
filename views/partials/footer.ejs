@@ -1,3 +1,13 @@
+<%#
+  views/partials/footer.ejs
+
+  The site footer on every page. The year is computed when the page is rendered, so it
+  never goes out of date.
+
+  Included by: every page view. Styles: site-footer in public/css/main.css (the page
+  layout keeps it at the bottom even on a short page).
+  Owner: SH.
+%>
 <footer class="site-footer">
-    <p>&copy; 2026 The Web Daily. All rights reserved.</p>
+    <p>&copy; <%= new Date().getFullYear() %> The Web Daily</p>
 </footer>
