@@ -18,7 +18,8 @@ by, see [CONVENTIONS.md](../CONVENTIONS.md).
 9. [How each file explains itself](#9-how-each-file-explains-itself)
 10. [Preparing for the defense](#10-preparing-for-the-defense)
 
-[Appendix: every page and API URL](#appendix-every-page-and-api-url)
+- [Appendix: where each requirement lives](#appendix-where-each-requirement-lives)
+- [Appendix: every page and API URL](#appendix-every-page-and-api-url)
 
 ## 1. Technologies
 
@@ -147,7 +148,7 @@ The sections below go through each folder file by file.
 | `app.js` | The Express app. Read its header first: it lists the middleware order and why |
 | `package.json` | The packages and the `npm` commands (`start`, `dev`, `seed`, `test:*`) |
 | `.env.example` | The settings each of us copies into our own `.env` (which is never committed) |
-| `README.md` | For the lecturer: install, demo users, features, where each requirement lives, design decisions in short |
+| `README.md` | For the lecturer: how to install and run the project, the demo users and the main features |
 | `CONVENTIONS.md` | How we write code: comments, naming, where files go, Git |
 
 ### `config/`: connecting to outside pieces
@@ -286,7 +287,7 @@ and goes to `returnArticleToReporter` in `controllers/editorController.js`. The
 **From a page.** The page's view is `views/<area>/<page>.ejs`; its script, if it has one, is
 `public/js/<area>/<page>.js`. The view's header says which controller renders it and with which values.
 
-**From a requirement.** The README's table ["Where each requirement lives"](../README.md#where-each-requirement-lives)
+**From a requirement.** The table ["Where each requirement lives"](#appendix-where-each-requirement-lives)
 lists the files for each requirement of the project document.
 
 ## 7. Following a request from start to finish
@@ -583,6 +584,50 @@ These are the decisions the lecturer is most likely to ask about. Each one has a
   cookies instead of CSRF tokens, the reporter's list without paging, Chart.js needing internet. Showing you know the
   trade-off is better than being caught by it.
 - **If you don't know, say how you would find out** (which file, which test) instead of guessing.
+
+## Appendix: where each requirement lives
+
+Each row is one requirement from the project document, and the files that implement it, in the order a
+request goes through them (route → middleware → controller → service / model → view → browser script).
+Route files are in `routes/pageRoutes/` (pages) and `routes/apiRoutes/` (JSON), named after the area.
+
+| Requirement | Server side | Page and browser script |
+|---|---|---|
+| Feed: only published articles, 20 per page, infinite scroll | `controllers/feedController.js` (`listFeedArticles`, `showFeedPage`) | `views/public/feed.ejs`, `public/js/public/feed.js` |
+| Search, category and viewed filters, sort by date or popularity, without reload | `controllers/feedController.js` (`readFeedQuery`, `buildFeedFilter`), `models/DeviceArticleView.js` | `public/js/public/feed.js` |
+| Full article page, readable by search engines | `controllers/articlePageController.js` | `views/public/article.ejs` |
+| Every visit counts for the statistics | `services/viewTracker.js` (`recordView`), `models/ArticleViewStats.js` | |
+| Comments: list and add without reloading the list | `controllers/commentController.js` (`listArticleComments`, `addComment`), `models/Comment.js` | `public/js/public/articleComments.js` |
+| A guest may post at most 3 comments a minute per device | `middleware/commentRateLimiter.js`, `middleware/assignDeviceId.js` | |
+| Login for reporters and editors; each goes to their own area | `controllers/authController.js`, `config/session.js` | `views/public/login.ejs`, `public/js/public/login.js` |
+| Permissions from the logged-in user, checked on the server | `middleware/requireLogin.js`, `middleware/requireRole.js`, `middleware/setCurrentUser.js` | |
+| Passwords never stored in plain text | `models/User.js`, `controllers/userController.js` (bcrypt) | |
+| Still logged in after a server restart | `config/session.js` (sessions stored in MongoDB) | |
+| Reporter: own articles and their status, create, edit, submit, see the editor's note, resubmit | `controllers/reporterController.js` | `views/reporter/dashboard.ejs`, `public/js/reporter/dashboard.js` |
+| Status transitions; every other transition refused | `services/articleWorkflow.js` (`canTransition`) | |
+| Work saved continuously, never lost (refresh, closed browser, another computer) | `controllers/reporterController.js` (`autosaveDraft`, `showArticleEditor`), `services/draftValidation.js` | `views/reporter/articleEditor.ejs`, `public/js/reporter/articleEditor.js` |
+| Editing a live article: readers keep the approved version until approval | `models/Article.js` (`draft` / `published`), `controllers/editorController.js` (`approveArticle`) | |
+| Editor: all articles, filter by status | `controllers/editorController.js` (`listAllArticles`) | `views/editor/dashboard.ejs`, `public/js/editor/dashboard.js` |
+| Editor: view, edit, approve, return with a note, delete | `controllers/editorController.js` | `views/editor/articleReview.ejs`, `public/js/editor/articleReview.js` |
+| Editor sees what is live and what awaits approval | `controllers/editorController.js` (`toReviewView`, `findChangedFields`) | `views/editor/partials/articleContent.ejs` |
+| Impact Analytics chart with publish markers | `controllers/analyticsController.js`, `services/viewTracker.js` (`getViewsOverTime`) | `views/editor/analytics.ejs`, `public/js/editor/analytics.js` |
+| Statistics that scale to thousands of readers | `models/ArticleViewStats.js` (one counter per article per hour) | |
+| Full CRUD on every model, search on a main field | See [CRUD coverage](#crud-coverage) | |
+| Errors and invalid data never crash the server | `middleware/errorHandler.js`, `utils/requestValidation.js`, `utils/httpErrors.js` | `views/public/error.ejs` |
+| Logs of errors and important events | `services/logger.js` (`logs/app.log`, `logs/error.log`) | |
+| Weather widget from an external service, at most 15 minutes old | `services/weatherService.js`, `controllers/weatherController.js` | `views/partials/sidebar.ejs`, `public/js/public/weatherWidget.js` |
+| Semantic HTML5, responsive layout (computer, tablet, phone) | | `views/partials/*.ejs`, `public/css/main.css` |
+| Demo data: 500+ articles, several reporters, comments, updates, view history | `scripts/seed.js` | |
+
+### CRUD coverage
+
+| Model | Create | Read, list and search | Update | Delete |
+|---|---|---|---|---|
+| `User` | User management (`POST /api/users`) | `GET /api/users?search=` | `PATCH /api/users/:id` | `DELETE /api/users/:id` |
+| `Article` | Reporter creates (`POST /api/reporter/articles`) | Feed search, editor dashboard search, reporter dashboard | Autosave, editor's edit, approve | Editor delete |
+| `Comment` | Article page (`POST /api/articles/:id/comments`) | Article page, moderation search (`GET /api/comments?search=`) | Moderation (`PATCH /api/comments/:id`) | Moderation, and with its article |
+| `ArticleViewStats` | `recordView` (upsert) | Views API with a date range, the chart | `recordView` (`$inc`) | Reset statistics, and with its article |
+| `DeviceArticleView` | `recordView` (upsert) | The feed's viewed / not-viewed filter | `recordView` (upsert refreshes it) | "Reset viewed marks", and with its article |
 
 ## Appendix: every page and API URL
 

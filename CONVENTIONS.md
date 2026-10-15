@@ -52,7 +52,7 @@ async function recordView(articleId, deviceId) { ... }
 ## Where files go
 
 The folders follow MVC, and the browser code mirrors the views, so every feature is easy to find
-(the README has a table of "where each requirement lives").
+(docs/PROJECT_GUIDE.md has a table of "where each requirement lives").
 
 | What | Where |
 |---|---|
