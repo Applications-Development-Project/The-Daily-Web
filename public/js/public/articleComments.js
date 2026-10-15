@@ -1,56 +1,30 @@
 /**
  * public/js/public/articleComments.js
  *
- * The comment form on the article page. When a reader posts a comment, this script
- * sends it with Ajax (apiClient.post) and adds it to the top of the list right away,
- * without reloading the page or the list (requirements: "a new comment appears
- * immediately, without reloading the whole list"). Server errors, for example a
- * missing name or "3 comments per minute" (429), are shown in #comment-error.
+ * The article page's comment form: posts a comment with Ajax and adds it to the top of
+ * the list at once, without reloading the page or the list. Server errors (a missing
+ * name, the 3-per-minute limit) are shown in #comment-error.
  *
- * The page (views/public/article.ejs, owned by SH) renders the article and its first
- * comments on the server, and provides these elements, fixed in "Shared contracts":
- *   #comments        the section, with the article id in data-article-id
- *   #comment-list    the list of comments
- *   #comment-form    the form, with fields named authorName and text
- *   #comment-error   where errors are shown
+ * Contract with views/public/article.ejs: #comments (with data-article-id),
+ * #comment-list, #comment-form (fields authorName and text), #comment-error, and the
+ * markup of one comment (li.comment, built the same way here).
  *
- * One comment in #comment-list has this markup. The server-rendered comments and the
- * ones added here must match, so both look the same:
- *   <li class="comment">
- *     <p class="comment-meta">
- *       <span class="comment-author">Noa</span>
- *       <time class="comment-date" datetime="2026-10-10T10:51:34.685Z">10 Oct 2026, 13:51</time>
- *     </p>
- *     <p class="comment-text">Great article!</p>
- *   </li>
- * When there are no comments yet, the list may hold <li class="empty-state">...</li>;
- * it is removed when the first comment is added.
+ * Everything a reader typed goes in with textContent, never innerHTML: a comment like
+ * <img src=x onerror="..."> would otherwise run in every reader's browser (stored XSS).
  *
- * Load after apiClient.js:
- *   <script src="/js/shared/apiClient.js"></script>
- *   <script src="/js/public/articleComments.js"></script>
- *
- * Security: everything a reader typed is put on the page with textContent, never
- * innerHTML, so a comment containing <script> or other HTML is shown as plain text
- * and never runs. With innerHTML, a comment such as <img src=x onerror="..."> would run
- * its code in the browser of every reader who opens the article (a "stored XSS"
- * attack): it could, for example, act on the page as that reader. textContent always
- * treats the value as text, whatever it contains.
- *
+ * Loaded by: views/public/article.ejs, after public/js/shared/apiClient.js.
  * Owner: OS.
  */
 
-// The same limits the server checks (controllers/commentController.js). Checking here
-// too gives an instant message; the server still checks, because a browser can be bypassed.
+// The same limits as the server, for an instant message (the server checks again).
 const MAX_AUTHOR_NAME_LENGTH = 50;
 const MAX_COMMENT_TEXT_LENGTH = 1000;
 
 /**
- * Formats a comment's date like "10 Oct 2026, 13:51". The article page formats the
- * server-rendered comments with the same options, so all dates look the same.
+ * Formats a comment's date like the server-rendered ones, in the reader's time zone.
  *
- * @param {string} isoDate - The date from the API, for example "2026-10-10T10:51:34.685Z".
- * @returns {string} The date for people to read, in the reader's own time zone.
+ * @param {string} isoDate - The date from the API.
+ * @returns {string} For example "10 Oct 2026, 13:51".
  */
 function formatCommentDate(isoDate) {
   return new Date(isoDate).toLocaleString('en-GB', {
@@ -63,13 +37,10 @@ function formatCommentDate(isoDate) {
 }
 
 /**
- * Builds the <li> for one comment, with the markup described in the header.
- * Every piece of text is set with textContent, so nothing a reader typed is ever
- * treated as HTML.
+ * Builds the li for one comment, all text set with textContent.
  *
- * @param {{id: string, authorName: string, text: string, createdAt: string}} comment -
- *   A comment as returned by the API.
- * @returns {HTMLLIElement} The finished list item.
+ * @param {{id: string, authorName: string, text: string, createdAt: string}} comment - From the API.
+ * @returns {HTMLLIElement}
  */
 function createCommentElement(comment) {
   const item = document.createElement('li');
@@ -82,8 +53,6 @@ function createCommentElement(comment) {
   author.className = 'comment-author';
   author.textContent = comment.authorName;
 
-  // <time datetime="..."> gives browsers and search engines the exact date,
-  // while people read the formatted one.
   const date = document.createElement('time');
   date.className = 'comment-date';
   date.dateTime = comment.createdAt;
@@ -100,10 +69,10 @@ function createCommentElement(comment) {
 }
 
 /**
- * Checks the fields before sending, with the same rules and messages as the server.
+ * Checks the fields before sending, with the server's rules and messages.
  *
- * @param {string} authorName - The name, already trimmed.
- * @param {string} text - The comment, already trimmed.
+ * @param {string} authorName - Trimmed.
+ * @param {string} text - Trimmed.
  * @returns {string|null} A message to show, or null if both are fine.
  */
 function findCommentFieldError(authorName, text) {
@@ -123,14 +92,8 @@ function findCommentFieldError(authorName, text) {
 }
 
 /**
- * Connects the comment form on this page. Does nothing on a page without #comments,
- * so the script can never break another page.
- *
- * The handlers below are defined inside this function, so they can use its
- * variables (the form, the list, the article id) without making them global. Each
- * handler keeps access to those variables after setUpCommentForm has finished, which
- * is called a closure. Keeping them out of the global scope means no other script on
- * the page can change them by accident.
+ * Connects the comment form. Does nothing on a page without #comments. The handlers
+ * live inside this function (closures), so no other script can change their variables.
  *
  * @returns {void}
  */
@@ -147,9 +110,9 @@ function setUpCommentForm() {
   const submitButton = commentForm.querySelector('[type="submit"]');
 
   /**
-   * Shows an error message under the form, as plain text.
+   * Shows an error under the form, as text.
    *
-   * @param {string} message - The text to show.
+   * @param {string} message
    * @returns {void}
    */
   function showCommentError(message) {
@@ -168,8 +131,8 @@ function setUpCommentForm() {
   }
 
   /**
-   * Adds a comment at the top of the list and removes the "no comments yet" note.
-   * Only this one element is added; the rest of the list is not reloaded.
+   * Adds one comment at the top (the rest of the list isn't reloaded) and removes the
+   * "no comments yet" note.
    *
    * @param {{id: string, authorName: string, text: string, createdAt: string}} comment
    * @returns {void}
@@ -185,11 +148,10 @@ function setUpCommentForm() {
   /**
    * Sends the form with Ajax instead of the browser's normal submit.
    *
-   * @param {SubmitEvent} event - The form's submit event.
+   * @param {SubmitEvent} event
    * @returns {Promise<void>}
    */
   async function submitComment(event) {
-    // Stop the normal submit, which would load a new page.
     event.preventDefault();
 
     const authorName = commentForm.elements.authorName.value.trim();
@@ -201,14 +163,11 @@ function setUpCommentForm() {
       return;
     }
 
-    // Disabled while waiting, so a double click doesn't post the comment twice.
+    // Disabled while waiting, so a double click doesn't post twice.
     submitButton.disabled = true;
     clearCommentError();
 
-    // encodeURIComponent: the id is read from the page, so we encode it before putting
-    // it in the URL; a changed data-article-id with "/" or "?" can't build another URL.
-    // apiClient never throws: a network failure also comes back as success: false,
-    // so the button is always enabled again below.
+    // The id is read from the page, so it is encoded before it goes into the URL.
     const result = await apiClient.post(`/api/articles/${encodeURIComponent(articleId)}/comments`, {
       authorName: authorName,
       text: text,
@@ -217,21 +176,18 @@ function setUpCommentForm() {
     submitButton.disabled = false;
 
     if (!result.success) {
-      // For example "Please enter your name." or the 3-per-minute limit message.
       showCommentError(result.error);
       return;
     }
 
     addCommentToTop(result.data);
-    // Clear the comment but keep the name, for the reader's next comment.
+    // Keep the name for the reader's next comment.
     commentForm.elements.text.value = '';
   }
 
   commentForm.addEventListener('submit', submitComment);
 }
 
-// The page may load this script in <head> or at the end of <body>. If the page is
-// still loading, wait until all elements exist; otherwise start right away.
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setUpCommentForm);
 } else {

@@ -1,29 +1,10 @@
 <%#
   views/public/error.ejs
 
-  The one error page for the whole site, used for every error on a normal page
-  (API requests get JSON instead): 404 for an unknown URL or an article that isn't
-  live, 401/403 for pages someone may not open, 400 for bad input, 500 when
-  something breaks on the server. There is no separate 404 view.
+  The one error page for every error on a normal page (APIs get JSON instead): 404,
+  401/403, 400 and 500. Usually rendered by middleware/errorHandler.js after next(error).
+  Locals: statusCode, message (both printed escaped).
 
-  Locals (both required):
-    statusCode - the HTTP status, for example 404
-    message    - a short sentence a reader can understand, for example "Article not found"
-
-  How a controller renders it:
-    res.status(404).render('public/error', { statusCode: 404, message: 'Article not found' })
-  Most errors don't render it directly: they call next(error), and
-  middleware/errorHandler.js renders this page with the right status.
-
-  Both values are printed with the escaping tag (equals sign), so even if a message
-  contained HTML it would be shown as text, never run.
-
-  It uses the shared head, header and footer (views/partials), so an error looks like
-  the rest of the site, and a logged-in user still sees their name and the logout
-  button on it.
-
-  Rendered by: middleware/errorHandler.js, and controllers for "not found" cases
-  (for example SH's article page).
   Owner: OS.
 %>
 <!DOCTYPE html>
@@ -32,18 +13,13 @@
 
 <body class="page-container">
   <%#
-    The shared header reads currentUser, which middleware/setCurrentUser.js sets for
-    every request. But this page can be shown for an error that happened before
-    setCurrentUser ran, or inside it (for example when the database is down), and then
-    currentUser doesn't exist. EJS would throw on the missing name, and the error page
-    itself would fail. "locals.currentUser" gives undefined instead of throwing, and
-    "|| null" turns that into "not logged in", so the page always renders.
+    An error can happen before (or inside) setCurrentUser, and then currentUser doesn't
+    exist. "locals.currentUser || null" keeps the error page itself from failing.
   %>
   <%- include('../partials/header', { currentUser: locals.currentUser || null }) %>
 
   <main class="main-content">
     <section class="empty-state" aria-labelledby="error-title">
-      <%# h2: the shared header already holds the page's h1 (the site name). %>
       <h2 id="error-title">Error <%= statusCode %></h2>
       <p><%= message %></p>
       <p><a class="btn btn-primary" href="/">Back to the home page</a></p>
