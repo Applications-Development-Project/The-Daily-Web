@@ -1,22 +1,14 @@
 /**
  * controllers/userController.js
  *
- * User management for the editor (full CRUD on the User model): the user management
- * page and the Users API to search, create, update and delete reporters and editors.
- * Every route here is editor-only (requireRole('editor') in the route files).
- *
- * Safety rules, each answered with 409 and a clear message:
- * - an editor can't delete or demote their own account,
- * - no change may leave the system with zero editors,
- * - a reporter who still has articles can't be deleted or made an editor
- *   (moving their articles to someone else is out of scope).
- *
- * Every user sent to the browser has the shape
- * { id, username, displayName, role, createdAt }. passwordHash is never sent.
+ * User management for the editor (full CRUD on User): the page and the Users API.
+ * Editor-only (requireRole in the routes). Safety rules, each answered with 409:
+ * an editor can't delete or demote their own account; the system always keeps an
+ * editor; a reporter who has articles can't be deleted or made an editor.
+ * A user sent to the browser is { id, username, displayName, role, createdAt }, never
+ * the password hash.
  *
  * Used by: routes/pageRoutes/userPageRoutes.js, routes/apiRoutes/userApiRoutes.js.
- * Related: models/User.js, models/Article.js, views/editor/users.ejs,
- * public/js/editor/users.js, services/logger.js.
  * Owner: OS.
  */
 
@@ -27,31 +19,28 @@ const logger = require('../services/logger');
 const { createHttpError } = require('../utils/httpErrors');
 const { isValidObjectId, escapeRegExp, readSearchText, readPageNumber } = require('../utils/requestValidation');
 
-// The user list is shown 20 at a time, like every other list in the project.
 const USERS_PER_PAGE = 20;
 
-// A search box value longer than this can't match any username or display name.
+// Longer can't match any username or display name.
 const MAX_SEARCH_LENGTH = 100;
 
-// How much work bcrypt does per hash; each +1 doubles it. 10 is what the whole team
-// uses (also in scripts/seed.js): fast enough for a login, slow for someone guessing.
+// bcrypt's work per hash (each +1 doubles it): fast for a login, slow for a guesser.
 const BCRYPT_ROUNDS = 10;
 
-// Field rules. The username and display name limits match models/User.js.
+// The same limits as models/User.js.
 const MIN_USERNAME_LENGTH = 3;
 const MAX_USERNAME_LENGTH = 30;
-// Letters, digits, dot, dash and underscore only: no spaces or symbols that would be
-// confusing to type at the login page.
+// No spaces or symbols that would be confusing to type at login.
 const USERNAME_PATTERN = /^[a-z0-9._-]+$/;
 const MAX_DISPLAY_NAME_LENGTH = 50;
 const MIN_PASSWORD_LENGTH = 8;
-// bcrypt only uses the first 72 bytes; the same limit as the login form.
+// bcrypt uses only the first 72 bytes; the same limit as the login form.
 const MAX_PASSWORD_LENGTH = 200;
 const USER_ROLES = ['reporter', 'editor'];
 
 /**
- * Turns a user from the database into the shape we send to the browser. Picking the
- * fields one by one means passwordHash can never leak, even by mistake.
+ * Turns a user into the shape sent to the browser. Picking fields one by one means
+ * passwordHash can never leak by mistake.
  *
  * @param {Object} user - A user document or a lean object.
  * @returns {{id: string, username: string, displayName: string, role: string, createdAt: Date}}
@@ -67,12 +56,11 @@ function toUserResponse(user) {
 }
 
 /**
- * Checks a new username. It is stored lowercase (see models/User.js), so we compare
- * and save the lowercase form.
+ * Checks a new username (stored lowercase).
  *
  * @param {*} value - body.username.
  * @returns {string} The trimmed, lowercase username.
- * @throws {Error} 400 if it is missing, the wrong length, or has other characters.
+ * @throws {Error} 400 if missing, the wrong length, or with other characters.
  */
 function readUsername(value) {
   const username = typeof value === 'string' ? value.trim().toLowerCase() : '';
@@ -90,7 +78,7 @@ function readUsername(value) {
  *
  * @param {*} value - body.displayName.
  * @returns {string} The trimmed display name.
- * @throws {Error} 400 if it is missing, blank or too long.
+ * @throws {Error} 400 if missing, blank or too long.
  */
 function readDisplayName(value) {
   const displayName = typeof value === 'string' ? value.trim() : '';
@@ -115,11 +103,8 @@ function readRole(value) {
 }
 
 /**
- * Checks a new password and turns it into a bcrypt hash. Only the hash is ever stored;
- * bcrypt adds a random salt, so two users with the same password get different hashes,
- * and the password can't be recovered from the hash.
- *
- * Spaces are kept as typed (no trim): they can be part of a password.
+ * Checks a new password and hashes it with bcrypt (a random salt per hash; the password
+ * can't be recovered). Spaces are kept: they can be part of a password.
  *
  * @param {*} value - body.password.
  * @returns {Promise<string>} The bcrypt hash.
@@ -133,11 +118,11 @@ async function hashNewPassword(value) {
 }
 
 /**
- * Loads the user named in the URL, for an update or delete.
+ * Loads the user named in the URL.
  *
  * @param {string} userId - request.params.id.
- * @returns {Promise<import('mongoose').Document>} The user document (can be changed and saved).
- * @throws {Error} 400 if the id is malformed, 404 if there is no such user.
+ * @returns {Promise<import('mongoose').Document>}
+ * @throws {Error} 400 for a malformed id, 404 if there is no such user.
  */
 async function findUserById(userId) {
   if (!isValidObjectId(userId)) {
@@ -150,19 +135,12 @@ async function findUserById(userId) {
   return user;
 }
 
-// The safety rules below answer 409 "Conflict", not 403 "Forbidden": the editor IS
-// allowed to manage users (403 would mean they aren't); the request is refused only
-// because of the current state of the data (it is their own account, the last editor,
-// or a reporter who still has articles). This matches the plan's meaning of 409:
-// "not allowed in the current state".
+// The safety rules answer 409 (not allowed in the current state), not 403: the editor
+// IS allowed to manage users.
 
 /**
- * Safety rule: never leave the system with zero editors, because then nobody could
- * approve articles or manage users. Called before an editor is demoted or deleted.
- *
- * (The "can't change your own account" rules already make this nearly impossible,
- * since the editor making the request stays an editor. We still check, as a second
- * safety net that doesn't depend on that reasoning.)
+ * Safety rule: never zero editors (nobody could approve or manage users). A second
+ * safety net beside "you can't demote yourself".
  *
  * @returns {Promise<void>}
  * @throws {Error} 409 if this is the last editor.
@@ -175,17 +153,16 @@ async function ensureAnotherEditorRemains() {
 }
 
 /**
- * Safety rule: a reporter who still has articles can't be deleted or made an editor,
- * because their articles would be left without a reporter (moving articles to someone
- * else is out of scope for this project).
+ * Safety rule: a reporter with articles can't be deleted or made an editor (their articles
+ * would have no reporter; moving articles is out of scope).
  *
  * @param {import('mongoose').Document} user - The reporter.
  * @param {string} actionDescription - For the message, for example "be deleted".
  * @returns {Promise<void>}
- * @throws {Error} 409 if the reporter has at least one article.
+ * @throws {Error} 409 if the reporter has an article.
  */
 async function ensureReporterHasNoArticles(user, actionDescription) {
-  // exists() stops at the first match instead of counting them all.
+  // exists() stops at the first match instead of counting.
   const hasArticles = await Article.exists({ reporter: user._id });
   if (hasArticles) {
     throw createHttpError(409, `This reporter still has articles, so they can't ${actionDescription}.`);
@@ -195,8 +172,8 @@ async function ensureReporterHasNoArticles(user, actionDescription) {
 /**
  * Checks whether the logged-in editor is acting on their own account.
  *
- * @param {import('express').Request} request - request.session.user.id is the editor.
- * @param {import('mongoose').Document} user - The account being changed.
+ * @param {import('express').Request} request
+ * @param {import('mongoose').Document} user
  * @returns {boolean}
  */
 function isOwnAccount(request, user) {
@@ -204,11 +181,9 @@ function isOwnAccount(request, user) {
 }
 
 /**
- * GET /editor/users - the user management page. It is sent empty; the browser script
- * (public/js/editor/users.js) loads the users from GET /api/users, so the list is
- * built in one place only. currentUser comes from res.locals (setCurrentUser).
+ * GET /editor/users - the page, sent empty; public/js/editor/users.js fills it from the API.
  *
- * @param {import('express').Request} request - The page request (editor only).
+ * @param {import('express').Request} request
  * @param {import('express').Response} response - Renders views/editor/users.ejs.
  * @returns {void}
  */
@@ -217,32 +192,27 @@ function showUserManagementPage(request, response) {
 }
 
 /**
- * GET /api/users?search=&page= - users whose username or display name contains the
- * search text (ignoring capital letters), sorted by username, 20 per page.
+ * GET /api/users?search=&page= - users whose username or display name contains the text
+ * (any capitals), by username, 20 per page. A "contains" search can't use an index, which
+ * costs nothing with a few dozen staff accounts.
  * Answers 200 { success: true, data: { users, page, totalPages, totalUsers } }.
- * totalPages lets the page enable or disable its "Next" button.
  *
- * @param {import('express').Request} request - request.query.search and .page.
- * @param {import('express').Response} response - The JSON answer.
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
  * @returns {Promise<void>}
- * @throws {Error} 400 for an invalid search or page (passed on to errorHandler).
+ * @throws {Error} 400 for an invalid search or page.
  */
 async function searchUsers(request, response) {
   const searchText = readSearchText(request.query.search, MAX_SEARCH_LENGTH);
   const page = readPageNumber(request.query.page);
 
-  // An empty filter {} matches every user. With a search, $or matches either field,
-  // and the "i" flag makes the match ignore capital letters. A "contains" RegExp can't
-  // use an index, so MongoDB checks every user; with a few dozen staff accounts that
-  // costs nothing.
   let filter = {};
   if (searchText !== '') {
     const searchPattern = new RegExp(escapeRegExp(searchText), 'i');
     filter = { $or: [{ username: searchPattern }, { displayName: searchPattern }] };
   }
 
-  // countDocuments and find run at the same time (Promise.all), so the page waits
-  // for one round trip to the database instead of two.
+  // Both at the same time: one round trip instead of two.
   const [totalUsers, users] = await Promise.all([
     User.countDocuments(filter),
     User.find(filter)
@@ -264,17 +234,14 @@ async function searchUsers(request, response) {
 }
 
 /**
- * POST /api/users - body { username, displayName, role, password }.
- * Creates a reporter or editor and answers 201 { success: true, data: <the new user> }.
+ * POST /api/users - body { username, displayName, role, password }. Answers 201 with the
+ * new user. A taken username is refused by the unique index (409 from errorHandler): a
+ * check-then-save could let two simultaneous requests both pass, the index can't.
  *
- * A taken username isn't checked here: the unique index on username refuses it,
- * and errorHandler turns MongoDB's duplicate key error into 409. Checking first and
- * then saving could still let two simultaneous requests both pass; the index can't.
- *
- * @param {import('express').Request} request - The new user's fields.
- * @param {import('express').Response} response - The JSON answer.
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
  * @returns {Promise<void>}
- * @throws {Error} 400 for an invalid field, 409 (from the index) for a taken username.
+ * @throws {Error} 400 for an invalid field, 409 for a taken username.
  */
 async function createUser(request, response) {
   const body = request.body || {};
@@ -296,7 +263,7 @@ async function createUser(request, response) {
  * @param {import('mongoose').Document} user - The account being changed.
  * @param {string} newRole - "reporter" or "editor".
  * @returns {Promise<void>}
- * @throws {Error} 409 if a safety rule forbids the change.
+ * @throws {Error} 409 if a safety rule forbids it.
  */
 async function changeRole(request, user, newRole) {
   if (newRole === user.role) {
@@ -316,12 +283,11 @@ async function changeRole(request, user, newRole) {
 }
 
 /**
- * PATCH /api/users/:id - body with any of { displayName, role, password }.
- * Answers 200 { success: true, data: <the updated user> }.
- * The username can't be changed: it is how the person logs in.
+ * PATCH /api/users/:id - any of { displayName, role, password }. The username can't
+ * change (it is how the person logs in). Answers 200 with the updated user.
  *
- * @param {import('express').Request} request - The changes.
- * @param {import('express').Response} response - The JSON answer.
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
  * @returns {Promise<void>}
  * @throws {Error} 400 for invalid input, 404 for an unknown user, 409 for a safety rule.
  */
@@ -334,18 +300,12 @@ async function updateUser(request, response) {
     throw createHttpError(400, 'Nothing to change: send displayName, role or password.');
   }
 
-  // Why findById + save() and not findByIdAndUpdate(): the safety rules in changeRole
-  // need the user's current role before deciding, save() always runs the model's
-  // validators (findByIdAndUpdate skips them unless told otherwise), and only the
-  // fields we assign below are written, so nothing from the body reaches the database
-  // unchecked.
-  // findById doesn't load passwordHash (select: false in the model). Mongoose saves only
-  // the fields that changed, so changing just the display name never touches the
-  // stored hash, and the user can still log in with their old password.
+  // findById + save(), not findByIdAndUpdate: the safety rules need the current role,
+  // save() always runs the validators, and only the fields assigned below are written.
+  // passwordHash isn't loaded (select: false) and is saved only if it changes.
   const user = await findUserById(request.params.id);
 
-  // Every field is checked before anything is saved, so a request with one bad field
-  // changes nothing.
+  // Every field is checked before saving, so one bad field changes nothing.
   if (body.displayName !== undefined) {
     user.displayName = readDisplayName(body.displayName);
   }
@@ -356,7 +316,6 @@ async function updateUser(request, response) {
     user.passwordHash = await hashNewPassword(body.password);
   }
 
-  // save() runs the model's validators again before writing.
   await user.save();
 
   logger.info(`Editor "${request.session.user.displayName}" updated user "${user.username}"`);
@@ -364,11 +323,11 @@ async function updateUser(request, response) {
 }
 
 /**
- * DELETE /api/users/:id - deletes a user, unless a safety rule forbids it.
- * Answers 200 { success: true, data: { id } }, so the page knows which row to remove.
+ * DELETE /api/users/:id - deletes a user unless a safety rule forbids it.
+ * Answers 200 { success: true, data: { id } }.
  *
- * @param {import('express').Request} request - request.params.id is the user to delete.
- * @param {import('express').Response} response - The JSON answer.
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
  * @returns {Promise<void>}
  * @throws {Error} 400 for a malformed id, 404 for an unknown user, 409 for a safety rule.
  */

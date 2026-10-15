@@ -1,9 +1,7 @@
 /**
  * routes/apiRoutes/userApiRoutes.js
  *
- * JSON API routes for managing users (full CRUD on the User model). Mounted at "/api"
- * in app.js, so "/users" here is "/api/users" in the browser.
- * Paths and access follow the routes table in "Shared contracts".
+ * JSON API for user management (full CRUD on User), mounted at "/api" in app.js.
  *
  * Owner: OS.
  */

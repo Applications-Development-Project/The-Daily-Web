@@ -1,8 +1,7 @@
 /**
  * routes/pageRoutes/userPageRoutes.js
  *
- * Page route for the editor's user management. Mounted at "/" in app.js.
- * Paths and access follow the routes table in "Shared contracts".
+ * The editor's user management page, mounted at "/" in app.js.
  *
  * Owner: OS.
  */
@@ -13,7 +12,7 @@ const userController = require('../../controllers/userController');
 
 const router = express.Router();
 
-// Editors only. requireRole also sends guests to /login.
+// Editors only; guests go to /login.
 router.get('/editor/users', requireRole('editor'), userController.showUserManagementPage);
 
 module.exports = router;
