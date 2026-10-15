@@ -18,6 +18,9 @@ by, see [CONVENTIONS.md](../CONVENTIONS.md).
 9. [How each file explains itself](#9-how-each-file-explains-itself)
 10. [Preparing for the defense](#10-preparing-for-the-defense)
 
+- [Appendix: where each requirement lives](#appendix-where-each-requirement-lives)
+- [Appendix: every page and API URL](#appendix-every-page-and-api-url)
+
 ## 1. Technologies
 
 Only technologies taught in the course, plus the four packages the lecturer approved.
@@ -88,6 +91,55 @@ Two kinds of routes and answers:
 
 ## 4. Directory by directory
 
+### The whole tree
+
+The browser code and the views are split by the same three areas, `public` (guests), `reporter` and `editor`,
+so the script of `views/<area>/<page>.ejs` is `public/js/<area>/<page>.js`.
+
+```
+The-Daily-Web/
+├── server.js                 Loads .env, connects to MongoDB, then starts the server
+├── app.js                    The Express app: middleware, routers, 404 and error handling, in that order
+├── config/
+│   ├── database.js           Connect to / disconnect from MongoDB
+│   └── session.js            Login sessions stored in MongoDB (survive a restart)
+├── models/                   Mongoose schemas and indexes
+│   ├── User.js               Reporters and editors (bcrypt hash only)
+│   ├── Article.js            Two copies of the content: draft (worked on) and published (what readers see)
+│   ├── Comment.js            Guest comments (with the device id for the comment limit)
+│   ├── ArticleViewStats.js   One view counter per article per hour
+│   └── DeviceArticleView.js  Which browser has opened which article (viewed filter)
+├── routes/
+│   ├── pageRoutes/           <area>PageRoutes.js: URLs that render EJS pages, mounted at "/"
+│   └── apiRoutes/            <area>ApiRoutes.js: JSON URLs used by the browser scripts, mounted at "/api"
+├── controllers/              One file per area: read the request, use models and services, send a page or JSON
+├── middleware/               Runs before the controllers: device cookie, current user, login and role checks,
+│                             comment limit, 404, error handler
+├── services/                 Business rules shared by controllers: status rules, draft rules, view counting,
+│                             weather, logger
+├── utils/                    Small helpers every controller uses: errors, request checks, "is this an API request?"
+├── views/
+│   ├── partials/             head, header (login state and logout), footer, sidebar (weather)
+│   ├── public/               feed, article, login, error
+│   ├── reporter/             dashboard, articleEditor
+│   └── editor/               dashboard, articleReview, analytics, users, comments, partials/ (nav, article content)
+├── public/                   Served as static files
+│   ├── css/main.css          The one stylesheet
+│   ├── images/               placeholder.svg (when an article image can't load), favicon.svg
+│   └── js/
+│       ├── shared/apiClient.js   fetch() wrapper every page script uses: always { success, data, error, status }
+│       ├── public/               feed.js, articleComments.js, weatherWidget.js, login.js
+│       ├── reporter/             dashboard.js, articleEditor.js (autosave)
+│       └── editor/               dashboard.js, articleReview.js, analytics.js (chart), users.js, comments.js
+├── scripts/seed.js           Demo data (npm run seed)
+├── tests/                    Self-check scripts (npm run test:workflow, test:reporter, test:editor)
+├── docs/PROJECT_GUIDE.md     This guide
+├── CONVENTIONS.md            The team's code conventions
+└── .env.example              Template for your own .env
+```
+
+The sections below go through each folder file by file.
+
 ### Top level
 
 | File | What it is |
@@ -96,7 +148,7 @@ Two kinds of routes and answers:
 | `app.js` | The Express app. Read its header first: it lists the middleware order and why |
 | `package.json` | The packages and the `npm` commands (`start`, `dev`, `seed`, `test:*`) |
 | `.env.example` | The settings each of us copies into our own `.env` (which is never committed) |
-| `README.md` | For the lecturer: features, install, folder tree, design decisions, API table |
+| `README.md` | For the lecturer: how to install and run the project, the demo users and the main features |
 | `CONVENTIONS.md` | How we write code: comments, naming, where files go, Git |
 
 ### `config/`: connecting to outside pieces
@@ -229,15 +281,33 @@ One word per idea everywhere: always "reporter" (never "writer" or "author"), al
 **From a URL.** Find the URL in a route file (`routes/pageRoutes/` for pages, `routes/apiRoutes/` without
 the `/api` prefix for JSON). The route names the controller function; the controller's JSDoc lists every
 answer it can give. Example: `POST /api/editor/articles/:id/return` is in `routes/apiRoutes/editorApiRoutes.js`
-and goes to `returnArticleToReporter` in `controllers/editorController.js`.
+and goes to `returnArticleToReporter` in `controllers/editorController.js`. The
+[appendix](#appendix-every-page-and-api-url) lists every URL.
 
 **From a page.** The page's view is `views/<area>/<page>.ejs`; its script, if it has one, is
 `public/js/<area>/<page>.js`. The view's header says which controller renders it and with which values.
 
-**From a requirement.** The README's table ["Where each requirement lives"](../README.md#where-each-requirement-lives)
+**From a requirement.** The table ["Where each requirement lives"](#appendix-where-each-requirement-lives)
 lists the files for each requirement of the project document.
 
 ## 7. Following a request from start to finish
+
+Every request first goes through `app.js`, which runs middleware in the order it is written:
+
+1. **Body parsers** (`express.json`, `express.urlencoded`), so `req.body` exists.
+2. **Static files** from `public/` (CSS, scripts, images), answered before any session work.
+3. **Session** (`config/session.js`): `req.session.user = { id, role, displayName }` after login.
+4. **Device id** (`assignDeviceId`): `req.deviceId` for every browser, guests included.
+5. **Current user** (`setCurrentUser`): reloads the role from the database; `currentUser` for every view.
+6. **Routers**: page routers at `/`, API routers at `/api`. Protected routes run `requireLogin` /
+   `requireRole` first, then the controller.
+7. **404** (`notFoundHandler`), then **`errorHandler`** last, which answers every error: JSON
+   `{ success: false, error }` for `/api/...`, the error page otherwise.
+
+Controllers report a problem with `throw createHttpError(404, 'Article not found.')`; with Express 5 an error
+thrown in an async controller reaches `errorHandler` without any try/catch.
+
+Three requests, followed file by file:
 
 **A guest posts a comment.**
 
@@ -286,14 +356,16 @@ lists the files for each requirement of the project document.
 
 ## 9. How each file explains itself
 
-Every file starts with a **header comment**: what it does, who calls it, the related files and its owner.
-Every function has a **JSDoc comment**: its purpose, parameters, return value and the errors it throws.
-Comments explain **why** a choice was made, often as the question a lecturer would ask ("Why one counter
-per hour and not one document per view?"), including the requirement it serves and any known limit we
-accepted. In EJS views these notes are EJS comments, so they never reach the browser.
+Every file starts with a short **header comment** (about 5 to 15 lines): what it does, who uses it and its
+owner. Every function has a **JSDoc comment**: its purpose, parameters, return value and the errors it throws,
+plus a sentence or two on *why* when the choice is not obvious. A tricky line has a short **"why" comment**
+right next to it, for example why `$inc` with `upsert` is safe when two readers arrive together, or why a value
+must be a string before it reaches a query. In EJS views these notes are EJS comments, so they never reach the
+browser.
 
-So the fastest way to understand any file is to read its header, then the JSDoc of the function you are
-looking at.
+The comments are kept short so the code stays easy to read; the longer explanations are in this guide
+(sections 7, 10.4 and 10.5). So the fastest way to understand any file is to read its header, then the JSDoc
+of the function you are looking at, then the "why" comments in its body.
 
 ## 10. Preparing for the defense
 
@@ -405,8 +477,11 @@ These are the decisions the lecturer is most likely to ask about. Each one has a
 
 - **Two copies of an article** (`draft` and `published`), and why "live" means `published` is not null, whatever the
   status (`models/Article.js`).
-- **Why `published` to `draft` is in the transition table**, and why every other transition is refused: `canTransition`
-  looks the change up in a table, and anything not in it is `false` (`services/articleWorkflow.js`).
+- **Why `published` to `draft` is in the transition table**, and why every other transition is refused. The
+  requirements list four transitions but also require that an edited live article goes through approval again while
+  readers keep the old version; `status` describes the working copy, so starting to edit a live article makes the new
+  version "In preparation". `canTransition` looks the change up in a table, and anything not in it is `false`
+  (`services/articleWorkflow.js`).
 - **Hourly view counters:** one document per article per hour; `$inc` with `upsert` is atomic, so simultaneous views
   are never lost; a unique index stops duplicates; 30 days is at most 720 documents per article
   (`models/ArticleViewStats.js`, `services/viewTracker.js`).
@@ -429,7 +504,8 @@ These are the decisions the lecturer is most likely to ask about. Each one has a
 - **Passwords:** a bcrypt hash with a salt (cost 10), never stored or sent as text; `passwordHash` has
   `select: false` and is removed in `toJSON` (`models/User.js`).
 - **Login:** the same message and the same time for an unknown user and a wrong password; a new session id at login
-  (against session fixation); the session is deleted at logout; logout is a POST form (`authController.js`).
+  (against session fixation); the session is deleted at logout; logout is a POST form; a taken username is caught by
+  the unique index, not by a check-then-save (`authController.js`, `models/User.js`).
 - **Sessions:** the browser holds only a signed, `httpOnly` cookie; the data is in MongoDB; the role is reloaded from
   the database on every request, so a demotion applies at once (`config/session.js`, `setCurrentUser.js`).
 - **Permissions on the server:** `requireLogin` and `requireRole` in every route file; ownership in the controller
@@ -448,7 +524,8 @@ These are the decisions the lecturer is most likely to ask about. Each one has a
 - **Debounce:** 300 ms for searches, 2 seconds for autosave.
 - **Answers that arrive out of order:** every list request has a number, and an older answer is ignored.
 - **Autosave:** one request at a time; a retry after 5 seconds on a network or server error (not on 4xx); a last save
-  with `fetch(..., { keepalive: true })` when the page closes; a clear message when the session has ended.
+  with `fetch(..., { keepalive: true })` when the page closes; a clear message when the session has ended; the edit
+  page is always filled from the server, never from browser storage, so another computer sees the same text.
 - **Validation in two places:** the browser's check is only a quick answer; the server's check is the real one.
 - **Chart.js:** a linear x-axis of timestamps (a time axis would need an extra date-adapter package); our own
   `afterDraw` plugin draws the dashed publish markers; over 30 days the hours are added up into days.
@@ -499,10 +576,91 @@ These are the decisions the lecturer is most likely to ask about. Each one has a
 
 ### 10.7 How to answer in the room
 
-- **Open the file** and read its header comment: it says what the file does, why, and which requirement it serves.
+- **Open the file** and read its header comment: it says what the file does and who uses it. The "why" of a
+  choice is in the comment next to its line.
 - **Answer the "why", not only the "what":** the requirement it serves, the simpler alternative and why we didn't
   choose it, and any limit we accepted.
 - **Name the known limits yourself:** the comment-limit race, page-number paging while the list changes, `sameSite`
   cookies instead of CSRF tokens, the reporter's list without paging, Chart.js needing internet. Showing you know the
   trade-off is better than being caught by it.
 - **If you don't know, say how you would find out** (which file, which test) instead of guessing.
+
+## Appendix: where each requirement lives
+
+Each row is one requirement from the project document, and the files that implement it, in the order a
+request goes through them (route → middleware → controller → service / model → view → browser script).
+Route files are in `routes/pageRoutes/` (pages) and `routes/apiRoutes/` (JSON), named after the area.
+
+| Requirement | Server side | Page and browser script |
+|---|---|---|
+| Feed: only published articles, 20 per page, infinite scroll | `controllers/feedController.js` (`listFeedArticles`, `showFeedPage`) | `views/public/feed.ejs`, `public/js/public/feed.js` |
+| Search, category and viewed filters, sort by date or popularity, without reload | `controllers/feedController.js` (`readFeedQuery`, `buildFeedFilter`), `models/DeviceArticleView.js` | `public/js/public/feed.js` |
+| Full article page, readable by search engines | `controllers/articlePageController.js` | `views/public/article.ejs` |
+| Every visit counts for the statistics | `services/viewTracker.js` (`recordView`), `models/ArticleViewStats.js` | |
+| Comments: list and add without reloading the list | `controllers/commentController.js` (`listArticleComments`, `addComment`), `models/Comment.js` | `public/js/public/articleComments.js` |
+| A guest may post at most 3 comments a minute per device | `middleware/commentRateLimiter.js`, `middleware/assignDeviceId.js` | |
+| Login for reporters and editors; each goes to their own area | `controllers/authController.js`, `config/session.js` | `views/public/login.ejs`, `public/js/public/login.js` |
+| Permissions from the logged-in user, checked on the server | `middleware/requireLogin.js`, `middleware/requireRole.js`, `middleware/setCurrentUser.js` | |
+| Passwords never stored in plain text | `models/User.js`, `controllers/userController.js` (bcrypt) | |
+| Still logged in after a server restart | `config/session.js` (sessions stored in MongoDB) | |
+| Reporter: own articles and their status, create, edit, submit, see the editor's note, resubmit | `controllers/reporterController.js` | `views/reporter/dashboard.ejs`, `public/js/reporter/dashboard.js` |
+| Status transitions; every other transition refused | `services/articleWorkflow.js` (`canTransition`) | |
+| Work saved continuously, never lost (refresh, closed browser, another computer) | `controllers/reporterController.js` (`autosaveDraft`, `showArticleEditor`), `services/draftValidation.js` | `views/reporter/articleEditor.ejs`, `public/js/reporter/articleEditor.js` |
+| Editing a live article: readers keep the approved version until approval | `models/Article.js` (`draft` / `published`), `controllers/editorController.js` (`approveArticle`) | |
+| Editor: all articles, filter by status | `controllers/editorController.js` (`listAllArticles`) | `views/editor/dashboard.ejs`, `public/js/editor/dashboard.js` |
+| Editor: view, edit, approve, return with a note, delete | `controllers/editorController.js` | `views/editor/articleReview.ejs`, `public/js/editor/articleReview.js` |
+| Editor sees what is live and what awaits approval | `controllers/editorController.js` (`toReviewView`, `findChangedFields`) | `views/editor/partials/articleContent.ejs` |
+| Impact Analytics chart with publish markers | `controllers/analyticsController.js`, `services/viewTracker.js` (`getViewsOverTime`) | `views/editor/analytics.ejs`, `public/js/editor/analytics.js` |
+| Statistics that scale to thousands of readers | `models/ArticleViewStats.js` (one counter per article per hour) | |
+| Full CRUD on every model, search on a main field | See [CRUD coverage](#crud-coverage) | |
+| Errors and invalid data never crash the server | `middleware/errorHandler.js`, `utils/requestValidation.js`, `utils/httpErrors.js` | `views/public/error.ejs` |
+| Logs of errors and important events | `services/logger.js` (`logs/app.log`, `logs/error.log`) | |
+| Weather widget from an external service, at most 15 minutes old | `services/weatherService.js`, `controllers/weatherController.js` | `views/partials/sidebar.ejs`, `public/js/public/weatherWidget.js` |
+| Semantic HTML5, responsive layout (computer, tablet, phone) | | `views/partials/*.ejs`, `public/css/main.css` |
+| Demo data: 500+ articles, several reporters, comments, updates, view history | `scripts/seed.js` | |
+
+### CRUD coverage
+
+| Model | Create | Read, list and search | Update | Delete |
+|---|---|---|---|---|
+| `User` | User management (`POST /api/users`) | `GET /api/users?search=` | `PATCH /api/users/:id` | `DELETE /api/users/:id` |
+| `Article` | Reporter creates (`POST /api/reporter/articles`) | Feed search, editor dashboard search, reporter dashboard | Autosave, editor's edit, approve | Editor delete |
+| `Comment` | Article page (`POST /api/articles/:id/comments`) | Article page, moderation search (`GET /api/comments?search=`) | Moderation (`PATCH /api/comments/:id`) | Moderation, and with its article |
+| `ArticleViewStats` | `recordView` (upsert) | Views API with a date range, the chart | `recordView` (`$inc`) | Reset statistics, and with its article |
+| `DeviceArticleView` | `recordView` (upsert) | The feed's viewed / not-viewed filter | `recordView` (upsert refreshes it) | "Reset viewed marks", and with its article |
+
+## Appendix: every page and API URL
+
+Pages (rendered on the server with EJS), in `routes/pageRoutes/`:
+
+| Page | Who |
+|---|---|
+| `GET /` feed, `GET /articles/:id` article, `GET /login` | Everyone |
+| `GET /reporter` dashboard, `GET /reporter/articles/:id/edit` editor | Reporter (their own articles) |
+| `GET /editor`, `GET /editor/articles/:id` review, `GET /editor/analytics`, `GET /editor/users`, `GET /editor/comments` | Editor |
+| `POST /logout` (a plain HTML form in the header, works without JavaScript) | Logged in |
+
+JSON API (all under `/api`, used by the browser scripts), in `routes/apiRoutes/`:
+
+| Method and path | Purpose | Who |
+|---|---|---|
+| `GET /api/articles?search=&category=&viewed=&sort=&page=` | 20 live articles and `hasMore` | Everyone |
+| `DELETE /api/articles/viewed` | Reset this browser's viewed marks | Everyone |
+| `GET /api/weather` | The cached weather | Everyone |
+| `GET /api/articles/:id/comments`, `POST /api/articles/:id/comments` | List and add comments (guests: 3 a minute) | Everyone |
+| `POST /api/auth/login` | Log in; answers where to go next | Everyone |
+| `GET /api/reporter/articles`, `POST /api/reporter/articles` | My articles, create one | Reporter |
+| `PATCH /api/reporter/articles/:id/draft`, `POST /api/reporter/articles/:id/submit` | Autosave, submit | Reporter (owner) |
+| `GET /api/editor/articles?status=&search=&page=` | All articles, 20 per page | Editor |
+| `PATCH /api/editor/articles/:id/draft` | Edit any article (a live one is published at once) | Editor |
+| `POST /api/editor/articles/:id/approve`, `POST /api/editor/articles/:id/return` | Publish; return with a note | Editor |
+| `DELETE /api/editor/articles/:id` | Delete with its comments and statistics | Editor |
+| `GET /api/editor/articles/:id/views?from=&to=`, `DELETE /api/editor/articles/:id/views` | Chart data; reset statistics | Editor |
+| `GET /api/users?search=&page=`, `POST /api/users`, `PATCH /api/users/:id`, `DELETE /api/users/:id` | User management | Editor |
+| `GET /api/comments?search=&page=`, `PATCH /api/comments/:id`, `DELETE /api/comments/:id` | Comment moderation | Editor |
+
+Every JSON answer is `{ success: true, data }` or `{ success: false, error: "<message a user can read>" }`.
+
+Status codes: `200` OK, `201` created, `400` invalid input, `401` not logged in, `403` not allowed,
+`404` not found, `409` not allowed in the current status, `429` too many comments, `503` weather unavailable,
+`500` server error (details only in the log).
