@@ -1,28 +1,12 @@
 <%#
   views/editor/partials/articleContent.ejs
 
-  Shows one version of an article's content (the working copy or the live version)
-  on the editor's review page: title, summary, category, main image and the body
-  split into paragraphs. Written once here so the review page can show two versions
-  side by side with exactly the same layout.
+  One version of an article (working copy or live) on the review page. Written once, so
+  both versions side by side have exactly the same layout.
 
-  Locals:
-    heading       - the box title, for example "Submitted changes".
-    content       - { title, summary, category, imageUrl, paragraphs } prepared by
-                    toContentView() in controllers/editorController.js.
-    changedFields - optional: names of the fields that differ between the two
-                    versions, for example ['title', 'body']. Those fields get a
-                    "Changed" marker. The marker is a word, not only a colour, so
-                    it is also clear to people who don't see colours well.
-
-  Everything is printed with the escaping tag (equals sign), so text a reporter typed
-  can never become HTML or script on the editor's page. That includes the image
-  address inside src="...": escaping keeps it inside the attribute, and browsers never
-  run script from an image address. Checking that it is an http(s) address is the job
-  of the save step (the reporter's autosave and the editor's edit).
-
-  The body is plain text (paragraphs separated by a blank line), not HTML, so each
-  paragraph is printed as text in its own p element.
+  Locals: heading; content (from toContentView in the controller); changedFields
+  (optional: those fields get the word "(changed)", not only a colour).
+  Everything is printed escaped, including the image address.
 
   Included by: views/editor/articleReview.ejs.
   Owner: SM.
@@ -31,7 +15,6 @@
   // locals.changedFields: reading a local that wasn't passed would crash the page.
   const changedFields = locals.changedFields || [];
 
-  // Returns the field's heading, with the marker when the field changed.
   function fieldHeading(fieldName, label) {
     return changedFields.includes(fieldName) ? label + ' (changed)' : label;
   }
@@ -50,7 +33,6 @@
 
   <h4><%= fieldHeading('imageUrl', 'Main image') %></h4>
   <% if (content.imageUrl) { %>
-    <%# loading="lazy": the browser fetches the image only when it scrolls into view. %>
     <img class="review-image" src="<%= content.imageUrl %>" alt="Main image of the article" loading="lazy">
     <p><small><%= content.imageUrl %></small></p>
   <% } else { %>

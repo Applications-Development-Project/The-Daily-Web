@@ -1,26 +1,12 @@
 <%#
   views/editor/dashboard.ejs
 
-  The editor dashboard: every article in the system, with a status filter, a title
-  search and pages of 20. Each row links to the article's review page.
+  The editor dashboard: every article, with a status filter, a title search and pages
+  of 20. The table body starts empty; public/js/editor/dashboard.js fills it from the
+  API, so the row layout exists in one place only.
 
-  The table body starts empty. public/js/editor/dashboard.js fills it from
-  GET /api/editor/articles and refills it after every filter, search or page change,
-  without reloading the page (Ajax). The element ids below are what that script uses.
-  Why not render the first page here too: then the row layout would exist twice (here
-  and in the script) and could drift apart. The work plan accepts JavaScript for the
-  editor's pages; only the public article page must work without it.
-
-  Requirements this serves: the editor sees all articles and filters them by status;
-  search, filtering and paging don't reload the page; semantic HTML5 (main, nav, form,
-  table with th scope="col") with a label for every field.
-
-  Only an editor ever receives this page: requireRole('editor') runs on the server
-  before the controller (routes/pageRoutes/editorPageRoutes.js).
-
-  Rendered by: controllers/editorController.js (showEditorDashboard), for GET /editor.
-  Locals: title (the page title), statusOptions ([{ value, label }] for the filter).
-  Includes: the shared head, header and footer (views/partials) and the editor nav.
+  Rendered by: showEditorDashboard (controllers/editorController.js), for GET /editor.
+  Locals: title, statusOptions ([{ value, label }] for the filter).
   Owner: SM.
 %>
 <!DOCTYPE html>
@@ -34,12 +20,7 @@
   <main class="main-content">
     <h2>All articles</h2>
 
-    <%#
-      role="search" tells screen readers this form filters the list below.
-      The status choices come from the server (STATUS and STATUS_LABELS), so the page
-      offers exactly the statuses the API accepts. maxlength="200" matches the
-      server's search limit; it is only a convenience, the server checks it again.
-    %>
+    <%# maxlength matches the server's limit; the server checks it again. %>
     <form id="article-filters" class="card" role="search">
       <label for="status-filter">Status</label>
       <select id="status-filter" name="status" class="form-field">
@@ -54,20 +35,11 @@
         maxlength="200" placeholder="Part of a title..." autocomplete="off">
     </form>
 
-    <%#
-      Loading, "no articles" and error messages appear here.
-      aria-live="polite" makes screen readers announce the new text when it changes.
-    %>
+    <%# aria-live: screen readers announce the message when it changes. %>
     <p id="article-list-message" class="loading" aria-live="polite">Loading articles...</p>
-    <%# The result of the editor's last action (for example "Deleted ..."). %>
     <p id="article-action-message" aria-live="polite" hidden></p>
 
-    <%#
-      On a narrow screen the table scrolls sideways inside this box, not the whole page
-      (requirements: responsive for computer, tablet and phone). table-scroll is the
-      shared class for this in public/css/main.css (SH), so every table on the site
-      behaves the same way.
-    %>
+    <%# On a narrow screen the table scrolls sideways inside this box, not the whole page. %>
     <div class="table-scroll">
       <table class="data-table">
         <thead>
@@ -97,7 +69,6 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: public/js/editor/dashboard.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="/js/editor/dashboard.js"></script>
 </body>
