@@ -1,36 +1,17 @@
 <%#
   views/editor/articleReview.ejs
 
-  The editor's review page for one article: who wrote it, its status, whether it is
-  live, the editor's note if it was returned, the content and the publish history
-  (every approval, with its date and editor).
+  The review page of one article: details, the editor's note, the content, the Edit
+  form, the decision (approve or return with a note) and the publish history. For a
+  live article with an update in progress, the live version and the submitted changes
+  are shown side by side with the changed fields marked.
 
-  The content part depends on the article:
-  - never published: the submitted content;
-  - live with an update in progress: "Currently live" and "Submitted changes" side by
-    side, with the changed fields marked (requirements: the editor must understand
-    what is published now and what new content awaits approval);
-  - live with no update: the live version only.
+  Everything a reporter typed is printed with the escaping tag (equals sign), so it is
+  shown as text; the minus-sign tag is used only to include our own templates.
 
-  The whole page is rendered on the server; no script is needed to read it.
-
-  Security: only an editor ever receives this page (requireRole('editor') in
-  routes/pageRoutes/editorPageRoutes.js). Everything a reporter typed (title, summary,
-  body, note) is printed with the escaping tag (equals sign), so it is shown as text and
-  can't run as script on the editor's page. The tag with a minus sign (no escaping) is
-  used only to include our own templates (head, header, nav, partials).
-
-  When the workflow allows a decision (only for an article awaiting approval), the
-  page also shows "Approve and publish" and "Return for corrections" with a required
-  note. Every article also has an Edit form (the editor can edit all articles): it
-  changes the working copy, and for a live article with no update in progress, saving
-  publishes the edit at once (see editArticleDraft in the controller). public/js/editor/articleReview.js sends them to the editor API with
-  apiClient (every page's browser code lives in public/js/<area>/).
-
-  Rendered by: controllers/editorController.js (showArticleReview), for GET /editor/articles/:id.
-  Locals: title (the page title), review (prepared by toReviewView() in the controller)
-  and categories (Article.CATEGORIES, for the Edit form).
-  Includes: the shared head, header and footer, the editor nav and partials/articleContent.
+  Rendered by: showArticleReview (controllers/editorController.js), for GET /editor/articles/:id.
+  Locals: title, review (from toReviewView), categories (for the Edit form).
+  Script: public/js/editor/articleReview.js.
   Owner: SM.
 %>
 <!DOCTYPE html>
@@ -53,16 +34,12 @@
           <%= review.isLive ? 'Live on the site' : 'Not published yet' %> &middot;
           Last change <%= review.updatedAt %>
         </p>
-        <%#
-          Only for an article readers can see: an article that was never published has
-          no views yet. encodeURIComponent keeps the id inside the query value, whatever it holds.
-        %>
+        <%# Only a live article has views to show. %>
         <% if (review.isLive) { %>
           <p><a href="/editor/analytics?article=<%= encodeURIComponent(review.id) %>">See its views over time (Impact Analytics)</a></p>
         <% } %>
       </header>
 
-      <%# The note the editor wrote when returning it; the reporter sees the same note on their dashboard. %>
       <% if (review.editorNote) { %>
         <section class="card">
           <h3>Note to the reporter</h3>
@@ -78,13 +55,7 @@
 
       <% } else { %>
         <p class="card"><strong>Changed in this update:</strong> <%= review.changedFieldLabels.join(', ') %></p>
-        <%#
-          Two columns side by side: the live version on the left, the submitted one on
-          the right, so the editor reads them line by line. two-column is the shared class
-          in public/css/main.css (SH): a Flexbox row of two columns that becomes one column on a
-          phone, where the columns would be too narrow to read (requirements: responsive).
-          Each included partial is one section element, so it is one column (one flex item) by itself.
-        %>
+        <%# two-column (main.css): side by side, one column on a phone. %>
         <div class="two-column">
           <%- include('partials/articleContent', { heading: 'Currently live', content: review.published, changedFields: review.changedFields }) %>
           <%- include('partials/articleContent', { heading: 'Submitted changes', content: review.draft, changedFields: review.changedFields }) %>
@@ -92,16 +63,9 @@
       <% } %>
 
       <%#
-        The editor's own edit (requirements: the editor can edit every article). What saving
-        does depends on the status, and the summary line says it: for a live article with no
-        update in progress it publishes at once (data-publishes-on-save makes the script ask
-        for confirmation); otherwise only the working copy changes and the status stays.
-        details/summary is plain HTML that folds the form away until the editor opens it,
-        without any script. The limits (maxlength, required, the category list)
-        match the server's checks, but they are only a quick answer in the browser: the
-        server checks everything again, because a request can be sent without this page.
-        The values are printed with the escaping tag, so a title like "<b>" fills the field
-        as text.
+        The Edit form, folded away by details/summary until opened. For a live article,
+        saving publishes at once, so the script asks for confirmation. The browser limits
+        match the server's checks, which run again on the server.
       %>
       <% if (review.canEdit) { %>
         <details class="card" id="edit-section">
@@ -137,11 +101,7 @@
         </details>
       <% } %>
 
-      <%#
-        The decision buttons appear only when canTransition allows them (pending).
-        The server checks again when they are used, so hiding them is only for
-        clarity, never the protection.
-      %>
+      <%# Shown only when the workflow allows a decision; the server checks again. %>
       <% if (review.canApprove || review.canReturn) { %>
         <section class="card" id="review-decision">
           <h3>Your decision</h3>
@@ -151,11 +111,6 @@
             <button type="button" id="approve-button" class="btn btn-primary">Approve and publish</button>
           <% } %>
 
-          <%#
-            required and maxlength="2000" give a quick answer in the browser; the server
-            checks the same rules again (an empty note gets 400), because a request can
-            be sent without this page.
-          %>
           <% if (review.canReturn) { %>
             <form id="return-form">
               <label for="return-note">Note to the reporter: what needs to be fixed? (required)</label>
@@ -174,7 +129,7 @@
         <% if (review.publishHistory.length === 0) { %>
           <p class="empty-state">Never published.</p>
         <% } else { %>
-          <%# reversed: the list is newest first, so the numbers count down and the first approval keeps number 1. %>
+          <%# reversed: newest first, but the first approval keeps number 1. %>
           <ol reversed>
             <% review.publishHistory.forEach(function (publishEvent) { %>
               <li>Published <%= publishEvent.publishedAt %> by <%= publishEvent.editorName %></li>
@@ -187,7 +142,6 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: public/js/editor/articleReview.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="/js/editor/articleReview.js"></script>
 </body>
