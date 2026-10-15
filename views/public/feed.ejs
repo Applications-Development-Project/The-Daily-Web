@@ -1,42 +1,15 @@
 <%#
   views/public/feed.ejs
 
-  The home page: the news feed of live articles, with search, filters, sorting and
-  infinite scroll. Open to everyone.
+  The home page feed. The server renders the first 20 articles (seen at once, readable by
+  search engines); public/js/public/feed.js loads more on scroll and reloads the list for
+  a search, filter or sort, without reloading the page. Its cards use the same markup.
 
-  How it is built:
-  - The server renders the first 20 articles into this HTML (controllers/feedController.js,
-    showFeedPage), so the reader sees articles immediately and the links are in the page
-    source for search engines.
-  - public/js/public/feed.js loads the next pages when the reader nears the bottom
-    (IntersectionObserver), and reloads the list from page 1 when the search, a filter or
-    the sort changes, all through GET /api/articles, without reloading the page.
-  - A card here and a card built by feed.js have the same markup and classes (article-card),
-    so they look the same however they were loaded.
+  Text from the database is printed with the escaping tag. autocomplete="off" on the
+  filters: after "Back", the browser can't restore a value that doesn't match the list.
 
-  Why it is written this way (questions a lecturer may ask):
-  - Semantic HTML5: main for the feed, aside for the sidebar (partials/sidebar.ejs), one
-    article element per card, time with a machine-readable datetime, a form with role="search".
-    Screen readers and search engines understand the page structure from these elements.
-  - Flexbox layout: main-content-wrapper puts the feed and the sidebar side by side, and on a
-    narrow screen stacks the sidebar below the feed (public/css/main.css), so the page works on
-    a computer, a tablet and a phone (requirements: responsive).
-  - Every text from the database is printed with the escaping tag (the one with an equals
-    sign): a title containing "<script>" is shown as text and never runs (XSS). The tag with
-    a minus sign is used only to include our own partials.
-  - These notes are EJS comments (the tag with a hash sign): the server removes them, so
-    they never reach the browser. An HTML comment would be readable by anyone with
-    "View page source".
-  - autocomplete="off" on the filters: otherwise, after "Back", the browser could restore a
-    filter value that doesn't match the list the server rendered.
-  - Every label is a real label element (visually hidden where the placeholder says enough),
-    so screen readers announce each field.
-
-  Rendered by: controllers/feedController.js (showFeedPage), for GET /.
-  Locals: title, articles (feed cards: id, title, summary, imageUrl, category, reporterName,
-  publishedAt, totalViews), hasMore (whether there is a second page), categories
-  (Article.CATEGORIES).
-  Includes: the shared head, header, sidebar and footer (views/partials).
+  Rendered by: showFeedPage (controllers/feedController.js), for GET /.
+  Locals: title, articles (feed cards), hasMore, categories.
   Owner: SH.
 %>
 <!DOCTYPE html>
@@ -50,9 +23,7 @@
         <main class="main-content">
             <h2 class="visually-hidden">Latest news</h2>
 
-            <%# Search, filters and sort. No action or submit button: feed.js reacts to every
-                change and the server is asked with fetch; Enter in the search box is handled
-                by the script too, so the page never reloads. %>
+            <%# No submit button: the script reacts to every change (and to Enter). %>
             <form id="feed-filters" class="card feed-filters" role="search">
                 <label for="search-input" class="visually-hidden">Search articles</label>
                 <input type="search" id="search-input" name="search" class="form-field"
@@ -67,7 +38,7 @@
                         <% }); %>
                     </select>
 
-                    <%# Viewed means opened from this browser (the deviceId cookie): readers don't log in. %>
+                    <%# Viewed = opened from this browser (the deviceId cookie). %>
                     <label for="viewed-filter" class="visually-hidden">Viewed or not</label>
                     <select id="viewed-filter" name="viewed" class="form-field" autocomplete="off">
                         <option value="">Viewed and not viewed</option>
@@ -81,26 +52,17 @@
                         <option value="popular">Most popular</option>
                     </select>
 
-                    <%# type="button": it must never submit the form. feed.js calls
-                        DELETE /api/articles/viewed, then reloads the list (not the page). %>
                     <button type="button" id="reset-views-btn" class="btn btn-secondary">Reset viewed marks</button>
                 </div>
                 <p id="feed-action-message" class="form-error" role="alert" hidden></p>
             </form>
 
-            <%# The list. data-has-more tells feed.js whether the server has a second page.
-                aria-live="polite": screen readers announce new cards and messages. %>
+            <%# data-has-more tells the script whether there is a second page. %>
             <div id="feed-list" data-has-more="<%= hasMore ? 'true' : 'false' %>" aria-live="polite">
                 <% articles.forEach(function (article) { %>
-                    <%# A card with an image gets article-card-with-image: on a wide screen the image
-                        sits beside the text (a Flexbox row), on a phone above it (main.css). %>
                     <article class="card article-card<%= article.imageUrl ? ' article-card-with-image' : '' %>" data-article-id="<%= article.id %>">
                         <% if (article.imageUrl) { %>
-                            <%# loading="lazy": images further down load only when the reader scrolls to them.
-                                onerror: if the image's host is down or the link is broken, show our own
-                                placeholder instead of a broken-image icon (this.onerror = null stops a loop
-                                if the placeholder itself failed). The address was checked to be http(s)
-                                when it was saved, and escaping keeps it inside the attribute. %>
+                            <%# onerror: a broken image shows our placeholder (onerror = null stops a loop). %>
                             <img class="article-card-image" src="<%= article.imageUrl %>" alt="<%= article.title %>"
                                 loading="lazy" onerror="this.onerror=null; this.src='/images/placeholder.svg';">
                         <% } %>
@@ -131,7 +93,6 @@
 
     <%- include('../partials/footer') %>
 
-    <%# Order matters: feed.js and weatherWidget.js call apiClient, so apiClient.js loads first. %>
     <script src="/js/shared/apiClient.js"></script>
     <script src="/js/public/feed.js"></script>
     <script src="/js/public/weatherWidget.js"></script>

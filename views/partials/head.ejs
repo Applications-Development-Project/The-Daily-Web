@@ -1,21 +1,10 @@
 <%#
   views/partials/head.ejs
 
-  The head element shared by every page: character set, the viewport for phones, the
-  page title, the site icon and the one shared stylesheet.
-
-  Locals (both optional):
-    title       - the page title shown in the browser tab and in search results.
-                  Default: the site name.
-    description - a one-sentence summary for search engines (the article page passes the
-                  article's summary). Left out when not given.
-  "locals.title" instead of "title": reading a local that a page didn't pass would make
-  EJS throw, while reading it from locals just gives undefined.
-
-  The viewport meta tag makes phones use the real screen width instead of pretending to be
-  a desktop, which is what makes the responsive CSS work (requirements: computer, tablet
-  and phone). Express serves the public folder at "/" (app.js), so public/css/main.css is
-  at /css/main.css.
+  The head shared by every page: character set, viewport, title, icon and the stylesheet.
+  Locals (optional): title, description (for search engines). "locals.title": reading a
+  local a page didn't pass would make EJS throw.
+  The viewport tag makes phones use their real width, which the responsive CSS needs.
 
   Included by: every page view.
   Owner: SH.
