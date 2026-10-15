@@ -1,64 +1,39 @@
 /**
  * middleware/commentRateLimiter.js
  *
- * Enforces the requirement "a guest may post at most 3 comments per minute from the
- * same device; a further attempt is blocked by the server with a suitable message".
- * It runs before the comment controller, so a blocked comment is never saved.
+ * A guest may post at most 3 comments per minute from the same device; the next one gets
+ * 429 "Too Many Requests" with a message. It counts the comments this device saved in the
+ * last 60 seconds (instead of a counter in memory), so the limit survives a restart, needs
+ * no extra storage, and is answered from the { deviceId, createdAt } index. createdAt is
+ * set by Mongoose, so a guest can't fake it. Reporters and editors aren't limited.
  *
- * How it counts: it asks MongoDB how many comments this device (req.deviceId, from the
- * deviceId cookie) created in the last 60 seconds. If there are already 3, the request
- * gets 429 "Too Many Requests", the HTTP status made for exactly this case (it is in the
- * plan's list of status codes). Counting saved comments, instead of keeping a counter
- * in memory, means:
- * - the limit still holds after a server restart,
- * - no extra collection or storage is needed,
- * - the check is fast: the { deviceId: 1, createdAt: -1 } index on Comment answers the
- *   count without reading any comment documents.
- * The count relies on createdAt, which a guest can't fake: Mongoose sets it when the
- * comment is saved, and commentController.addComment copies only the name and text
- * from the request body, never a date.
- *
- * Who is limited: only guests. Logged-in reporters and editors skip the check, because
- * the requirement talks about guests.
- *
- * Known limits (acceptable for this project, worth knowing for the defense):
- * - Counting and then saving are two separate steps. Two comments sent at exactly the
- *   same moment could both be counted before either is saved, and both pass.
- *   A strict version would need one atomic database operation per device.
- * - A guest can get a new device id by clearing cookies. Recognising a device without a
- *   cookie (for example by IP address) has its own problems: everyone behind one
- *   office or school network shares an IP.
+ * Known limits: counting and saving are two steps, so two comments at exactly the same
+ * moment could both pass; clearing cookies gives a new device id (an IP address would be
+ * shared by a whole office or school network).
  *
  * Used by: routes/apiRoutes/commentApiRoutes.js, before commentController.addComment.
- * Related: models/Comment.js (the index), middleware/assignDeviceId.js (req.deviceId),
- * middleware/errorHandler.js (sends the 429 JSON).
  * Owner: OS.
  */
 
 const Comment = require('../models/Comment');
 const logger = require('../services/logger');
 
-// The limit from the requirements: 3 comments per minute per device.
 const MAX_COMMENTS_PER_WINDOW = 3;
 const WINDOW_MS = 60 * 1000;
 
 const LIMIT_REACHED_MESSAGE = 'You can post up to 3 comments per minute. Please wait a moment and try again.';
 
 /**
- * Lets the comment through, or stops it with 429 if this guest's device already
- * posted 3 comments in the last minute.
+ * Lets the comment through, or passes on a 429 if this guest's device already posted 3
+ * comments in the last minute. If the count fails, Express 5 sends the error to
+ * errorHandler by itself.
  *
- * It is async because it waits for the database count. In Express 5, if the count
- * fails, the rejected promise goes to errorHandler by itself (500), so the server
- * doesn't crash.
- *
- * @param {import('express').Request} request - Uses request.session.user and request.deviceId.
+ * @param {import('express').Request} request - Uses session.user and deviceId.
  * @param {import('express').Response} response - Not used; errorHandler sends the 429.
- * @param {import('express').NextFunction} next - Continues to the controller, or passes the 429 on.
+ * @param {import('express').NextFunction} next
  * @returns {Promise<void>}
  */
 async function limitGuestComments(request, response, next) {
-  // Reporters and editors are not limited.
   if (request.session.user) {
     return next();
   }
