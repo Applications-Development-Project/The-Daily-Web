@@ -1,42 +1,19 @@
 <%#
   views/public/article.ejs
 
-  The full article page: the approved version of one article, and its comments.
-  Open to everyone.
+  The full article page and its comments. Everything, the full text and the existing
+  comments included, is in the HTML the server sends, so search engines read it without
+  JavaScript. articleComments.js only adds a NEW comment to the top of the list.
 
-  Requirements this serves: the page shows the title, reporter's name, category, publish
-  date, main image and the full text, and a comments area with the list and a form for a
-  new comment. It must be readable by search engines, so EVERYTHING here, the full text and
-  the existing comments included, is in the HTML the server sends; nothing depends on
-  JavaScript. The only script for the article itself is articleComments.js, which adds a
-  NEW comment to the top of the list without reloading it.
+  Text from the database is printed with the escaping tag. The comments area is a contract
+  with public/js/public/articleComments.js: the element ids and the markup of one comment.
 
-  Why it is written this way (questions a lecturer may ask):
-  - XSS: every text from the database (title, body, comments) is printed with the escaping
-    tag (the one with an equals sign). A comment like "<script>alert(1)</script>" is shown
-    as text and never runs. The tag with a minus sign is used only to include our own
-    partials, never for user text.
-  - The body is plain text split into paragraphs by the controller, so readers see real
-    paragraphs while no HTML from a reporter ever reaches the page.
-  - These notes are EJS comments: the server removes them, so they never reach the browser.
-  - The comments area is a contract with public/js/public/articleComments.js: the ids
-    comments (with data-article-id), comment-list, comment-form (fields authorName and
-    text) and comment-error, and the markup of one comment (li.comment with
-    p.comment-meta, span.comment-author, time.comment-date and p.comment-text). The script
-    builds new comments with exactly the same markup, so old and new ones look the same.
-  - Semantic HTML5: article for the article, header inside it for title and details, time
-    with a machine-readable datetime, figure for the image, section for the comments.
-
-  Rendered by: controllers/articlePageController.js (showArticlePage), for GET /articles/:id.
-  Locals: title, description (the summary, for the meta description; it isn't printed in
-  the page because a body usually opens with it), article ({ id, title, category, imageUrl,
-  paragraphs, reporterName, publishedAt }), comments (the newest, each
-  { authorName, text, createdAt }).
-  Includes: the shared head, header, sidebar and footer (views/partials).
+  Rendered by: showArticlePage (controllers/articlePageController.js), for GET /articles/:id.
+  Locals: title, description, article, comments.
   Owner: SH (page). The comments script is OS's.
 %>
 <%
-  // The date format the whole site uses, for example "10 Oct 2026, 14:32".
+  // For example "10 Oct 2026, 14:32", as on the rest of the site.
   const dateFormat = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
 %>
 <!DOCTYPE html>
@@ -63,9 +40,7 @@
                 </header>
 
                 <% if (article.imageUrl) { %>
-                    <%# onerror: a broken link or a host that is down shows our own placeholder
-                        instead of a broken-image icon. The address was checked to be http(s)
-                        when it was saved, and escaping keeps it inside the attribute. %>
+                    <%# onerror: a broken image shows our placeholder. %>
                     <figure>
                         <img class="article-card-image" src="<%= article.imageUrl %>" alt="<%= article.title %>"
                             onerror="this.onerror=null; this.src='/images/placeholder.svg';">
@@ -82,7 +57,7 @@
             <section id="comments" class="card" data-article-id="<%= article.id %>" aria-labelledby="comments-title">
                 <h3 id="comments-title">Comments</h3>
 
-                <%# Newest first, at most Comment.MAX_SHOWN_PER_ARTICLE (the same number as the API). %>
+                <%# Newest first, as many as the comments API sends. %>
                 <ul id="comment-list">
                     <% comments.forEach(function (comment) { %>
                         <li class="comment">
@@ -98,16 +73,16 @@
                     <% } %>
                 </ul>
 
-                <%# The script sends this form with fetch. method="post" only matters if the script
-                    failed to load: the browser would otherwise send the form with GET and put the
-                    name and comment in the address bar. maxlength and required give a quick answer
-                    in the browser; the server checks the same rules again (and the 3-per-minute limit). %>
+                <%#
+                  The script sends the form with fetch. method="post" matters only if the script
+                  failed to load (GET would put the comment in the address bar). The server checks
+                  the same rules again, and the 3-per-minute limit.
+                %>
                 <form id="comment-form" method="post">
                     <label for="comment-author-name">Your name</label>
                     <input type="text" id="comment-author-name" name="authorName" class="form-field" maxlength="50" required>
                     <label for="comment-text">Your comment</label>
                     <textarea id="comment-text" name="text" class="form-field" rows="4" maxlength="1000" required></textarea>
-                    <%# role="alert": screen readers announce an error (for example the limit) as soon as it appears. %>
                     <p id="comment-error" class="form-error" role="alert" hidden></p>
                     <button type="submit" class="btn btn-primary">Post comment</button>
                 </form>
@@ -119,7 +94,6 @@
 
     <%- include('../partials/footer') %>
 
-    <%# Order matters: articleComments.js and weatherWidget.js call apiClient, so apiClient.js loads first. %>
     <script src="/js/shared/apiClient.js"></script>
     <script src="/js/public/articleComments.js"></script>
     <script src="/js/public/weatherWidget.js"></script>

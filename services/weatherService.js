@@ -1,51 +1,15 @@
 /**
  * services/weatherService.js
  *
- * Gets the current weather for the sidebar widget from Open-Meteo (open-meteo.com), and
- * keeps it in memory so that all readers share one copy.
+ * The sidebar's weather from Open-Meteo, kept in memory so all readers share one copy.
+ * Open-Meteo is free and needs no key or credit card, so it works on any computer
+ * (a keyed service would fail on the lecturer's, since .env isn't in the repository).
  *
- * Requirements this serves (in our own words): the sidebar shows a weather widget from a
- * known, free external web service, on a plan that needs no credit card; the data a reader
- * sees may be at most 15 minutes old; the site may serve thousands of readers at once.
+ * At most 15 minutes old: a copy younger than 5 minutes is served as it is (so Open-Meteo
+ * is called at most every 5 minutes, however many readers); a copy is never served after
+ * 10 minutes; the widget asks again every 5 minutes. 10 + 5 = 15.
  *
- * Why Open-Meteo and not OpenWeatherMap (the example the requirements give): Open-Meteo is
- * free and needs no account, no API key and no credit card. Our .env is never in the
- * repository, so with a keyed service the widget would show "Weather unavailable" on every
- * computer that doesn't have our key, including the lecturer's. With Open-Meteo it works
- * on any computer right after "npm install". The city is set in .env (WEATHER_CITY for the
- * name shown, WEATHER_LATITUDE and WEATHER_LONGITUDE for the place), with Tel Aviv as the
- * default.
- *
- * How the 15 minutes are guaranteed (three numbers that work together):
- * - REFRESH_AFTER_MS (5 minutes): a copy younger than this is served as it is, without
- *   calling Open-Meteo. So the external service is called at most once every 5 minutes,
- *   whether we have 1 reader or 10,000: every browser reads OUR cached copy.
- * - MAX_AGE_MS (10 minutes): if Open-Meteo fails, we keep serving the last good copy, but
- *   only while it is younger than 10 minutes. After that the widget says "Weather
- *   unavailable" instead of showing old weather as if it were current.
- * - The browser asks our server again every 5 minutes (public/js/public/weatherWidget.js).
- * The worst case is a copy that is just under 10 minutes old when the browser gets it, then
- * shown for 5 more minutes: under 10 + 5 = 15 minutes of delay added by our site.
- *
- * Other choices a lecturer may ask about:
- * - One shared request (fetchInProgress): if many readers arrive while the copy is being
- *   refreshed, they all wait for the SAME call instead of each starting their own. Without
- *   it, 1,000 readers arriving when the copy expires would send 1,000 calls at once.
- * - A short pause after a failure (RETRY_AFTER_FAILURE_MS): while the service is down, we
- *   try again at most once a minute, instead of on every request.
- * - A timeout (REQUEST_TIMEOUT_MS): a service that never answers can't make our readers
- *   wait forever; after 5 seconds the call counts as failed.
- * - In memory, not in MongoDB: the copy is a few bytes, and losing it on a restart costs
- *   only one call. (With several server processes each would have its own copy; one
- *   process is what this project runs.)
- * - The browser never calls Open-Meteo itself: it calls our /api/weather. That is what lets
- *   thousands of readers share one copy, and the page doesn't depend on an outside site.
- * - Problems are logged with logger.warn, not logger.error: an outside service being down
- *   is expected and handled, not a bug in our server.
- *
- * Used by: controllers/weatherController.js (GET /api/weather).
- * Related: public/js/public/weatherWidget.js (the widget), views/partials/sidebar.ejs,
- * .env.example (WEATHER_CITY, WEATHER_LATITUDE, WEATHER_LONGITUDE).
+ * Used by: controllers/weatherController.js.
  * Owner: SH.
  */
 
@@ -59,15 +23,14 @@ const DEFAULT_LATITUDE = 32.0853;
 const DEFAULT_LONGITUDE = 34.7818;
 
 const MINUTE_MS = 60 * 1000;
-// See the header for how these numbers keep the widget under 15 minutes old.
 const REFRESH_AFTER_MS = 5 * MINUTE_MS;
 const MAX_AGE_MS = 10 * MINUTE_MS;
+// While the service is down, try again at most once a minute, not on every request.
 const RETRY_AFTER_FAILURE_MS = 1 * MINUTE_MS;
+// A service that never answers can't make readers wait forever.
 const REQUEST_TIMEOUT_MS = 5000;
 
-// Open-Meteo describes the weather with a number, the international "WMO weather code".
-// This table turns the code into words and a symbol for the widget. Each row lists the
-// codes that look the same to a reader.
+// Open-Meteo gives an international "WMO weather code"; this turns it into words and a symbol.
 const WEATHER_DESCRIPTIONS = [
   { codes: [0], description: 'Clear sky', icon: '☀️' },
   { codes: [1, 2], description: 'Partly cloudy', icon: '⛅' },
@@ -79,17 +42,14 @@ const WEATHER_DESCRIPTIONS = [
   { codes: [95, 96, 99], description: 'Thunderstorm', icon: '⛈️' },
 ];
 
-// The last weather the service gave us: { city, temperature, description, icon, updatedAt }.
-// null until the first successful call.
+// The last good weather (null until the first success), the call running now (a Promise
+// shared by everyone who waits), and when the last call failed.
 let lastGoodWeather = null;
-// The call to Open-Meteo that is running right now (a Promise), or null.
 let fetchInProgress = null;
-// When the last call failed (milliseconds since 1970), or 0.
 let lastFailureAt = 0;
 
 /**
- * Reads the place to ask about from .env, with Tel Aviv as the default. A coordinate that
- * isn't a number (a typo in .env) falls back to the default instead of breaking the widget.
+ * Reads the place from .env, with Tel Aviv as the default (also for a coordinate typo).
  *
  * @returns {{city: string, latitude: number, longitude: number}}
  */
@@ -106,7 +66,7 @@ function readConfiguredPlace() {
 }
 
 /**
- * Turns a WMO weather code into words and a symbol. At night a clear sky gets a moon.
+ * Turns a WMO weather code into words and a symbol (a moon for a clear night).
  *
  * @param {number} weatherCode - Open-Meteo's weather_code.
  * @param {boolean} isDay - false at night.
@@ -124,16 +84,13 @@ function describeWeatherCode(weatherCode, isDay) {
 }
 
 /**
- * Calls Open-Meteo once and turns its answer into our own small object, with only the
- * fields the widget shows (the contract { city, temperature, description, icon, updatedAt }).
+ * Calls Open-Meteo once and keeps only the widget's fields.
  *
  * @returns {Promise<{city: string, temperature: number, description: string, icon: string, updatedAt: Date}>}
  * @throws {Error} If the call fails, times out, or the answer isn't in the expected shape.
  */
 async function fetchWeatherFromApi() {
   const place = readConfiguredPlace();
-  // URLSearchParams builds and encodes the query string. "current" asks only for the three
-  // values we show; units are Celsius by default.
   const query = new URLSearchParams({
     latitude: String(place.latitude),
     longitude: String(place.longitude),
@@ -147,8 +104,7 @@ async function fetchWeatherFromApi() {
   }
 
   const data = await response.json();
-  // An outside service can change or break its answer; we check the fields we use instead
-  // of letting "data.current is undefined" crash the request.
+  // An outside answer can change: check the fields instead of crashing on undefined.
   const current = data && data.current;
   if (!current || typeof current.temperature_2m !== 'number' || typeof current.weather_code !== 'number') {
     throw new Error('Open-Meteo answered in an unexpected format');
@@ -165,13 +121,11 @@ async function fetchWeatherFromApi() {
 }
 
 /**
- * Refreshes lastGoodWeather with one call to Open-Meteo. If a call is already running,
- * returns that same call instead of starting another one (all waiting readers share it).
+ * Refreshes the shared copy with one call. If a call is already running, everyone waits
+ * for that same call (1,000 readers at once still make one call). Never rejects: a
+ * failure is logged as a warning (an outside service down is expected, not our bug).
  *
- * The returned promise never rejects: a failure is logged and remembered in lastFailureAt,
- * and getWeather then decides what to answer.
- *
- * @returns {Promise<void>} Resolves when the call has finished, successfully or not.
+ * @returns {Promise<void>}
  */
 function refreshWeather() {
   if (fetchInProgress === null) {
@@ -185,7 +139,6 @@ function refreshWeather() {
         logger.warn(`Weather service failed: ${error.message}`);
       })
       .finally(() => {
-        // Cleared whatever happened, so the next refresh can start a new call.
         fetchInProgress = null;
       });
   }
@@ -193,31 +146,27 @@ function refreshWeather() {
 }
 
 /**
- * Tells whether the cached weather is younger than the given age.
+ * Tells whether the shared copy is younger than the given age.
  *
  * @param {number} maxAgeMs - The age limit, in milliseconds.
- * @returns {boolean} true if there is a cached copy younger than maxAgeMs.
+ * @returns {boolean}
  */
 function isCachedWeatherYoungerThan(maxAgeMs) {
   return lastGoodWeather !== null && Date.now() - lastGoodWeather.updatedAt.getTime() < maxAgeMs;
 }
 
 /**
- * Returns the current weather, from the shared copy when it is fresh enough, otherwise
- * after refreshing it (see the header for the rules).
+ * Returns the current weather: the shared copy when fresh enough, otherwise after a refresh.
  *
  * @returns {Promise<{city: string, temperature: number, description: string, icon: string, updatedAt: Date}>}
- * @throws {Error} "Weather unavailable" when there is no copy younger than 10 minutes
- *   (the controller answers 503 and the widget says so).
+ * @throws {Error} "Weather unavailable" when no copy is younger than 10 minutes.
  */
 async function getWeather() {
-  // The common case: thousands of requests answered from memory, with no outside call.
+  // The common case: answered from memory.
   if (isCachedWeatherYoungerThan(REFRESH_AFTER_MS)) {
     return lastGoodWeather;
   }
 
-  // Right after a failure we don't call again on every request; the last good copy (if it
-  // is still young enough) is served meanwhile.
   if (Date.now() - lastFailureAt >= RETRY_AFTER_FAILURE_MS) {
     await refreshWeather();
   }

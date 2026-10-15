@@ -1,18 +1,10 @@
 <%#
   views/public/login.ejs
 
-  The login page for reporters and editors (guests read the site without an account).
-  The form is sent with fetch (Ajax) to POST /api/auth/login, so a wrong password is
-  shown right here without reloading the page. On success the server answers with
-  where to go next (/reporter or /editor), and the script goes there.
+  The login page for reporters and editors. public/js/public/login.js sends the form with
+  fetch, so a wrong password is shown without reloading. A logged-in user never sees it.
 
-  Rendered by: controllers/authController.js (showLoginPage), for GET /login.
-  Logged-in users never see it: showLoginPage sends them to their own area.
-
-  The page's script is public/js/public/login.js (every page's browser code lives in
-  public/js/<area>/, so there are no inline scripts).
-
-  Styles: login-card, login-intro and btn-block in public/css/main.css (no inline styles).
+  Rendered by: showLoginPage (controllers/authController.js), for GET /login.
   Owner: OS (logic) / SH (layout and partials).
 %>
 <!DOCTYPE html>
@@ -24,15 +16,13 @@
 
     <main class="main-content">
         <section class="card login-card" aria-labelledby="login-title">
-            <%# h2: the shared header already holds the page's h1 (the site name). %>
             <h2 id="login-title">Log in</h2>
             <p class="login-intro">For reporters and editors. Readers don't need an account.</p>
 
-            <%# method="post" matters even though the script sends the form itself: if the
-                script ever fails to load, the browser would otherwise send the form with GET
-                and put the password in the address bar and the browser history. %>
-            <%# autocomplete="username" and "current-password" let the browser's password
-                manager fill in and save the login. %>
+            <%#
+              method="post": if the script failed to load, GET would put the password in the
+              address bar. The autocomplete values let a password manager fill in the login.
+            %>
             <form id="login-form" method="post" action="/api/auth/login">
                 <label for="username">Username</label>
                 <input id="username" name="username" type="text" class="form-field" autocomplete="username" maxlength="30" required autofocus>
@@ -40,7 +30,7 @@
                 <label for="password">Password</label>
                 <input id="password" name="password" type="password" class="form-field" autocomplete="current-password" maxlength="200" required>
 
-                <%# role="alert" makes screen readers announce the error as soon as it appears. %>
+                <%# role="alert": screen readers announce the error at once. %>
                 <p id="login-error" class="form-error" role="alert" hidden></p>
 
                 <button id="login-button" class="btn btn-primary btn-block" type="submit">Log in</button>
@@ -50,7 +40,6 @@
 
     <%- include('../partials/footer') %>
 
-    <%# Order matters: login.js calls apiClient, so apiClient.js must load first. %>
     <script src="/js/shared/apiClient.js"></script>
     <script src="/js/public/login.js"></script>
 </body>

@@ -1,55 +1,31 @@
 /**
  * public/js/editor/analytics.js
  *
- * Runs the Impact Analytics page (views/editor/analytics.ejs): the editor searches an
- * article by title, picks it, chooses a period, and sees a Chart.js line chart of its
- * views over time with a dashed vertical line at every publish. A button resets the
- * article's statistics. Nothing here reloads the page (Ajax with fetch, through apiClient.js).
+ * The Impact Analytics page: search an article, choose a period, and see a Chart.js line
+ * of its views with a numbered dashed line at every publish; reset its statistics.
+ * Nothing here reloads the page.
  *
- * Requirements this serves: the editor sees an article's views over time with a clear mark
- * at each published update, so the views before and after can be compared; the statistics
- * can be reset; the page works without full reloads.
- *
- * How the chart is drawn, and why:
- * - The x-axis is a "linear" axis of millisecond timestamps, with labels formatted in a
- *   callback (formatAxisLabel). Chart.js's "time" axis would need an extra date-adapter
- *   package, and we only use the packages the course allows.
- * - The publish markers are drawn by our own small Chart.js plugin (publishMarkerPlugin,
- *   using the afterDraw hook): after Chart.js draws the line, the plugin draws one dashed
- *   vertical line and a number at each publish time, matching the numbered list below it.
- * - The x-axis labels are placed by us on whole hours or midnights (buildTimeTicks), not
- *   on the odd moments Chart.js would pick on a linear axis.
- * - Up to 30 days, the chart shows views per HOUR, as the server stores them. For longer
- *   periods the hours are added up into DAYS in the browser: 8,760 points on a screen a
- *   few hundred pixels wide can't be read, while 365 daily points can.
- *
- * Every text from the server is put on the page with textContent, never innerHTML, so a
- * title like "<script>..." is shown as text. Nothing here is a permission check: the APIs
- * answer 401/403 to anyone who isn't an editor, whatever this script does.
- *
- * The answers it reads are SM's own contracts: { articles: [...] } from listAllArticles in
- * controllers/editorController.js, and { buckets: [{ hourStart, views }], publishEvents:
- * [{ publishedAt }] } from getArticleViews in controllers/analyticsController.js.
+ * The x-axis is a "linear" axis of timestamps (Chart.js's "time" axis needs an extra
+ * package). Up to 30 days the chart shows views per hour; longer periods are added up
+ * per day, because thousands of hourly points can't be read.
  *
  * Loaded by: views/editor/analytics.ejs, after public/js/shared/apiClient.js and Chart.js.
- * Related: controllers/analyticsController.js, services/viewTracker.js.
  * Owner: SM.
  */
 
 const ARTICLES_API_URL = '/api/editor/articles';
 
-// The same search delay as the dashboard: one request when typing pauses, not one per key.
+// Wait this long after the last key before searching.
 const SEARCH_DELAY_MS = 300;
 
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
-// Periods longer than this are shown per day instead of per hour (see the header).
+// Longer periods are shown per day instead of per hour.
 const MAX_HOURLY_DAYS = 30;
 
 /**
- * Reads a colour from main.css (for example --color-accent), so the chart uses the site's
- * colours. A canvas can't use CSS variables directly, so we read the computed value.
+ * Reads a colour from main.css (a canvas can't use CSS variables directly).
  *
  * @param {string} variableName - For example '--color-accent'.
  * @param {string} fallback - Used if the stylesheet doesn't define it.
@@ -61,8 +37,7 @@ function readCssColour(variableName, fallback) {
 }
 
 /**
- * Formats a moment for people, for example "10 Oct 2026, 14:00", in the editor's own time
- * zone (the server sends exact moments in UTC). The same format as the dashboard.
+ * Formats a moment, for example "10 Oct 2026, 14:00", in the editor's time zone.
  *
  * @param {number|string} moment - Milliseconds or an ISO date.
  * @returns {string}
@@ -78,11 +53,9 @@ function formatDateTime(moment) {
 }
 
 /**
- * Formats one label of the x-axis. Shorter than formatDateTime, because many labels share
- * the axis. The ticks sit on whole hours (24 hours) or on midnights (longer periods), see
- * buildTimeTicks, so the time or the date alone says everything.
+ * Formats one x-axis label: the time for a 24-hour period, otherwise the date.
  *
- * @param {number} milliseconds - The tick's value on the linear axis.
+ * @param {number} milliseconds - The tick's value on the axis.
  * @param {number} rangeDays - The chosen period in days.
  * @returns {string} For example "14:00" or "10 Oct".
  */
@@ -95,10 +68,9 @@ function formatAxisLabel(milliseconds, rangeDays) {
 }
 
 /**
- * Chooses where the x-axis labels go. On a "linear" axis Chart.js picks round numbers of
- * MILLISECONDS, which as times are odd moments like "15 Sept 22:20". We place the ticks
- * ourselves instead: every 3 hours on the hour for 24 hours, and on local midnights for
- * longer periods, a few days apart so about 7 labels fit.
+ * Places the x-axis labels on round times: every 3 hours for 24 hours, otherwise on
+ * midnights a few days apart (about 7 labels). On its own, Chart.js would pick round
+ * numbers of milliseconds, which are odd times like "22:20".
  *
  * @param {number} from - The axis start, in milliseconds.
  * @param {number} to - The axis end, in milliseconds.
@@ -119,10 +91,10 @@ function buildTimeTicks(from, to, rangeDays) {
     }
     return ticks;
   }
-  // The smallest step from this list that gives at most about 7 labels.
+  // The smallest step that gives at most about 7 labels.
   const stepDays = [1, 2, 5, 7, 14, 30, 61].find((days) => rangeDays / days <= 7) || 61;
   tick.setHours(24, 0, 0, 0);
-  // setDate (not adding milliseconds) keeps the ticks on midnight across daylight saving changes.
+  // setDate keeps the ticks on midnight across daylight saving changes.
   for (; tick.getTime() <= to; tick.setDate(tick.getDate() + stepDays)) {
     ticks.push({ value: tick.getTime() });
   }
@@ -130,9 +102,8 @@ function buildTimeTicks(from, to, rangeDays) {
 }
 
 /**
- * Turns the server's hourly buckets into chart points { x: milliseconds, y: views }.
- * For a long period the hours are added up per day (the editor's local day), so the
- * chart stays readable; see the header.
+ * Turns the server's hourly buckets into chart points { x: milliseconds, y: views },
+ * adding the hours up per (local) day when perDay is true.
  *
  * @param {{hourStart: string, views: number}[]} buckets - Oldest first, one per hour.
  * @param {boolean} perDay - true to add the hours up into days.
@@ -142,7 +113,7 @@ function toChartPoints(buckets, perDay) {
   if (!perDay) {
     return buckets.map((bucket) => ({ x: new Date(bucket.hourStart).getTime(), y: bucket.views }));
   }
-  // A Map keeps the days in the order they were first added, which is oldest first.
+  // A Map keeps the days in the order they were added (oldest first).
   const viewsPerDay = new Map();
   buckets.forEach((bucket) => {
     const dayStart = new Date(bucket.hourStart);
@@ -154,29 +125,23 @@ function toChartPoints(buckets, perDay) {
 }
 
 /**
- * Our own Chart.js plugin: after the chart is drawn, it draws a dashed vertical line and a
- * number at each publish time, so the editor sees the views before and after each update.
- * The numbers match the numbered list under the chart, which gives each publish's exact
- * time; a short number fits even when two publishes are close together, where a word
- * would overlap. If two numbers would still touch, the second is drawn one row lower.
- * Chart.js calls afterDraw on every redraw (for example when the window is resized), so
- * the markers always sit at the right place.
- *
- * The times come from the chart's options (options.plugins.publishMarkers.times), so the
- * same plugin object serves every chart.
+ * Our own Chart.js plugin: after Chart.js draws the line (afterDraw), it draws a numbered
+ * dashed line at each publish time. The numbers match the list under the chart. Numbers
+ * that would touch are moved one row lower. The times come from
+ * options.plugins.publishMarkers.times.
  */
 const publishMarkerPlugin = {
   id: 'publishMarkers',
 
   /**
    * @param {Object} chart - The Chart.js chart being drawn.
-   * @param {Object} args - Unused (Chart.js passes it to every hook).
+   * @param {Object} args - Unused.
    * @param {{times: number[], colour: string}} options - Our plugin's options.
    * @returns {void}
    */
   afterDraw(chart, args, options) {
     const { ctx: context, chartArea, scales } = chart;
-    // save() and restore(): the dash and colour we set must not leak into Chart.js's own drawing.
+    // save() and restore(): our dash and colour must not leak into Chart.js's drawing.
     context.save();
     context.strokeStyle = options.colour;
     context.fillStyle = options.colour;
@@ -186,13 +151,11 @@ const publishMarkerPlugin = {
     context.textAlign = 'left';
     context.textBaseline = 'top';
 
-    // Where the last number ended and on which row it was, to move the next one down if needed.
     let lastLabelRight = -Infinity;
     let row = 0;
     options.times.forEach((publishTime, index) => {
       // getPixelForValue turns a time into its x position on the canvas.
       const x = scales.x.getPixelForValue(publishTime);
-      // A publish outside the visible area is skipped (it can't be, but this keeps it safe).
       if (x < chartArea.left || x > chartArea.right) {
         return;
       }
@@ -203,7 +166,6 @@ const publishMarkerPlugin = {
 
       const label = String(index + 1);
       const labelX = x + 3;
-      // Three rows are enough: by the fourth close publish, the first row is free again.
       row = labelX < lastLabelRight ? (row + 1) % 3 : 0;
       context.fillText(label, labelX, chartArea.top + 2 + row * 14);
       lastLabelRight = labelX + context.measureText(label).width + 3;
@@ -214,8 +176,8 @@ const publishMarkerPlugin = {
 };
 
 /**
- * Finds the page's elements and connects the search, the period, the chart and the reset
- * button. Does nothing on a page without the analytics panel.
+ * Connects the search, the period, the chart and the reset button. Does nothing on a
+ * page without the analytics panel.
  *
  * @returns {void}
  */
@@ -239,15 +201,12 @@ function setUpAnalyticsPage() {
   const resetButton = document.getElementById('reset-views');
   const resetMessage = document.getElementById('reset-message');
 
-  // The article on the chart now; null until the editor picks one.
   let chosenArticle = null;
-  // The Chart.js chart, kept so it can be destroyed before drawing the next one
-  // (two charts on one canvas would flicker between old and new data).
+  // Kept so it can be destroyed before the next chart is drawn on the same canvas.
   let chart = null;
   let searchTimer = null;
 
-  // Each request gets a number; an older answer arriving after a newer one is ignored, so
-  // the page always shows the result of the editor's latest action (as on the dashboard).
+  // Late answers to older requests are ignored, as on the dashboard.
   let latestSearchNumber = 0;
   let latestChartNumber = 0;
 
@@ -256,7 +215,7 @@ function setUpAnalyticsPage() {
    *
    * @param {HTMLElement} element - Where to show it.
    * @param {string} text - The message, or '' to hide it.
-   * @param {string} className - 'loading', 'empty-state', 'form-error' or '' (main.css).
+   * @param {string} className - 'loading', 'empty-state', 'form-error' or ''.
    * @returns {void}
    */
   function showMessage(element, text, className) {
@@ -290,8 +249,6 @@ function setUpAnalyticsPage() {
     const button = document.createElement('button');
     button.type = 'button';
     button.className = 'btn';
-    // A never-published article has no views yet; we still let the editor open it, and
-    // the chart then says so, instead of hiding it from the results.
     const liveText = article.isLive ? '' : ', not published yet';
     button.textContent = `${article.title} (${article.statusLabel}${liveText})`;
     button.addEventListener('click', function handleResultClick() {
@@ -302,7 +259,7 @@ function setUpAnalyticsPage() {
   }
 
   /**
-   * Searches articles by title with the dashboard's list API and shows up to 20 results.
+   * Searches articles by title with the dashboard's list API (up to 20 results).
    *
    * @returns {Promise<void>}
    */
@@ -318,7 +275,6 @@ function setUpAnalyticsPage() {
     }
 
     showMessage(resultsMessage, 'Searching...', 'loading');
-    // URLSearchParams encodes the text, so "C++ & AI" reaches the server unchanged.
     const query = new URLSearchParams({ search: searchText });
     const result = await apiClient.get(`${ARTICLES_API_URL}?${query.toString()}`);
     if (searchNumber !== latestSearchNumber) {
@@ -347,7 +303,7 @@ function setUpAnalyticsPage() {
   }
 
   /**
-   * Called on every key press in the search box: waits until typing pauses.
+   * On every key press: waits until typing pauses, then searches.
    *
    * @returns {void}
    */
@@ -357,7 +313,7 @@ function setUpAnalyticsPage() {
   }
 
   /**
-   * Enter in the search box would submit the form and reload the page; search now instead.
+   * Enter in the search box: search now instead of submitting the form.
    *
    * @param {SubmitEvent} event - The form's submit event.
    * @returns {void}
@@ -369,11 +325,11 @@ function setUpAnalyticsPage() {
   }
 
   /**
-   * Puts an article on the chart. The address bar gets ?article=<id> (without reloading),
-   * so refreshing the page or copying the link opens the same article again.
+   * Puts an article on the chart and writes ?article=<id> in the address bar (without
+   * reloading), so a refresh or a copied link opens the same article.
    *
-   * @param {string} articleId - The article's id.
-   * @param {string} articleTitle - Its title, for the heading.
+   * @param {string} articleId
+   * @param {string} articleTitle - For the heading.
    * @returns {void}
    */
   function chooseArticle(articleId, articleTitle) {
@@ -386,9 +342,8 @@ function setUpAnalyticsPage() {
   }
 
   /**
-   * Lists the publish times under the chart: the same information as the dashed lines,
-   * readable as text (and by screen readers). It is a numbered list (ol), and item 1 is
-   * the line numbered 1 on the chart.
+   * Lists the publish times under the chart (numbered like the dashed lines), readable as
+   * text and by screen readers.
    *
    * @param {number[]} publishTimes - Milliseconds, oldest first.
    * @returns {void}
@@ -407,8 +362,8 @@ function setUpAnalyticsPage() {
   }
 
   /**
-   * Draws (or redraws) the chart. If Chart.js didn't load (for example no internet
-   * connection to the CDN), the page still shows the numbers and the publish list.
+   * Draws (or redraws) the chart. If Chart.js didn't load (no internet to the CDN), the
+   * summary and the publish list still show the numbers.
    *
    * @param {{x: number, y: number}[]} points - The chart's points.
    * @param {number[]} publishTimes - Where to draw the dashed lines.
@@ -433,50 +388,44 @@ function setUpAnalyticsPage() {
           data: points,
           borderColor: readCssColour('--color-accent', '#3498db'),
           borderWidth: 2,
-          // No dot on every point: with hundreds of points the dots would hide the line.
+          // No dots: with hundreds of points they would hide the line.
           pointRadius: 0,
           pointHitRadius: 6,
         }],
       },
       options: {
         responsive: true,
-        // Width divided by height. Chart.js's default (2) leaves a phone with a chart only
-        // about 170px tall, so narrow screens get a taller shape.
+        // A taller shape on phones (the default 2 would leave a chart about 170px tall).
         aspectRatio: canvas.parentElement.clientWidth < 600 ? 1.2 : 2,
-        // No animation: redrawing hundreds of points on every period change is slow
-        // and gains nothing for reading numbers.
         animation: false,
-        // The points are already { x, y } numbers in order, so Chart.js can skip its parsing step.
+        // The points are already { x, y } numbers in order, so Chart.js can skip parsing.
         parsing: false,
         normalized: true,
-        // The tooltip shows the point nearest to the mouse on the x-axis, without
-        // having to hit the thin line exactly.
+        // The tooltip shows the point nearest the mouse, without hitting the thin line exactly.
         interaction: { mode: 'nearest', axis: 'x', intersect: false },
         scales: {
           x: {
             type: 'linear',
             min: period.from,
             max: period.to,
-            // Chart.js calls this after making its own ticks; we replace them (buildTimeTicks).
+            // Replaces Chart.js's own ticks with ours (buildTimeTicks).
             afterBuildTicks: (scale) => {
               scale.ticks = buildTimeTicks(period.from, period.to, period.rangeDays);
             },
             ticks: {
               maxRotation: 0,
-              // On a narrow screen Chart.js still hides labels that would overlap.
               autoSkip: true,
               callback: (value) => formatAxisLabel(value, period.rangeDays),
             },
           },
           y: {
             beginAtZero: true,
-            // precision 0: views are whole numbers, so no "2.5 views" on the axis.
+            // Whole numbers only: no "2.5 views".
             ticks: { precision: 0 },
             title: { display: true, text: `Views per ${unitWord}` },
           },
         },
         plugins: {
-          // One line only, and its name is on the y-axis, so the legend adds nothing.
           legend: { display: false },
           tooltip: {
             callbacks: {
@@ -494,8 +443,8 @@ function setUpAnalyticsPage() {
   }
 
   /**
-   * Loads the chosen article's views for the chosen period and shows them: the summary in
-   * words, the chart and the list of publish times.
+   * Loads the chosen article's views for the chosen period and shows the summary, the
+   * chart and the publish list.
    *
    * @returns {Promise<void>}
    */
@@ -513,7 +462,7 @@ function setUpAnalyticsPage() {
     const periodLabel = rangeSelect.options[rangeSelect.selectedIndex].textContent.toLowerCase();
 
     showMessage(chartMessage, 'Loading the chart...', 'loading');
-    // Full ISO timestamps: a date alone would be read by the server as midnight UTC.
+    // Full ISO timestamps: a date alone would be read as midnight UTC.
     const query = new URLSearchParams({ from: new Date(from).toISOString(), to: new Date(to).toISOString() });
     const result = await apiClient.get(`${ARTICLES_API_URL}/${encodeURIComponent(chosenArticle.id)}/views?${query.toString()}`);
     if (chartNumber !== latestChartNumber) {
@@ -542,17 +491,14 @@ function setUpAnalyticsPage() {
     summary.textContent = summaryText;
     canvas.setAttribute('aria-label', `Chart of views over time for "${chosenArticle.title}": ${summaryText}`);
 
-    // The chart is drawn even with no views: a flat line with the publish markers still
-    // answers the editor's question ("did the update change anything?").
+    // Drawn even with no views: the flat line and the markers still answer the question.
     showMessage(chartMessage, totalViews === 0 ? 'No views in this period.' : '', totalViews === 0 ? 'empty-state' : '');
     showPublishList(publishTimes);
     drawChart(toChartPoints(buckets, period.perDay), publishTimes, period);
   }
 
   /**
-   * Asks the editor to confirm, then resets the chosen article's statistics and reloads
-   * the chart (which then shows 0). The confirmation only protects against a slip of the
-   * mouse; the server checks again that the user is an editor.
+   * Asks for confirmation, resets the chosen article's statistics and reloads the chart.
    *
    * @returns {Promise<void>}
    */
@@ -567,7 +513,7 @@ function setUpAnalyticsPage() {
       return;
     }
 
-    // Disabled while waiting, so a double click can't send the request twice.
+    // Disabled while waiting, against double clicks.
     resetButton.disabled = true;
     const result = await apiClient.delete(`${ARTICLES_API_URL}/${encodeURIComponent(chosenArticle.id)}/views`);
     resetButton.disabled = false;
@@ -591,15 +537,12 @@ function setUpAnalyticsPage() {
   rangeSelect.addEventListener('change', loadChart);
   resetButton.addEventListener('click', resetStatistics);
 
-  // The review page links here with ?article=<id>; the server put that article's id and
-  // title on the page, so its chart opens at once.
+  // Opened from the review page's link: the server put the article on the page.
   if (page.dataset.initialArticleId) {
     chooseArticle(page.dataset.initialArticleId, page.dataset.initialArticleTitle);
   }
 }
 
-// The script is loaded at the end of <body>, but we still wait if the page is loading,
-// so it works wherever the script tag is placed.
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setUpAnalyticsPage);
 } else {
