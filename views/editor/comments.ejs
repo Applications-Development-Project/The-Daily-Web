@@ -1,21 +1,12 @@
 <%#
   views/editor/comments.ejs
 
-  The editor's comment moderation page: every comment on the site, newest first, with
-  the article it was posted on, a search box (comment text or author name) and pages of
-  20. Each row can be edited in place or deleted after a confirmation.
+  The comment moderation page, sent as an empty frame: public/js/editor/comments.js loads
+  the comments (newest first, with their article, search, pages of 20) and edits and
+  deletes them without reloading.
 
-  The page is sent as an empty frame: the table body starts empty, and
-  public/js/editor/comments.js fills it from GET /api/comments and does every edit
-  and delete with Ajax, so the page never reloads. Building the rows in one place (the
-  script) means the first page and every later page look exactly the same.
-  The element ids below are what that script uses.
-
-  Rendered by: controllers/commentController.js (showCommentModerationPage), for
-  GET /editor/comments. Only editors get here: the route uses requireRole('editor').
-  Locals: title (the page title); currentUser comes from middleware/setCurrentUser.js
-  and is read by the shared header.
-  Includes: the shared head, header and footer (views/partials) and the editor nav (SM).
+  Rendered by: showCommentModerationPage (controllers/commentController.js), for GET /editor/comments.
+  Locals: title.
   Owner: OS.
 %>
 <!DOCTYPE html>
@@ -29,32 +20,18 @@
   <main class="main-content" id="comment-moderation">
     <h2>Comments</h2>
 
-    <%#
-      role="search" tells screen readers this form filters the list below.
-      The script searches while the editor types; it also stops Enter from submitting
-      the form, which would reload the page.
-    %>
+    <%# maxlength matches the server's search limit. %>
     <form id="comment-search-form" class="card" role="search">
       <label for="comment-search">Search comments or author names</label>
-      <%# maxlength matches the server's search limit (100 characters). %>
       <input type="search" id="comment-search" name="search" class="form-field"
         maxlength="100" placeholder="Part of a comment or a name..." autocomplete="off">
     </form>
 
-    <%#
-      Loading and "no comments" messages appear here.
-      aria-live="polite" makes screen readers announce the new text when it changes.
-    %>
+    <%# aria-live: screen readers announce the message when it changes. %>
     <p id="comment-list-status" class="loading" aria-live="polite">Loading comments...</p>
-    <%# Errors from the server, for example an edit with empty text. role="alert" is announced at once. %>
     <p id="comment-list-error" class="form-error" role="alert" hidden></p>
 
-    <%#
-      On a narrow screen the table scrolls sideways inside this box, not the whole page
-      (requirements: responsive for computer, tablet and phone). table-scroll is the
-      shared class for this in public/css/main.css (SH), so every table on the site
-      behaves the same way.
-    %>
+    <%# On a narrow screen the table scrolls sideways inside this box. %>
     <div class="table-scroll">
       <table class="data-table">
         <thead>
@@ -83,7 +60,6 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: public/js/editor/comments.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="/js/editor/comments.js"></script>
 </body>

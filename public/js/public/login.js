@@ -1,27 +1,16 @@
 /**
  * public/js/public/login.js
  *
- * Runs the login page (views/public/login.ejs): sends the username and password with
- * fetch (Ajax) to POST /api/auth/login, shows a wrong password right on the page without
- * reloading it, and on success goes to the address the server answered (/reporter or
- * /editor, decided on the server from the user's role).
+ * The login page: sends the username and password to POST /api/auth/login with fetch,
+ * shows an error without reloading, and on success goes where the server says
+ * (/reporter or /editor, decided from the role). The server checks everything again.
  *
- * The check in this file (both fields filled) only gives a quick answer. The server checks
- * everything again in controllers/authController.js, because anything in the browser can
- * be bypassed by sending the request directly.
- *
- * It used to be an inline script at the end of login.ejs; it moved here so every page's
- * browser code lives in public/js/<area>/, next to the other pages of the same area.
- *
- * Loaded by: views/public/login.ejs, after public/js/shared/apiClient.js (this file calls apiClient).
- * Related: controllers/authController.js (logIn), the ids "login-form", "login-error" and
- * "login-button" in login.ejs.
+ * Loaded by: views/public/login.ejs, after public/js/shared/apiClient.js.
  * Owner: OS.
  */
 
 /**
- * Connects the login form once the page has loaded. Does nothing if the form is missing,
- * so a mistake in the HTML can't cause a script error.
+ * Connects the login form. Does nothing if a piece of the form is missing.
  *
  * @returns {void}
  */
@@ -35,10 +24,9 @@ function setUpLoginForm() {
   }
 
   /**
-   * Shows an error under the form. textContent (not innerHTML) puts the message in
-   * as plain text, so a message can never add HTML or scripts to the page.
+   * Shows an error under the form, as text.
    *
-   * @param {string} message - The text to show.
+   * @param {string} message
    * @returns {void}
    */
   function showLoginError(message) {
@@ -47,21 +35,18 @@ function setUpLoginForm() {
   }
 
   /**
-   * Sends the username and password with fetch instead of the browser's normal
-   * form submit, then goes to the user's area, or shows the server's error.
+   * Sends the form with fetch, then goes to the user's area or shows the server's error.
    *
-   * @param {SubmitEvent} event - The form's submit event.
+   * @param {SubmitEvent} event
    * @returns {Promise<void>}
    */
   async function submitLoginForm(event) {
-    // Stop the normal submit, which would load a new page.
     event.preventDefault();
 
     const username = loginForm.elements.username.value.trim();
     const password = loginForm.elements.password.value;
 
-    // Checked here for a quick answer, and checked again on the server,
-    // because anything in the browser can be bypassed.
+    // A quick answer only; the server checks again.
     if (username === '' || password === '') {
       showLoginError('Please enter your username and password.');
       return;
@@ -74,14 +59,12 @@ function setUpLoginForm() {
     const result = await apiClient.post('/api/auth/login', { username: username, password: password });
 
     if (!result.success) {
-      // For example 401 "Wrong username or password." (the same message whether the
-      // username exists or not, so the form can't be used to discover usernames).
       showLoginError(result.error);
       loginButton.disabled = false;
       return;
     }
 
-    // The server decides where each role goes; the browser only follows.
+    // The server decides where each role goes.
     window.location.assign(result.data.redirectTo);
   }
 
