@@ -1,21 +1,9 @@
 <%#
   views/partials/sidebar.ejs
 
-  The sidebar of the public pages, with the weather widget (requirements: a weather
-  widget in the site's sidebar, from an external web service; ours is Open-Meteo).
-
-  The widget arrives with "Loading weather..." and is filled in the browser by
-  public/js/public/weatherWidget.js from our own GET /api/weather. Why not render the
-  weather on the server with the page: the feed and article pages would then wait for the
-  weather before they could be sent, and a slow weather service would slow down the whole
-  site. Loading it separately keeps the article text fast, and the widget refreshes itself
-  while the page stays open (every 5 minutes, see weatherWidget.js).
-
-  The page that includes this partial must also load /js/shared/apiClient.js and then
-  /js/public/weatherWidget.js at the end of its body.
-
-  aside is the semantic HTML5 element for content beside the main content; on a narrow
-  screen the CSS moves it below the main content (public/css/main.css).
+  The public pages' sidebar with the weather widget. It is filled in the browser by
+  public/js/public/weatherWidget.js, so a slow weather service never delays the page.
+  The including page must load /js/shared/apiClient.js and /js/public/weatherWidget.js.
 
   Included by: views/public/feed.ejs and views/public/article.ejs.
   Owner: SH.
@@ -23,7 +11,7 @@
 <aside class="sidebar" aria-label="Sidebar">
     <section id="weather-widget" class="card loading" aria-labelledby="weather-title">
         <h3 id="weather-title">Weather</h3>
-        <%# aria-live="polite": screen readers announce the weather when it arrives or changes. %>
+        <%# aria-live: screen readers announce the weather when it arrives or changes. %>
         <div id="weather-content" aria-live="polite">Loading weather...</div>
     </section>
 </aside>
