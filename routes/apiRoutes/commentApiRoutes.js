@@ -1,12 +1,9 @@
 /**
  * routes/apiRoutes/commentApiRoutes.js
  *
- * JSON API routes for comments (full CRUD on the Comment model). Mounted at "/api"
- * in app.js, so "/comments" here is "/api/comments" in the browser.
- * Paths and access follow the routes table in "Shared contracts".
- *
- * This router only defines paths ending in "/comments" under "/articles/:id", never a
- * bare "/articles/:id", so it can't clash with SH's DELETE /api/articles/viewed.
+ * JSON API for comments (mounted at "/api" in app.js): an article's comments, and the
+ * editor's moderation. Never a bare "/articles/:id" route, so it can't clash with
+ * DELETE /api/articles/viewed.
  *
  * Owner: OS.
  */
@@ -18,8 +15,8 @@ const commentController = require('../../controllers/commentController');
 
 const router = express.Router();
 
-// On the article page: open to everyone. Posting goes through the rate limiter
-// first, so a guest's 4th comment in a minute never reaches the controller.
+// Open to everyone. Posting goes through the limiter first, so a guest's 4th comment in a
+// minute never reaches the controller.
 router.get('/articles/:id/comments', commentController.listArticleComments);
 router.post('/articles/:id/comments', limitGuestComments, commentController.addComment);
 
