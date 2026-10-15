@@ -1,41 +1,20 @@
 /**
  * public/js/editor/articleReview.js
  *
- * Runs the buttons and forms of the editor's review page (views/editor/articleReview.ejs):
- * - "Approve and publish"      POST /api/editor/articles/:id/approve
- * - "Return for corrections"   POST /api/editor/articles/:id/return with { note }
- * - The Edit form               PATCH /api/editor/articles/:id/draft with the five fields
- *   (any article; for a live article with no update in progress, saving publishes it)
- * Everything else on the page (the two versions side by side, the history) is rendered on
- * the server, so it needs no script.
+ * The buttons and forms of the editor's review page: Approve, Return (with a note) and
+ * the Edit form. After a successful action the page reloads, because the whole page
+ * (status, buttons, history) changes and is rendered on the server.
  *
- * After a successful action the page reloads, so the status, the buttons and the publish
- * history come fresh from the server. Why a reload here and not for search or paging: the
- * requirements ask for no full reload in interactive areas like search, filtering, paging
- * and comments. After a decision the whole page changes (status, buttons, history), and all
- * of it is rendered on the server, so reloading shows the true new state without repeating
- * the page's rendering in JavaScript.
- *
- * The server makes every real check (editor role, pending status, the note, the field
- * rules); these functions only send the request and show the answer, including 409 when
- * someone already decided and 401 when the session ended. Text from the server is shown
- * with textContent, never innerHTML.
- *
- * It used to be an inline script at the end of articleReview.ejs; it moved here so every
- * page's browser code lives in public/js/<area>/.
+ * The server makes every real check; this script sends the request and shows the
+ * answer (409 if someone already decided, 401 if the session ended).
  *
  * Loaded by: views/editor/articleReview.ejs, after public/js/shared/apiClient.js.
- * Related: controllers/editorController.js (approveArticle, returnArticleToReporter,
- * editArticleDraft). Element ids used: article-review (with data-article-id), decision-message,
- * review-decision, approve-button, return-form, return-note, edit-form, edit-message and the
- * edit-* fields.
  * Owner: SM.
  */
 
 /**
- * Connects the review page's buttons and forms once the page has loaded. Each part is
- * optional: the server shows the buttons only when the workflow allows them (an article
- * awaiting approval), so on other articles there is nothing to connect.
+ * Connects the review page's buttons and forms. Each part is optional: the server shows
+ * them only when they apply.
  *
  * @returns {void}
  */
@@ -44,15 +23,13 @@ function setUpArticleReview() {
   if (!reviewElement) {
     return;
   }
-  // The article id is written by the server into data-article-id; encodeURIComponent keeps
-  // it inside the URL path whatever it holds.
   const articleUrl = `/api/editor/articles/${encodeURIComponent(reviewElement.dataset.articleId)}`;
 
   /**
    * Shows a message in the decision box.
    *
    * @param {string} text - The message.
-   * @param {string} className - '' for a normal message, 'form-error' for an error, 'loading' while waiting.
+   * @param {string} className - '', 'form-error' or 'loading'.
    * @returns {void}
    */
   function showDecisionMessage(text, className) {
@@ -63,10 +40,9 @@ function setUpArticleReview() {
   }
 
   /**
-   * Turns every decision button on or off, so the editor can't send a second
-   * decision while the first one is on its way.
+   * Turns the decision buttons off while a decision is on its way (no double decisions).
    *
-   * @param {boolean} disabled - true while a decision is being sent.
+   * @param {boolean} disabled
    * @returns {void}
    */
   function setDecisionButtonsDisabled(disabled) {
@@ -97,13 +73,12 @@ function setUpArticleReview() {
     if (result.status === 401) {
       showDecisionMessage('Your session has ended. Please log in again in another tab, then try again.', 'form-error');
     } else {
-      // For example 409 if someone already decided, or 400 for an empty note.
       showDecisionMessage(result.error, 'form-error');
     }
   }
 
   /**
-   * Approve: asks for confirmation first, because readers see the new version at once.
+   * Approve, after a confirmation, because readers see the new version at once.
    *
    * @returns {void}
    */
@@ -115,8 +90,7 @@ function setUpArticleReview() {
   }
 
   /**
-   * Return: the note is required (requirements: returning comes with a note). We check
-   * it here for a quick message; the server checks it again (400 for an empty note).
+   * Return: the note is required. Checked here for a quick message; the server checks again.
    *
    * @param {SubmitEvent} event - The return form's submit event.
    * @returns {void}
@@ -133,26 +107,21 @@ function setUpArticleReview() {
   }
 
   /**
-   * Saves the editor's edit of the submitted version, then reloads the page, so the
-   * comparison, the "(changed)" marks and the date come fresh from the server (the
-   * same reason as after a decision). On an error the form keeps what the editor typed.
-   * The server makes every real check (pending only, the field rules); a 400 message
-   * names the field that is wrong.
+   * Saves the Edit form, then reloads the page. For a live article, saving publishes the
+   * change, so it asks first. On an error, the form keeps what the editor typed.
    *
    * @param {SubmitEvent} event - The edit form's submit event.
    * @returns {Promise<void>}
    */
   async function saveEdit(event) {
-    // Stop the normal form submit, which would load a new page.
     event.preventDefault();
-    // Editing a live article publishes the change to readers at once, so ask first.
     const publishesOnSave = event.target.dataset.publishesOnSave === 'true';
     if (publishesOnSave && !window.confirm('Publish these changes? Readers will see them immediately.')) {
       return;
     }
     const editMessage = document.getElementById('edit-message');
     const saveButton = event.target.querySelector('button[type="submit"]');
-    // All five fields are sent, as the server expects the whole draft (like the reporter's autosave).
+    // The whole draft is sent, like the reporter's autosave.
     const draft = {
       title: document.getElementById('edit-title').value,
       summary: document.getElementById('edit-summary').value,
@@ -178,7 +147,6 @@ function setUpArticleReview() {
     editMessage.className = 'form-error';
     editMessage.textContent = result.status === 401
       ? 'Your session has ended. Please log in again in another tab, then save again.'
-      // For example 400 (a field is invalid or empty) or 409 (a live article saved without changes).
       : result.error;
   }
 
