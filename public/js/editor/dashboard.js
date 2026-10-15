@@ -1,43 +1,24 @@
 /**
  * public/js/editor/dashboard.js
  *
- * Fills the editor dashboard's table (views/editor/dashboard.ejs) with articles from
- * GET /api/editor/articles, 20 per page. Changing the status filter, typing in the title
- * search and moving between pages all reload only the table, never the page (Ajax).
- * Each row links to the article's review page and has a Delete button, which asks
- * for confirmation and then deletes the article with its comments and statistics.
+ * Fills the editor dashboard's table from GET /api/editor/articles, 20 per page. The
+ * status filter, the title search and the paging reload only the table, never the page.
+ * Each row has a Review link and a Delete button (with confirmation).
  *
- * Requirements this serves: the editor sees every article and filters them by status;
- * search, filtering and paging happen without a full page reload (Ajax with fetch,
- * through apiClient.js).
- *
- * Every text from the server is put on the page with textContent, never innerHTML,
- * so a title like "<script>..." is shown as plain text and can't run as code.
- *
- * Nothing here is a permission check. The server decides: the list and delete APIs
- * answer 401/403 to anyone who isn't an editor, whatever this script does. Checks in
- * the browser (the 200-character limit on the search box, the delete confirmation)
- * are only for a quick, friendly answer; the server checks the same things again.
- *
- * The answer it reads, { articles: [{ id, title, reporterName, status, statusLabel,
- * isLive, updatedAt }], page, totalPages, totalArticles }, is SM's own contract with
- * listAllArticles in controllers/editorController.js.
+ * Text from the server goes in with textContent, never innerHTML, so a title can't run
+ * as code. Nothing here is a permission check: the server answers 401/403 itself.
  *
  * Loaded by: views/editor/dashboard.ejs, after public/js/shared/apiClient.js.
- * Related: controllers/editorController.js (listAllArticles, deleteArticle).
  * Owner: SM.
  */
 
 const ARTICLES_API_URL = '/api/editor/articles';
 
-// How long to wait after the last key in the search box before searching, so typing
-// "council" sends one request instead of seven (the same delay as user management).
+// Wait this long after the last key before searching, so typing a word sends one request.
 const SEARCH_DELAY_MS = 300;
 
 /**
- * Formats a date from the server for the table, for example "10 Oct 2026, 14:32".
- * It runs in the browser, so the time is shown in the editor's own time zone; the
- * server sends the exact moment in ISO format (UTC).
+ * Formats a date from the server, for example "10 Oct 2026, 14:32", in the editor's time zone.
  *
  * @param {string} isoDate - A date in ISO format, as JSON sends it.
  * @returns {string}
@@ -75,8 +56,7 @@ function createTextCell(text) {
  */
 function createArticleRow(article, onDeleteClick) {
   const row = document.createElement('tr');
-  // encodeURIComponent: a value placed inside a URL is always encoded, so even an
-  // unexpected id could never change the address (ids are 24 hex characters today).
+  // A value placed in a URL is always encoded, so it can never change the address.
   const reviewUrl = `/editor/articles/${encodeURIComponent(article.id)}`;
 
   const titleCell = document.createElement('td');
@@ -85,14 +65,13 @@ function createArticleRow(article, onDeleteClick) {
   titleLink.textContent = article.title;
   titleCell.append(titleLink);
 
-  // The badge's colour comes from main.css: status-draft, status-pending...
+  // The badge's colour comes from main.css (status-draft, status-pending...).
   const statusCell = document.createElement('td');
   const statusBadge = document.createElement('span');
   statusBadge.className = `status-badge status-${article.status}`;
   statusBadge.textContent = article.statusLabel;
   statusCell.append(statusBadge);
 
-  // <time datetime="..."> keeps the exact date for machines; people read the formatted one.
   const updatedCell = document.createElement('td');
   const updatedTime = document.createElement('time');
   updatedTime.dateTime = article.updatedAt;
@@ -127,8 +106,8 @@ function createArticleRow(article, onDeleteClick) {
 }
 
 /**
- * Finds the dashboard's elements, loads the first page and connects the filter,
- * the search box and the paging buttons. Does nothing on a page without the table.
+ * Finds the dashboard's elements, loads the first page and connects the filter, the
+ * search box and the paging buttons. Does nothing on a page without the table.
  *
  * @returns {void}
  */
@@ -146,21 +125,17 @@ function setUpEditorDashboard() {
   const nextButton = document.getElementById('next-page');
   const pageInfo = document.getElementById('page-info');
 
-  // What the table shows right now: '' for status or search means "no filter".
-  // The server's answer is the truth for page and totalPages, so they are updated
-  // from every answer.
+  // '' for status or search means "no filter". page and totalPages come from the server.
   const listState = { status: '', search: '', page: 1, totalPages: 1 };
 
-  // The waiting search, so a new key press can cancel it (see searchAfterTyping).
   let searchTimer = null;
 
-  // Every request gets a number. If an older request answers after a newer one (the
-  // network doesn't promise the order), its answer is ignored, so the table always
-  // shows the result of the editor's latest action.
+  // An answer to an older request that arrives late is ignored, so the table always
+  // shows the editor's latest action (the network doesn't promise the order).
   let latestRequestNumber = 0;
 
   /**
-   * Shows a message above the table (loading, empty, error).
+   * Shows a message above the table.
    *
    * @param {string} text - The message.
    * @param {string} className - 'loading', 'empty-state' or 'form-error' (main.css).
@@ -186,8 +161,8 @@ function setUpEditorDashboard() {
   }
 
   /**
-   * Builds the API address for the current filter, search and page. URLSearchParams
-   * encodes the values, so a search like "C++ & AI" reaches the server unchanged.
+   * Builds the API address for the current filter, search and page (URLSearchParams
+   * encodes the values).
    *
    * @returns {string} For example "/api/editor/articles?status=pending&search=council&page=1".
    */
@@ -216,7 +191,7 @@ function setUpEditorDashboard() {
   }
 
   /**
-   * Asks the server for the current page and redraws the table with the answer.
+   * Asks the server for the current page and redraws the table.
    *
    * @returns {Promise<void>}
    */
@@ -249,7 +224,6 @@ function setUpEditorDashboard() {
     listState.page = page;
     listState.totalPages = totalPages;
 
-    // replaceChildren removes the old rows and adds the new ones in one step.
     const rows = articles.map((article) => createArticleRow(article, deleteArticle));
     tableBody.replaceChildren(...rows);
     if (articles.length === 0) {
@@ -275,13 +249,11 @@ function setUpEditorDashboard() {
   }
 
   /**
-   * Asks the editor to confirm, then deletes the article and reloads the current page.
-   * The server checks again that the user is an editor; the confirmation only protects
-   * against a slip of the mouse, because a deleted article can't be brought back.
+   * Asks for confirmation (a deleted article can't be brought back), deletes the article
+   * and reloads the current page of the table.
    *
    * @param {{id: string, title: string}} article - The article in the clicked row.
-   * @param {HTMLButtonElement} deleteButton - Disabled while deleting, so a double
-   *   click can't send the request twice.
+   * @param {HTMLButtonElement} deleteButton - Disabled while deleting, against double clicks.
    * @returns {Promise<void>}
    */
   async function deleteArticle(article, deleteButton) {
@@ -301,7 +273,7 @@ function setUpEditorDashboard() {
       return;
     }
     if (!result.success) {
-      // For example 404: someone else already deleted it. The reload below shows the truth.
+      // For example 404 if someone else deleted it already; the reload shows the truth.
       showActionMessage(result.error, 'form-error');
     } else {
       const commentCount = result.data.deletedComments;
@@ -309,8 +281,7 @@ function setUpEditorDashboard() {
       showActionMessage(`Deleted "${article.title}" (with ${commentCount} ${commentWord}).`, '');
     }
 
-    // If that was the only row on the last page, that page no longer exists:
-    // go back one page instead of showing an empty table.
+    // If that was the only row on the last page, go back one page.
     if (tableBody.children.length === 1 && listState.page > 1) {
       listState.page -= 1;
     }
@@ -342,8 +313,7 @@ function setUpEditorDashboard() {
   }
 
   /**
-   * Reads the filter and search boxes and loads the first page of the new results.
-   * A new filter starts again from page 1: page 3 of the old results may not exist.
+   * Reads the filter and search and loads page 1 of the new results.
    *
    * @returns {void}
    */
@@ -356,8 +326,8 @@ function setUpEditorDashboard() {
   }
 
   /**
-   * Called on every key press in the search box. Each press cancels the waiting
-   * search and starts the wait again, so the search runs only once typing pauses.
+   * On every key press: cancels the waiting search and waits again, so the search runs
+   * only once typing pauses.
    *
    * @returns {void}
    */
@@ -367,8 +337,7 @@ function setUpEditorDashboard() {
   }
 
   /**
-   * Pressing Enter in the search box would normally submit the form and reload the
-   * page; we stop that and search right away instead.
+   * Enter in the search box: search now instead of submitting the form (a page reload).
    *
    * @param {SubmitEvent} event - The form's submit event.
    * @returns {void}
@@ -386,8 +355,6 @@ function setUpEditorDashboard() {
   loadArticles();
 }
 
-// The script is loaded at the end of <body>, but we still wait if the page is loading,
-// so it works wherever the script tag is placed.
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setUpEditorDashboard);
 } else {

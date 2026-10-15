@@ -1,37 +1,28 @@
 /**
  * public/js/editor/comments.js
  *
- * Runs the editor's comment moderation page (views/editor/comments.ejs). Everything
- * happens with Ajax through apiClient, so the page never reloads:
- * - the table shows 20 comments at a time from GET /api/comments, newest first, each
- *   with a link to the article it was posted on, and Previous/Next buttons,
- * - typing in the search box filters the table (300 ms after the last key),
- * - Edit turns a row's text into a text box that sends PATCH /api/comments/:id,
- * - Delete asks for confirmation, then sends DELETE /api/comments/:id.
- * The server checks everything again (editor only, search and page rules, the text
- * rules); this script only shows its answers.
+ * The comment moderation page, all through the API without reloading: the table (20 per
+ * page, each comment linked to its article), the search, editing a comment's text and
+ * deleting with confirmation. The server checks everything again.
  *
- * Every value from the server is put on the page with textContent, never innerHTML.
- * That matters most on this page: it shows comments typed by any guest on the site,
- * so a comment like <img src=x onerror="..."> must appear as text and never run in
- * the editor's browser.
+ * Text from the server goes in with textContent, never innerHTML: this page shows text
+ * typed by any guest, so a comment like <img src=x onerror="..."> must never run here.
  *
- * Load after apiClient.js. Owner: OS.
+ * Loaded by: views/editor/comments.ejs, after public/js/shared/apiClient.js.
+ * Owner: OS.
  */
 
-// How long to wait after the last key in the search box before searching, so typing
-// "noa" sends one request instead of three.
+// Wait this long after the last key before searching.
 const SEARCH_DELAY_MS = 300;
 
-// The same limit the server checks (controllers/commentController.js). Checking here
-// too gives an instant message; the server still checks, because a browser can be bypassed.
+// The same limit as the server, for an instant message (the server checks again).
 const MAX_COMMENT_TEXT_LENGTH = 1000;
 
 /**
- * Creates an element with optional text, as plain text.
+ * Creates an element with optional text (as text).
  *
  * @param {string} tagName - For example 'td'.
- * @param {string} [text] - Text content.
+ * @param {string} [text]
  * @returns {HTMLElement}
  */
 function createElementWithText(tagName, text) {
@@ -43,10 +34,10 @@ function createElementWithText(tagName, text) {
 }
 
 /**
- * Creates a button. type="button" so it never submits a form by accident.
+ * Creates a button (type="button", so it never submits a form by accident).
  *
  * @param {string} label - The button text.
- * @param {string} className - CSS classes, for example 'btn btn-danger'.
+ * @param {string} className - For example 'btn btn-danger'.
  * @returns {HTMLButtonElement}
  */
 function createButton(label, className) {
@@ -57,10 +48,10 @@ function createButton(label, className) {
 }
 
 /**
- * Checks edited text before sending, with the same rules and messages as the server.
+ * Checks edited text with the server's rules and messages.
  *
- * @param {string} text - The new text, already trimmed.
- * @returns {string|null} A message to show, or null if the text is fine.
+ * @param {string} text - Trimmed.
+ * @returns {string|null} A message, or null if fine.
  */
 function findCommentTextError(text) {
   if (text === '') {
@@ -73,11 +64,10 @@ function findCommentTextError(text) {
 }
 
 /**
- * Formats a comment's date like "10 Oct 2026, 13:51", the same format as the
- * comments on the article page (public/js/public/articleComments.js).
+ * Formats a date like the article page's comments, in the editor's time zone.
  *
  * @param {string} isoDate - A date from the API.
- * @returns {string} The date in the editor's own time zone.
+ * @returns {string} For example "10 Oct 2026, 13:51".
  */
 function formatCommentDate(isoDate) {
   return new Date(isoDate).toLocaleString('en-GB', {
@@ -90,10 +80,9 @@ function formatCommentDate(isoDate) {
 }
 
 /**
- * Builds the table cell with the comment's date. <time datetime="..."> gives the exact
- * date to the browser, while people read the formatted one.
+ * Builds the date cell (<time datetime> keeps the exact date for the browser).
  *
- * @param {string} isoDate - comment.createdAt from the API.
+ * @param {string} isoDate - comment.createdAt.
  * @returns {HTMLTableCellElement}
  */
 function createDateCell(isoDate) {
@@ -105,12 +94,8 @@ function createDateCell(isoDate) {
 }
 
 /**
- * Builds the table cell that names the comment's article, as a link to it, so the
- * editor can read the comment in its context.
- *
- * Comments can only be posted on live articles, and a live article stays live until
- * it is deleted (which also deletes its comments), so the link always works.
- * article is null only if the article is gone; then there is nothing to link to.
+ * Builds the cell linking to the comment's article, so the editor can read it in context
+ * ("(deleted article)" if it is gone).
  *
  * @param {({id: string, title: string}|null)} article - From the API.
  * @returns {HTMLTableCellElement}
@@ -123,15 +108,13 @@ function createArticleCell(article) {
   }
 
   const link = createElementWithText('a', article.title);
-  // encodeURIComponent keeps the id from changing the URL, whatever it contains.
   link.href = `/articles/${encodeURIComponent(article.id)}`;
   cell.append(link);
   return cell;
 }
 
 /**
- * Connects the whole page. The functions inside share the page's state (current page,
- * search timer) and elements without making them global (a closure).
+ * Connects the page. The inner functions share its state without making it global.
  *
  * @returns {void}
  */
@@ -153,13 +136,13 @@ function setUpCommentModeration() {
   let currentPage = 1;
   let totalPages = 1;
   let searchTimer = null;
-  // Counts the list requests, so only the answer to the newest one is shown.
+  // Only the answer to the newest list request is shown.
   let latestRequestNumber = 0;
 
   /**
-   * Shows an error above the table, or hides it when message is empty.
+   * Shows an error above the table, or hides it for ''.
    *
-   * @param {string} message - The text to show, or '' to hide.
+   * @param {string} message
    * @returns {void}
    */
   function showListError(message) {
@@ -168,7 +151,7 @@ function setUpCommentModeration() {
   }
 
   /**
-   * Builds the normal (not editing) table row for one comment, with Edit and Delete.
+   * Builds the normal table row for one comment, with Edit and Delete.
    *
    * @param {{id: string, authorName: string, text: string, createdAt: string,
    *   article: ({id: string, title: string}|null)}} comment - From the API.
@@ -180,12 +163,10 @@ function setUpCommentModeration() {
     const actions = document.createElement('td');
     const editButton = createButton('Edit', 'btn');
     const deleteButton = createButton('Delete', 'btn btn-danger');
-    // replaceWith swaps only this row, so the rest of the table stays as it is.
     editButton.addEventListener('click', () => {
       const editRow = createEditRow(comment);
       row.replaceWith(editRow);
-      // Put the cursor in the text box, so the editor can start typing at once.
-      // (This must come after replaceWith: an element not on the page can't take focus.)
+      // After replaceWith: an element not on the page can't take focus.
       editRow.querySelector('textarea').focus();
     });
     deleteButton.addEventListener('click', () => deleteComment(comment, deleteButton));
@@ -202,17 +183,14 @@ function setUpCommentModeration() {
   }
 
   /**
-   * Builds the editing version of a row: the text in a text box, with Save and Cancel.
-   * Only the text can be edited, the same rule as on the server: the author's name,
-   * article and date stay as they were, so the comment still shows who wrote it.
+   * Builds the editing row: only the text can change, as on the server.
    *
-   * @param {Object} comment - The comment before editing (same shape as above).
+   * @param {Object} comment - The comment before editing.
    * @returns {HTMLTableRowElement}
    */
   function createEditRow(comment) {
     const row = document.createElement('tr');
 
-    // .value (like textContent) puts the text in as text, never as HTML.
     const textBox = document.createElement('textarea');
     textBox.className = 'form-field';
     textBox.rows = 3;
@@ -243,18 +221,15 @@ function setUpCommentModeration() {
   }
 
   /**
-   * Sends the edited text. On success the row goes back to normal with the server's
-   * version of the text (trimmed, exactly as saved); on failure the row stays in edit
-   * mode, so nothing the editor typed is lost, and the message is shown above the table.
+   * Sends the edited text. On failure the row stays in edit mode, so nothing typed is lost.
    *
    * @param {Object} comment - The comment before editing.
    * @param {HTMLTableRowElement} row - The editing row.
    * @param {HTMLButtonElement} saveButton - Disabled while saving.
-   * @param {string} newText - The text box's value, trimmed.
+   * @param {string} newText - Trimmed.
    * @returns {Promise<void>}
    */
   async function saveComment(comment, row, saveButton, newText) {
-    // Nothing changed: no request is needed.
     if (newText === comment.text) {
       showListError('');
       row.replaceWith(createCommentRow(comment));
@@ -267,7 +242,6 @@ function setUpCommentModeration() {
       return;
     }
 
-    // Disabled while waiting, so a double click doesn't send the change twice.
     saveButton.disabled = true;
     const result = await apiClient.patch(`/api/comments/${encodeURIComponent(comment.id)}`, { text: newText });
     saveButton.disabled = false;
@@ -278,23 +252,20 @@ function setUpCommentModeration() {
     }
 
     showListError('');
-    // The PATCH answer is the public comment shape, without the article, so we keep
-    // the article we already have and take everything else from the server.
+    // The answer has no article, so we keep the one we have.
     const updatedComment = Object.assign({}, result.data, { article: comment.article });
     row.replaceWith(createCommentRow(updatedComment));
   }
 
   /**
-   * Asks for confirmation, deletes the comment, then reloads the current page of the
-   * list, so the page stays full (the next comment moves up) and the count stays right.
+   * Asks for confirmation (showing the start of the text), deletes the comment and reloads
+   * the page of the list.
    *
    * @param {Object} comment - The comment to delete.
    * @param {HTMLButtonElement} deleteButton - Disabled while deleting.
    * @returns {Promise<void>}
    */
   async function deleteComment(comment, deleteButton) {
-    // confirm() is the browser's own yes/no box; deleting can't be undone. The start
-    // of the text is shown so the editor can see which comment they clicked.
     const preview = comment.text.length > 60 ? `${comment.text.slice(0, 60)}...` : comment.text;
     if (!window.confirm(`Delete this comment by ${comment.authorName}?\n\n"${preview}"\n\nThis can't be undone.`)) {
       return;
@@ -310,7 +281,7 @@ function setUpCommentModeration() {
 
     showListError('');
     await loadComments();
-    // If that was the last comment on the last page, step back one page.
+    // That was the last comment on the last page: step back one page.
     if (tableBody.children.length === 0 && currentPage > 1) {
       currentPage -= 1;
       await loadComments();
@@ -318,13 +289,8 @@ function setUpCommentModeration() {
   }
 
   /**
-   * Loads one page of comments from the API and shows it.
-   *
-   * Why the request number: searches are sent while the editor types, and the answers
-   * don't always come back in the order the requests were sent. Without this check, a
-   * slow answer for "no" could arrive after the answer for "noa" and replace it, so
-   * the table would show results for text that is no longer in the box. Each call
-   * takes a new number, and an answer is shown only if no newer request started since.
+   * Loads one page of comments. A slow answer for an old search must not replace the
+   * newer one: only the newest request is shown.
    *
    * @returns {Promise<void>}
    */
@@ -335,7 +301,6 @@ function setUpCommentModeration() {
     listStatus.textContent = 'Loading comments...';
     listStatus.hidden = false;
 
-    // URLSearchParams encodes the search text, so characters like & or # are safe.
     const query = new URLSearchParams({ page: String(currentPage) });
     const searchText = searchInput.value.trim();
     if (searchText !== '') {
@@ -355,8 +320,6 @@ function setUpCommentModeration() {
 
     showListError('');
     totalPages = result.data.totalPages;
-    // replaceChildren swaps the whole table body at once, so the old page's rows
-    // never stay mixed in with the new ones.
     tableBody.replaceChildren(...result.data.comments.map(createCommentRow));
 
     if (result.data.comments.length === 0) {
@@ -371,10 +334,7 @@ function setUpCommentModeration() {
     nextButton.disabled = currentPage >= totalPages;
   }
 
-  // Search: wait until the editor stops typing, then start again from page 1.
-  // Every key press cancels the timer of the previous key (clearTimeout) and starts a
-  // new one, so the search runs only once no key has been pressed for SEARCH_DELAY_MS
-  // ("debouncing").
+  // Debounce: every key restarts the timer, so the search runs once typing pauses.
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
@@ -382,7 +342,7 @@ function setUpCommentModeration() {
       loadComments();
     }, SEARCH_DELAY_MS);
   });
-  // Pressing Enter in the search box must not reload the page.
+  // Enter in the search box must not reload the page.
   searchForm.addEventListener('submit', (event) => event.preventDefault());
 
   previousButton.addEventListener('click', () => {
@@ -397,8 +357,6 @@ function setUpCommentModeration() {
   loadComments();
 }
 
-// The page may load this script in <head> or at the end of <body>. If the page is
-// still loading, wait until all elements exist; otherwise start right away.
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setUpCommentModeration);
 } else {

@@ -1,21 +1,11 @@
 <%#
   views/editor/users.ejs
 
-  The editor's user management page: search the users, add a reporter or editor, edit a
-  user's display name, role or password in the table, and delete a user. The page is
-  sent as an empty frame; public/js/editor/users.js loads the users from the Users API
-  and does every change with Ajax, so the page never reloads.
+  The user management page, sent as an empty frame; public/js/editor/users.js loads the
+  users and does every change without reloading. data-current-user-id lets the script
+  disable the editor's own Delete button (only a convenience: the server refuses anyway).
 
-  Locals: currentUser (set for every view by middleware/setCurrentUser.js). Its id goes
-  into data-current-user-id, so the script can disable the editor's own Delete button.
-  That is only a convenience: the server refuses to delete or demote your own account
-  in any case (controllers/userController.js).
-
-  The editor's name and the logout button come from the shared header, like on every
-  other page; this page doesn't have its own copy of them.
-
-  Rendered by: controllers/userController.js (showUserManagementPage), for GET /editor/users.
-  Includes: the shared head, header and footer (views/partials) and the editor nav (SM).
+  Rendered by: showUserManagementPage (controllers/userController.js), for GET /editor/users.
   Owner: OS.
 %>
 <!DOCTYPE html>
@@ -27,15 +17,11 @@
   <%- include('partials/editorNav', { activePage: 'users' }) %>
 
   <main class="main-content" id="user-management" data-current-user-id="<%= currentUser.id %>">
-    <%# h2: the shared header already holds the page's h1 (the site name). %>
     <h2>Users</h2>
 
     <section class="card" aria-labelledby="add-user-title">
       <h3 id="add-user-title">Add a user</h3>
-      <%# The browser checks these attributes before sending (a quick answer); the server checks
-          the same rules again in userController.js, because a request can be sent without this page.
-          pattern is the same rule as USERNAME_PATTERN on the server, and title is the message the
-          browser shows when it doesn't match. %>
+      <%# A quick answer in the browser; the server checks the same rules (pattern = USERNAME_PATTERN). %>
       <form id="add-user-form">
         <div class="form-field">
           <label for="new-username">Username</label>
@@ -55,7 +41,7 @@
         </div>
         <div class="form-field">
           <label for="new-password">Password (8 characters or more)</label>
-          <%# autocomplete="new-password" stops the browser from filling in the editor's own password. %>
+          <%# new-password: the browser won't fill in the editor's own password. %>
           <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" required>
         </div>
         <p id="add-user-message" role="status" hidden></p>
@@ -73,11 +59,7 @@
 
       <p id="user-list-error" class="form-error" role="alert" hidden></p>
 
-      <%#
-        On a narrow screen the table scrolls sideways inside this box, not the whole page
-        (requirements: responsive for computer, tablet and phone). table-scroll is the
-        shared class for this in public/css/main.css (SH).
-      %>
+      <%# On a narrow screen the table scrolls sideways inside this box. %>
       <div class="table-scroll">
         <table class="data-table">
           <thead>
@@ -104,7 +86,6 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first: public/js/editor/users.js uses it. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="/js/editor/users.js"></script>
 </body>

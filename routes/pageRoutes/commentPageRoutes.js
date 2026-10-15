@@ -1,8 +1,7 @@
 /**
  * routes/pageRoutes/commentPageRoutes.js
  *
- * Page route for the editor's comment moderation. Mounted at "/" in app.js.
- * Paths and access follow the routes table in "Shared contracts".
+ * The editor's comment moderation page, mounted at "/" in app.js.
  *
  * Owner: OS.
  */
@@ -13,7 +12,7 @@ const commentController = require('../../controllers/commentController');
 
 const router = express.Router();
 
-// Editors only. requireRole also sends guests to /login.
+// Editors only; guests go to /login.
 router.get('/editor/comments', requireRole('editor'), commentController.showCommentModerationPage);
 
 module.exports = router;

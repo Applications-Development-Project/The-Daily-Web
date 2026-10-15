@@ -1,9 +1,7 @@
 /**
  * routes/apiRoutes/authApiRoutes.js
  *
- * JSON API route for logging in. Mounted at "/api" in app.js, so "/auth/login"
- * here is "/api/auth/login" in the browser. The login page sends the form with fetch.
- * Paths and access follow the routes table in "Shared contracts".
+ * POST /api/auth/login (mounted at "/api" in app.js); the login page sends it with fetch.
  *
  * Owner: OS.
  */

@@ -1,16 +1,10 @@
 /**
  * routes/pageRoutes/articlePageRoutes.js
  *
- * Page route for a single article. Mounted at "/" in app.js.
- * Created by OS in phase 0 with the path and access from the routes table in
- * "Shared contracts"; SH wrote the real controller behind it, which renders the whole
- * article on the server (for search engines) and counts the view.
+ * The full article page, mounted at "/" in app.js. The controller checks the id
+ * (404 for a malformed, unknown or not-live article).
  *
- * :id is any text here; the controller checks it and answers the 404 page for a malformed
- * or unknown id, or an article that isn't live.
- *
- * Related: controllers/articlePageController.js, views/public/article.ejs.
- *
+ * Related: controllers/articlePageController.js.
  * Owner: SH.
  */
 

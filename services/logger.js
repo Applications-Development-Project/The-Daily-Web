@@ -1,69 +1,39 @@
 /**
  * services/logger.js
  *
- * One place for all server logging. Every file calls logger.info() for important
- * operational events (server start, database connection, logins, article status
- * changes), logger.warn() for a problem we expected and handled (the weather service
- * being down), and logger.error() for failures, instead of calling console.log directly.
- * Because everyone goes through these two functions, where the logs go is decided
- * here only, and no caller had to change when the log files were added.
+ * All server logging: logger.info() for significant events (start, database, logins,
+ * article status changes...), logger.warn() for an expected, handled problem (the weather
+ * service down) and logger.error() for failures. Every line goes to the console and
+ * logs/app.log; errors also go, with their stack trace, to logs/error.log, so failures are
+ * easy to find. The logs folder is created at startup and is in .gitignore.
  *
- * Requirement covered: "keep logs of errors and significant operational events".
- * Events logged: server start; database connected and connection lost; login success,
- * login failure and logout; users created, updated or deleted; new, edited and deleted
- * comments; the comment limit being reached; articles submitted, approved, returned or
- * deleted (EZ's and SM's controllers); every 4xx error as one line
- * (errorHandler) and every 500 with its full stack trace.
- *
- * Where each line goes:
- * - the console, as before, so whoever runs "npm run dev" sees what happens;
- * - logs/app.log: every line, INFO, WARN and ERROR, so the whole story of the server can
- *   be read in order in one file;
- * - logs/error.log: only errors, each with its stack trace, so failures are easy to find
- *   without scrolling through thousands of normal events. Warnings are not errors of our
- *   server (for example an outside service didn't answer, and we showed the last good
- *   value instead), so they stay out of this file.
- * The logs folder is created when the server starts if it doesn't exist. It is in
- * .gitignore: log files are output of the running program, not source code.
- *
- * Called by: server.js, config/database.js, the middleware, the controllers,
- * services/viewTracker.js and scripts/seed.js.
+ * Called by: server.js, config/database.js, the middleware, the controllers, the services
+ * and scripts/seed.js.
  * Owner: OS.
  */
 
 const fs = require('fs');
 const path = require('path');
 
-// The logs folder at the top of the project. Built from __dirname (this file's folder)
-// rather than the current working directory, so the logs land in the same place
-// whether the server is started from the project folder or from somewhere else.
+// From this file's folder, so the logs land in the same place wherever the server is started.
 const LOGS_FOLDER = path.join(__dirname, '..', 'logs');
 const APP_LOG_PATH = path.join(LOGS_FOLDER, 'app.log');
 const ERROR_LOG_PATH = path.join(LOGS_FOLDER, 'error.log');
 
-// Created once, when this file is first loaded at startup. recursive: true also means
-// "no error if the folder already exists". Doing it synchronously here is fine: it
-// happens once, before the server accepts any request.
+// Once, at startup; recursive: no error if it already exists.
 fs.mkdirSync(LOGS_FOLDER, { recursive: true });
 
-// app.log is written through one write stream that stays open, instead of calling
-// fs.appendFile for every line. Each fs.appendFile call opens the file, writes and closes
-// it on its own, so two calls made quickly one after the other can finish in either
-// order, and lines could end up out of order. A stream writes its lines in exactly the
-// order they were given, and opening the file once is cheaper for a busy server.
-// flags: 'a' means "append": new lines go at the end and old logs are kept.
+// One stream kept open: lines are written in exactly the order given (separate
+// fs.appendFile calls could finish out of order). flags 'a' = append.
 const appLogStream = fs.createWriteStream(APP_LOG_PATH, { flags: 'a' });
 
-// A stream that can't write (for example the disk is full or the file is read-only)
-// emits an "error" event, and Node stops the whole process if nobody listens for it.
-// Logging must never bring the server down, so we report it on the console and go on.
+// Without a listener, a write error (disk full) would stop the whole process.
 appLogStream.on('error', (streamError) => {
   console.error(`Could not write to ${APP_LOG_PATH}: ${streamError.message}`);
 });
 
 /**
- * Builds one log line with a timestamp and a level, so every line has the same shape
- * and lines can be sorted and searched by time.
+ * Builds one log line with a timestamp and a level.
  *
  * @param {string} level - "INFO", "WARN" or "ERROR".
  * @param {string} message - What happened.
@@ -75,12 +45,10 @@ function formatLogLine(level, message) {
 }
 
 /**
- * Describes the error passed to logError, for the console and error.log.
+ * Describes the error given to logError.
  *
- * @param {*} [error] - The caught error, if there is one.
- * @returns {string|null} The stack trace (it starts with the error's message and shows
- *   the file and line where the problem started), the value as text if it isn't a
- *   real Error, or null if no error was given.
+ * @param {*} [error]
+ * @returns {string|null} The stack trace (file and line), the value as text, or null.
  */
 function describeError(error) {
   if (error && error.stack) {
@@ -93,17 +61,10 @@ function describeError(error) {
 }
 
 /**
- * Adds an error entry to error.log.
+ * Adds an entry to error.log synchronously, so an error logged right before the process
+ * exits is never lost. A failure to write is reported on the console, never thrown.
  *
- * Unlike app.log, this file is written synchronously (appendFileSync): the line is on
- * the disk before the function returns. Errors are rare, so the short wait costs
- * nothing, and an error logged right before the process stops (server.js calls
- * process.exit(1) when MongoDB can't be reached) is never lost, which an
- * asynchronous write still waiting in a queue could be.
- * If the file can't be written we say so on the console instead of throwing, because
- * a failure to log must never cause a new failure in the request being handled.
- *
- * @param {string} entry - The log line, plus the error's description on the next lines.
+ * @param {string} entry - The log line plus the error's description.
  * @returns {void}
  */
 function appendToErrorLog(entry) {
@@ -115,9 +76,9 @@ function appendToErrorLog(entry) {
 }
 
 /**
- * Logs a normal operational event: to the console and app.log.
+ * Logs a normal event: console and app.log.
  *
- * @param {string} message - What happened, for example "User dana logged in".
+ * @param {string} message - For example "User dana logged in".
  * @returns {void}
  */
 function logInfo(message) {
@@ -127,11 +88,9 @@ function logInfo(message) {
 }
 
 /**
- * Logs a problem that was expected and handled, so the server carried on normally:
- * to the console (as a warning) and app.log, but not error.log. Example: the weather
- * service didn't answer, so the widget got the last good result instead.
+ * Logs an expected, handled problem: console and app.log, not error.log.
  *
- * @param {string} message - What happened, for example "Weather service failed: timeout".
+ * @param {string} message - For example "Weather service failed: timeout".
  * @returns {void}
  */
 function logWarning(message) {
@@ -142,12 +101,9 @@ function logWarning(message) {
 }
 
 /**
- * Logs a failure: to the console, app.log (one line, so the timeline there is
- * complete) and error.log (the line plus the stack trace). When an Error object is
- * given we include its stack trace, because the stack shows the exact file and line
- * where the problem started.
+ * Logs a failure: console, app.log (one line) and error.log (with the stack trace).
  *
- * @param {string} message - What we were trying to do, for example "Could not save comment".
+ * @param {string} message - What we were trying to do.
  * @param {Error} [error] - The caught error, if there is one.
  * @returns {void}
  */
@@ -155,8 +111,7 @@ function logError(message, error) {
   const line = formatLogLine('ERROR', message);
   const errorDescription = describeError(error);
 
-  // console.error writes to the error stream (stderr) instead of normal output, so
-  // errors can be watched or saved separately from ordinary events.
+  // console.error writes to stderr, separate from normal output.
   console.error(line);
   if (errorDescription) {
     console.error(errorDescription);
@@ -166,11 +121,7 @@ function logError(message, error) {
   appendToErrorLog(errorDescription ? `${line}\n${errorDescription}` : line);
 }
 
-// Exported as logger.info, logger.warn and logger.error (info and error are the names
-// fixed in "Shared contracts"; warn was added for the weather service). Inside this file
-// the functions have verb-first names (logInfo, logWarning, logError), as the naming
-// convention asks. It also means logError's parameter can be called "error" without
-// hiding a function that is itself called "error".
+// Exported as logger.info, .warn and .error (the contract's names); inside, verb-first names.
 module.exports = {
   info: logInfo,
   warn: logWarning,

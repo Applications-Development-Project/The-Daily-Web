@@ -1,33 +1,15 @@
 <%#
   views/editor/analytics.ejs
 
-  The Impact Analytics page: the editor searches an article by title, chooses a range,
-  and sees a line chart of its views over time with a dashed line at every publish, so
-  the views before and after each update can be compared. A button resets the article's
-  statistics.
+  The Impact Analytics page: search an article, choose a period, see its views on a
+  chart with a numbered line at every publish, and reset its statistics. This file is
+  the frame; public/js/editor/analytics.js does the work without reloading the page.
 
-  This file is only the frame. public/js/editor/analytics.js does the work in the browser:
-  it searches with GET /api/editor/articles?search=, loads the chart data from
-  GET /api/editor/articles/:id/views and draws it with Chart.js, all without reloading
-  the page. The element ids below are what that script uses.
+  Chart.js 4.5.1 comes from cdnjs, on this page only (no npm package). The integrity
+  hash makes the browser refuse the file if the CDN ever sends a different one.
 
-  Requirements this serves: the editor picks an article and sees its views over time with
-  a clear mark at each published update (Impact Analytics); the statistics can be reset
-  (the Delete of the statistics' CRUD); Ajax without page reloads; semantic HTML5 with a
-  label for every field.
-
-  Chart.js comes from cdnjs, one fixed version (4.5.1), on this page only, so no package
-  is added to package.json. The integrity attribute holds the file's SHA-512 hash, as
-  cdnjs publishes it: if the CDN ever sent a different file, the browser would refuse to
-  run it. crossorigin="anonymous" is needed for that check and sends no cookies.
-
-  Only an editor ever receives this page: requireRole('editor') runs on the server
-  before the controller (routes/pageRoutes/analyticsPageRoutes.js).
-
-  Rendered by: controllers/analyticsController.js (showAnalyticsPage), for GET /editor/analytics.
-  Locals: title, rangeOptions ([{ days, label }]), defaultRangeDays, initialArticle
-  ({ id, title } or null, from ?article=), notice ('' or a message about ?article=).
-  Includes: the shared head, header and footer and the editor nav.
+  Rendered by: showAnalyticsPage (controllers/analyticsController.js), for GET /editor/analytics.
+  Locals: title, rangeOptions, defaultRangeDays, initialArticle ({ id, title } or null), notice.
   Owner: SM.
 %>
 <!DOCTYPE html>
@@ -38,10 +20,7 @@
   <%- include('../partials/header') %>
   <%- include('partials/editorNav', { activePage: 'analytics' }) %>
 
-  <%#
-    The data-* attributes pass the server's values to the script. They are printed with
-    the escaping tag like everything else, so a title can't break out of the attribute.
-  %>
+  <%# The data-* attributes pass the server's values to the script (escaped, like all output). %>
   <main class="main-content" id="analytics-page"
     data-default-range-days="<%= defaultRangeDays %>"
     data-initial-article-id="<%= initialArticle ? initialArticle.id : '' %>"
@@ -54,7 +33,6 @@
       <p class="form-error"><%= notice %></p>
     <% } %>
 
-    <%# role="search": tells screen readers this form finds an article. maxlength matches the server's search limit. %>
     <form id="article-picker" class="card" role="search">
       <label for="article-search">Find an article by title</label>
       <input type="search" id="article-search" name="search" class="form-field"
@@ -74,20 +52,14 @@
         <% }); %>
       </select>
 
-      <%# The numbers in words: the summary for everyone, and the chart's meaning for screen readers. %>
       <p id="chart-summary" aria-live="polite"></p>
       <p id="chart-message" aria-live="polite" hidden></p>
 
-      <%#
-        role="img" with an aria-label: a canvas is only pixels, so screen readers read
-        this label instead (the script updates it). The text inside the canvas shows
-        only in a browser that can't draw a canvas at all.
-      %>
+      <%# A canvas is only pixels: role="img" and the aria-label (updated by the script) are what screen readers read. %>
       <canvas id="views-chart" role="img" aria-label="Chart of views over time">
         Your browser can't show the chart. The summary above gives the numbers.
       </canvas>
 
-      <%# Numbered: item 1 is the dashed line numbered 1 on the chart. %>
       <h4>Published in this period (the numbered dashed lines)</h4>
       <ol id="publish-list"></ol>
       <p id="publish-empty" class="empty-state" hidden>Not published in this period.</p>
@@ -106,7 +78,6 @@
 
   <%- include('../partials/footer') %>
 
-  <%# apiClient first and Chart.js second: public/js/editor/analytics.js uses both. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.5.1/chart.umd.min.js"
     integrity="sha512-WoViKhKD4qI2WruSZqv9+kvM4WfFhUMQCLN4QlDTt5aU56fLQy2gYoxWIqlEnXqJy/+Ac5q/hk1oWfqnMDhwMA=="

@@ -1,35 +1,16 @@
 /**
  * controllers/editorController.js
  *
- * Everything the editor does with articles: the dashboard of all articles and the
- * review page, editing any article, approving (draft copied into published),
+ * The editor's work with articles: the dashboard and review page, editing, approving,
  * returning with a note, and deleting an article with its comments and statistics.
  *
- * Every route that reaches these functions is protected with requireRole('editor')
- * in the route files, so here request.session.user is always a logged-in editor.
- *
- * Rules every function here follows (the lecturer's usual questions):
- * - Permissions are checked on the server (requireRole in the routes, canTransition
- *   for status changes), never by hiding buttons in the browser.
- * - The article comes only from the URL (:id) and the editor only from the session.
- *   Nothing that decides who or what is changed is read from the request body.
- * - Every value from the request is checked for its type before it reaches a query
- *   (a JSON or query value can be an object or array, not only text).
- * - Errors: APIs answer with sendError() as { success: false, error } and a status
- *   code (400 invalid input, 404 not found, 409 not allowed in the current status).
- *   Pages throw createHttpError() and errorHandler shows the shared error page.
- *   Database failures need no try/catch: Express 5 sends a rejected promise from an
- *   async function to errorHandler, which answers 500 and logs it.
- * - The article model has two copies of the content: draft (worked on) and
- *   published (what readers see); see models/Article.js. "Live" means published is
- *   not null, whatever the status.
- *
- * Built step by step from OS's phase 0 placeholders; none is left. The function names
- * stayed the same, because the route files call them.
+ * Every route is protected with requireRole('editor'), so request.session.user is
+ * always an editor here. The article comes from the URL and the editor from the
+ * session, never from the request body. APIs answer errors with sendError(); pages
+ * throw createHttpError() and errorHandler shows the error page.
  *
  * Used by: routes/pageRoutes/editorPageRoutes.js, routes/apiRoutes/editorApiRoutes.js.
- * Related: models/Article.js, services/articleWorkflow.js (STATUS, canTransition),
- * services/draftValidation.js (EZ's field checks, shared with the reporter's autosave).
+ * Related: models/Article.js, services/articleWorkflow.js, services/draftValidation.js.
  * Owner: SM.
  */
 
@@ -43,17 +24,16 @@ const logger = require('../services/logger');
 const { createHttpError } = require('../utils/httpErrors');
 const { isValidObjectId, escapeRegExp } = require('../utils/requestValidation');
 
-// The dashboard shows 20 articles per page ("Shared contracts").
 const ARTICLES_PER_PAGE = 20;
-// Titles are at most 200 characters, so a longer search can never match anything.
+// Titles are at most 200 characters, so a longer search can never match.
 const MAX_SEARCH_LENGTH = 200;
 // An article can't go live with any of these empty (the image is optional).
 const REQUIRED_CONTENT_FIELDS = ['title', 'summary', 'body', 'category'];
 // Same limit as Article.editorNote in the model.
 const MAX_EDITOR_NOTE_LENGTH = 2000;
-// The same date format as the rest of the site, for example "10 Oct 2026, 14:32".
+// For example "10 Oct 2026, 14:32", as on the rest of the site.
 const DATE_TIME_FORMAT = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
-// The fields of a content object, with the names the review page shows, in page order.
+// The content fields with the names the review page shows, in page order.
 const CONTENT_FIELD_LABELS = {
   title: 'Title',
   summary: 'Summary',
@@ -63,12 +43,7 @@ const CONTENT_FIELD_LABELS = {
 };
 
 /**
- * Formats a date for the page, or returns '' when there is no date.
- *
- * Known limit: this runs on the server, so the time is in the server's time zone.
- * That is right while the server and the editor are in the same country. The
- * dashboard instead formats dates in the browser (public/js/editor/dashboard.js), in the
- * editor's own time zone.
+ * Formats a date for the page ('' when there is none), in the server's time zone.
  *
  * @param {Date|null|undefined} date
  * @returns {string}
@@ -78,9 +53,8 @@ function formatDateTime(date) {
 }
 
 /**
- * Prepares one content object (draft or published) for the page. The body is
- * plain text with a blank line between paragraphs, so it is split into paragraphs
- * here and the view prints each one with the escaping <%= %> tag.
+ * Prepares one content object (draft or published) for the page, with the body split
+ * into paragraphs (they are separated by a blank line).
  *
  * @param {{title: string, summary: string, body: string, imageUrl: string, category: string}} content
  * @returns {{title: string, summary: string, category: string, imageUrl: string, paragraphs: string[]}}
@@ -101,13 +75,11 @@ function toContentView(content) {
 
 /**
  * Lists the fields where the working copy differs from the live version, so the
- * editor sees exactly what an update changes. Values are compared as stored, so
- * even a changed space or line break counts as a change.
+ * editor sees what an update changes.
  *
  * @param {Object} draft - The working copy.
  * @param {Object|null} published - The live version, or null if never published.
- * @returns {string[]} Field names in page order, for example ['title', 'body'];
- *   empty when the article isn't live or nothing changed.
+ * @returns {string[]} Field names in page order; empty if not live or nothing changed.
  */
 function findChangedFields(draft, published) {
   if (!published) {
@@ -138,9 +110,8 @@ function toReviewView(article, role) {
     draft: toContentView(article.draft),
     published: isLive ? toContentView(article.published) : null,
     changedFields: changedFields,
-    // The same fields as readable names, for the line "Changed in this update: ...".
     changedFieldLabels: changedFields.map((field) => CONTENT_FIELD_LABELS[field]),
-    // Newest approval first, as the editor most often wants the latest one.
+    // Newest approval first.
     publishHistory: article.publishHistory
       .slice()
       .reverse()
@@ -148,18 +119,13 @@ function toReviewView(article, role) {
         publishedAt: formatDateTime(publishEvent.publishedAt),
         editorName: publishEvent.editor ? publishEvent.editor.displayName : 'Unknown editor',
       })),
-    // The buttons appear only when the workflow allows the decision. The server
-    // checks again when a button is used; hiding a button protects nothing.
+    // Hiding a button protects nothing: the server checks again when it is used.
     canApprove: canTransition(article.status, STATUS.PUBLISHED, role),
     canReturn: canTransition(article.status, STATUS.RETURNED, role),
-    // The editor may edit every article (requirements: "the editor can view and edit all
-    // the articles in the system"); editArticleDraft checks the role again on the server.
     canEdit: role === 'editor',
-    // Saving an edit of a live article with no update in progress publishes it at once
-    // (see editArticleDraft), so the form says so and asks for confirmation.
+    // Saving an edit of a live article publishes it at once (see editArticleDraft).
     editPublishesOnSave: article.status === STATUS.PUBLISHED,
-    // The draft as stored (the body with its blank lines, not split into paragraphs),
-    // to fill the Edit form, so the editor starts from exactly what was submitted.
+    // The draft as stored (the body not split), to fill the Edit form.
     editableDraft: {
       title: article.draft.title || '',
       summary: article.draft.summary || '',
@@ -173,7 +139,7 @@ function toReviewView(article, role) {
 /**
  * Sends an error answer in the shape every API uses: { success: false, error }.
  *
- * @param {import('express').Response} response - The response to send.
+ * @param {import('express').Response} response
  * @param {number} statusCode - 400, 404, 409...
  * @param {string} message - A message the editor can read.
  * @returns {void}
@@ -183,12 +149,8 @@ function sendError(response, statusCode, message) {
 }
 
 /**
- * Loads the article named in the URL (/:id), or answers the request itself if it can't:
- * 400 for an id that isn't a valid MongoDB id, 404 if no such article exists.
- * Checking the format first gives a clear message instead of a database CastError.
- *
- * isValidObjectId (utils/requestValidation.js) accepts only a string of exactly 24
- * hexadecimal characters, the one id rule the whole project shares.
+ * Loads the article named in the URL, or answers the request itself: 400 for an id
+ * that isn't a valid MongoDB id (checked before the database), 404 if it doesn't exist.
  *
  * @param {import('express').Request} request - request.params.id is the article id.
  * @param {import('express').Response} response - Used only to send the 400 or 404.
@@ -208,16 +170,12 @@ async function findArticleFromUrl(request, response) {
 }
 
 /**
- * Reads one text value from the query string.
- * A value can arrive as an array (?status=a&status=b), which we treat as invalid
- * instead of guessing which one was meant.
- *
- * Why the type check matters: only a plain string ever reaches a database query.
- * A request value that is an object or array could otherwise change the meaning of
- * the query (a NoSQL injection), or crash the code that expects text.
+ * Reads one text value from the query string. Only a plain string may reach a query:
+ * an array (?status=a&status=b) or an object could change the query's meaning
+ * (NoSQL injection), so it counts as invalid.
  *
  * @param {*} value - request.query.something.
- * @returns {string|null} The trimmed text ('' if it was not sent), or null if it isn't text.
+ * @returns {string|null} The trimmed text ('' if not sent), or null if it isn't text.
  */
 function readQueryText(value) {
   if (value === undefined) {
@@ -234,7 +192,7 @@ function readQueryText(value) {
  *
  * @param {Object} query - request.query.
  * @returns {{error: string}|{status: string, search: string, page: number}}
- *   Either a message for a 400 answer, or the clean values ('' means "no filter").
+ *   A message for a 400 answer, or the clean values ('' means "no filter").
  */
 function readArticleListQuery(query) {
   const status = readQueryText(query.status);
@@ -250,7 +208,7 @@ function readArticleListQuery(query) {
   if (search.length > MAX_SEARCH_LENGTH) {
     return { error: `Search can be at most ${MAX_SEARCH_LENGTH} characters` };
   }
-  // Only digits, so "2.5", "-1", "abc" and "1e3" are all rejected.
+  // Digits only, so "2.5", "-1", "abc" and "1e3" are refused.
   if (pageText !== '' && !/^\d+$/.test(pageText)) {
     return { error: 'Page must be a whole number, 1 or more' };
   }
@@ -263,11 +221,8 @@ function readArticleListQuery(query) {
 }
 
 /**
- * Turns an article from the database into one dashboard row, with only what the
- * table shows.
- *
- * The title is the working copy's (draft) title, because that is what the editor
- * reviews; an article whose draft has no title yet falls back to the live title.
+ * Turns an article into one dashboard row, with only what the table shows. The title is
+ * the working copy's, which is what the editor reviews.
  *
  * @param {Object} article - A lean article with reporter populated.
  * @returns {{id: string, title: string, reporterName: string, status: string,
@@ -278,31 +233,25 @@ function toArticleRow(article) {
   return {
     id: article._id.toString(),
     title: article.draft.title || liveTitle || '(untitled)',
-    // reporter is null if the user was deleted; the user rules prevent that, but the
-    // dashboard must still work if it ever happens.
     reporterName: article.reporter ? article.reporter.displayName : 'Unknown reporter',
     status: article.status,
     statusLabel: STATUS_LABELS[article.status],
-    // Live means readers can see it, whatever the status of the working copy.
+    // Live = readers can see it, whatever the status of the working copy.
     isLive: Boolean(article.published),
     updatedAt: article.updatedAt,
   };
 }
 
 /**
- * GET /editor - the editor dashboard: a table of every article in the system.
+ * GET /editor - the dashboard. The table arrives empty; public/js/editor/dashboard.js
+ * fills it from the API, so the rows are built in one place only.
  *
- * The page arrives with an empty table; public/js/editor/dashboard.js fills it from
- * GET /api/editor/articles and refills it when the editor filters, searches or
- * changes page, without reloading. That way the table is built in one place only.
- *
- * @param {import('express').Request} request - session.user is the editor.
+ * @param {import('express').Request} request
  * @param {import('express').Response} response - Renders views/editor/dashboard.ejs.
  * @returns {void}
  */
 function showEditorDashboard(request, response) {
-  // The filter's choices come from the shared status names and labels, so the page
-  // always offers exactly the statuses the API accepts.
+  // From the shared status list, so the filter offers exactly what the API accepts.
   const statusOptions = Object.values(STATUS).map((status) => ({ value: status, label: STATUS_LABELS[status] }));
   response.render('editor/dashboard', {
     title: 'Articles - Editor - The Daily Web',
@@ -311,24 +260,19 @@ function showEditorDashboard(request, response) {
 }
 
 /**
- * GET /editor/articles/:id - the review page of one article: who wrote it, its
- * status, the submitted content and its publish history.
- *
- * A malformed or unknown id shows the shared error page with 404 (errorHandler
- * renders it, because this is a page, not an /api request).
+ * GET /editor/articles/:id - the review page of one article.
  *
  * @param {import('express').Request} request - params.id; session.user is the editor.
  * @param {import('express').Response} response - Renders views/editor/articleReview.ejs.
  * @returns {Promise<void>}
- * @throws {Error} 404 if the id is malformed or no article has it.
+ * @throws {Error} 404 (the error page) if the id is malformed or no article has it.
  */
 async function showArticleReview(request, response) {
-  // For a page, "not a valid id" and "no such article" mean the same to the editor.
+  // For a person, "bad id" and "no such article" both mean "not found".
   if (!isValidObjectId(request.params.id)) {
     throw createHttpError(404, 'Article not found');
   }
 
-  // populate replaces the stored user ids with the users' display names.
   const article = await Article.findById(request.params.id)
     .populate('reporter', 'displayName')
     .populate('publishHistory.editor', 'displayName')
@@ -341,38 +285,21 @@ async function showArticleReview(request, response) {
   response.render('editor/articleReview', {
     title: `Review: ${review.title} - Editor - The Daily Web`,
     review: review,
-    // The categories the Edit form offers: the model's list, so the form can never offer
-    // a category the server would refuse.
+    // The model's list, so the Edit form never offers a category the server refuses.
     categories: Article.CATEGORIES,
   });
 }
 
 /**
- * GET /api/editor/articles?status=&search=&page= - every article in the system,
- * newest change first, 20 per page, for the editor dashboard.
+ * GET /api/editor/articles?status=&search=&page= - every article, newest change first,
+ * 20 per page. search matches the working or the live title, any capitals.
  *
- * - status: one of draft, pending, published, returned; empty means all.
- * - search: part of the title, any capitals; matches the working title or the live title.
- * - page: 1 or more; empty means 1.
+ * Fast with thousands of articles: 20 rows per answer, only the table's fields (.select,
+ * .lean), and the sort uses the { updatedAt, _id } indexes. Known limit: a search inside
+ * titles can't use an index (a text index could, but matches whole words only).
  *
  * Answers 200 { success: true, data: { articles, page, totalPages, totalArticles } },
- * or 400 with a message if a parameter is invalid. Database errors go to errorHandler
- * (Express 5 passes a rejected promise from an async controller on by itself).
- * The response shape is SM's own contract with public/js/editor/dashboard.js.
- *
- * Performance with thousands of articles:
- * - Only 20 rows per answer (paging), only the fields the table shows (.select),
- *   plain objects (.lean), and only the reporter's displayName (populate), so no
- *   article body or user data the page doesn't need is ever loaded.
- * - Without a filter, the sort reads the { updatedAt: -1, _id: -1 } index in order, so
- *   MongoDB never sorts the whole collection in memory; with a status filter it reads the
- *   { status: 1, updatedAt: -1, _id: -1 } index, again already in order.
- * Known limits, fine for the thousands of articles the requirements mention:
- * - A case-insensitive search inside titles ('i' regex, any position) can't use an
- *   index, so MongoDB checks the titles one by one. A text index would avoid that, but
- *   it matches whole words only.
- * - skip() still passes over the earlier pages; an editor rarely goes deep enough for
- *   that to matter.
+ * or 400 if a parameter is invalid.
  *
  * @param {import('express').Request} request - The query string holds the filters.
  * @param {import('express').Response} response - The JSON answer.
@@ -390,16 +317,13 @@ async function listAllArticles(request, response) {
     filter.status = listQuery.status;
   }
   if (listQuery.search !== '') {
-    // 'i' = ignore capitals. We search both titles, so a live article whose
-    // working copy was renamed can be found by either name.
+    // escapeRegExp: the text is searched as typed ("C++" is not a pattern).
     const titlePattern = new RegExp(escapeRegExp(listQuery.search), 'i');
     filter.$or = [{ 'draft.title': titlePattern }, { 'published.title': titlePattern }];
   }
 
-  // The page of articles and the total count are two independent queries, so we
-  // send both at once and wait for both, instead of one after the other.
-  // _id is the tie-breaker: articles with the same updatedAt keep a fixed order,
-  // so moving between pages never repeats or skips one.
+  // The page and the count don't depend on each other, so they run at the same time.
+  // _id breaks ties in updatedAt, so paging never repeats or skips an article.
   const [articles, totalArticles] = await Promise.all([
     Article.find(filter)
       .sort({ updatedAt: -1, _id: -1 })
@@ -416,7 +340,7 @@ async function listAllArticles(request, response) {
     data: {
       articles: articles.map(toArticleRow),
       page: listQuery.page,
-      // At least 1, so an empty result still reads "page 1 of 1".
+      // At least 1, so an empty result reads "page 1 of 1".
       totalPages: Math.max(1, Math.ceil(totalArticles / ARTICLES_PER_PAGE)),
       totalArticles: totalArticles,
     },
@@ -424,22 +348,18 @@ async function listAllArticles(request, response) {
 }
 
 /**
- * Makes the article's working copy (draft) the version readers see: the step shared by
- * approving (approveArticle) and by the editor's own edit of a live article
- * (editArticleDraft). Changes the document in memory only; the caller saves it.
- *
- * - toObject() makes a separate plain copy of the draft, so later edits to the draft can't
- *   change what readers see until the next publish.
- * - One "now" for all the dates, so lastPublishedAt and the new publishHistory entry are
- *   exactly the same moment (the chart marker and the feed date agree).
- * - Every publish is added to publishHistory: the analytics chart draws a marker for it.
+ * Makes the working copy (draft) the version readers see, and records the publish in
+ * the history (a marker on the analytics chart). Shared by approving and by the
+ * editor's edit of a live article. Changes the document in memory; the caller saves it.
  *
  * @param {import('mongoose').Document} article - The article to publish.
  * @param {string} editorId - The logged-in editor's id, from the session.
  * @returns {void}
  */
 function publishWorkingCopy(article, editorId) {
+  // One "now" for all dates, so the chart marker and the feed date agree.
   const now = new Date();
+  // toObject() makes a separate copy: later draft edits can't change what readers see.
   article.published = article.draft.toObject();
   article.status = STATUS.PUBLISHED;
   article.editorNote = '';
@@ -451,54 +371,26 @@ function publishWorkingCopy(article, editorId) {
 }
 
 /**
- * PATCH /api/editor/articles/:id/draft - the editor edits an article, in any status.
+ * PATCH /api/editor/articles/:id/draft - the editor edits an article in any status
+ * (requirements p.6: the editor can edit all articles). The status never changes:
+ * - pending, draft or returned: only the working copy changes; readers keep the live version;
+ * - published: saving is the approval, so the edit is published at once (the page asks
+ *   for confirmation first). Saving it unchanged answers 409, so no empty "update" is
+ *   added to the history.
  *
- * Requirements: "for an article awaiting approval, the editor can edit it himself" (p.5)
- * and "the editor can view and edit all the articles in the system" (p.6). The team first
- * allowed only pending articles; where the work plan and the requirements disagree, the
- * requirements win, so every article can be edited.
- *
- * Editing is not a status change (the requirements allow only the listed transitions), so
- * the status never changes here. What happens depends on the status:
- * - pending (awaiting approval): only the submitted version (draft) changes. The editor then
- *   approves or returns it as usual; readers keep the live version until then.
- * - draft or returned: the reporter's work in progress (draft) changes; the reporter sees the
- *   editor's version the next time they open it.
- * - published, with no update in progress: the editor is the one who approves, so saving IS
- *   the approval: the edited version is published at once (publishWorkingCopy), with a
- *   publishHistory entry and a chart marker, exactly like approving. The review page says
- *   so and asks for confirmation. Saving it with no change answers 409, so a click doesn't
- *   add an empty "update" to the history.
- *   Why this still follows "an edited published article goes through the same approval
- *   process, and readers see the new content only after an editor approves it" (p.4): the
- *   approval process ends with an editor's approval, and here the editor is the one making
- *   the change and confirming it. New content still reaches readers only through an editor's
- *   decision; a reporter's edit of a live article always waits for the editor (pending).
- *
- * Validation:
- * - The fields are checked by readDraftFromRequestBody (services/draftValidation.js), the
- *   same function the reporter's autosave uses, so a draft is held to the same rules
- *   whoever saves it: every field must be text (no objects, so no NoSQL injection), the same
- *   maximum lengths, a known category, and an http(s) image address or none. Anything else
- *   in the body (a "status", a "published", a "reporter") is dropped by that function.
- * - For a pending or published article, title, summary, body and category can't be empty:
- *   that version is submitted as complete or goes live. A draft or returned article is
- *   still being written, so empty fields are allowed there, as in the reporter's autosave.
- *
- * Known limit: if the reporter saved the same article between the editor opening the page
- * and saving, the editor's version would replace it. The requirements say simultaneous
- * editing of one article doesn't need to be supported.
+ * The fields are checked by EZ's readDraftFromRequestBody, the same rules as the
+ * reporter's autosave (it also drops any other field, like "status"). For a pending or
+ * published article, title, summary, body and category can't be empty.
  *
  * Answers 200 { success: true, data: { id, status, published, updatedAt } } (published:
- * true when the edit went live), 400 for a malformed id or an invalid field, 404 if the
- * article doesn't exist, 409 when a live article is saved without any change.
+ * true when the edit went live), 400 for a bad id or field, 404 if not found, 409 when a
+ * live article is saved unchanged.
  *
  * @param {import('express').Request} request - params.id; body { title, summary,
  *   category, imageUrl, body }; session.user is the editor.
  * @param {import('express').Response} response - The JSON answer.
  * @returns {Promise<void>}
- * @throws {Error} 400 from readDraftFromRequestBody for an invalid field; errorHandler
- *   turns it into { success: false, error } (Express 5 passes it on from async code).
+ * @throws {Error} 400 from readDraftFromRequestBody for an invalid field.
  */
 async function editArticleDraft(request, response) {
   const article = await findArticleFromUrl(request, response);
@@ -540,26 +432,15 @@ async function editArticleDraft(request, response) {
 }
 
 /**
- * POST /api/editor/articles/:id/approve - publishes the article: its working copy
- * (draft) becomes the version readers see (published).
+ * POST /api/editor/articles/:id/approve - publishes the article's working copy. For an
+ * update of a live article, this is the moment readers switch to the new version.
+ * The body is not read: exactly the reviewed draft is published.
  *
- * For an update to a live article this is the moment readers switch from the old
- * version to the new one; until now they kept seeing the last approved version.
- * Every approval is recorded in publishHistory, which the analytics chart marks.
+ * Known limit: two editors approving at the same moment could both pass the status
+ * check and add two history entries (simultaneous editing needn't be supported).
  *
- * The request body is not read at all: what gets published is exactly the draft the
- * editor reviewed, so nobody can publish other content by sending it in the request.
- * Only an editor can reach this, and only from pending (canTransition), so a reporter
- * can never publish, even by calling the API directly (requirements).
- *
- * Known limit: two editors pressing Approve at the same moment could both pass the
- * status check before either saves, adding two history entries. The requirements say
- * simultaneous editing of one article doesn't need to be supported; a stricter
- * version would update with a condition (only if status is still pending).
- *
- * Answers 200 { success: true, data: { id, status, lastPublishedAt } },
- * 400 for a malformed id, 404 if the article doesn't exist, and 409 if its status
- * doesn't allow publishing or a required field is empty.
+ * Answers 200 { success: true, data: { id, status, lastPublishedAt } }, 400 for a
+ * malformed id, 404 if not found, 409 if the status or a missing field prevents it.
  *
  * @param {import('express').Request} request - params.id; session.user is the editor.
  * @param {import('express').Response} response - The JSON answer.
@@ -571,25 +452,20 @@ async function approveArticle(request, response) {
     return;
   }
 
-  // The status rules live in articleWorkflow.js (only pending -> published, only
-  // by an editor). The role comes from the server-side session, never the browser.
+  // Only pending -> published, only by an editor (articleWorkflow.js). The role comes
+  // from the server-side session.
   if (!canTransition(article.status, STATUS.PUBLISHED, request.session.user.role)) {
     sendError(response, 409, `An article that is "${STATUS_LABELS[article.status]}" can't be published`);
     return;
   }
 
-  // The editor may have edited the draft after it was submitted, so we check again
-  // that nothing readers need is missing.
   const missingFields = REQUIRED_CONTENT_FIELDS.filter((field) => !(article.draft[field] || '').trim());
   if (missingFields.length > 0) {
     sendError(response, 409, `The article can't be published without: ${missingFields.join(', ')}`);
     return;
   }
 
-  // Copies the draft into published, sets the dates and adds the publish to the history.
   publishWorkingCopy(article, request.session.user.id);
-
-  // save() runs the model's validation (lengths, category) before writing.
   await article.save();
 
   logger.info(`Article ${article._id} approved and published by editor "${request.session.user.displayName}"`);
@@ -600,33 +476,22 @@ async function approveArticle(request, response) {
 }
 
 /**
- * POST /api/editor/articles/:id/return - body { note }. Sends the article back to its
- * reporter for corrections, with a note saying what to fix.
+ * POST /api/editor/articles/:id/return - body { note }. Returns the article to its
+ * reporter with a required note. A live version stays online unchanged.
  *
- * Only the working copy changes status. If the article is live, its published
- * version stays exactly as it is, so readers keep seeing the last approved version.
- *
- * The note is the only value read from the body. It is stored as plain text, and the
- * pages show it with the escaping <%= %> tag, so a note can't add HTML to a page.
- * The review page also checks the note in the browser for a quick message; this
- * check on the server is the real one.
- *
- * Answers 200 { success: true, data: { id, status, editorNote } },
- * 400 if the note is missing, empty or too long (or the id is malformed),
- * 404 if the article doesn't exist, and 409 if its status doesn't allow returning.
+ * Answers 200 { success: true, data: { id, status, editorNote } }, 400 if the note is
+ * missing, empty or too long (or the id is malformed), 404 if not found, 409 if the
+ * status doesn't allow returning.
  *
  * @param {import('express').Request} request - params.id, body.note; session.user is the editor.
  * @param {import('express').Response} response - The JSON answer.
  * @returns {Promise<void>}
  */
 async function returnArticleToReporter(request, response) {
-  // In Express 5, request.body is undefined when the request has no body at all,
-  // so we fall back to an empty object instead of crashing on undefined.note.
+  // Express 5: request.body is undefined when the request has no body.
   const body = request.body || {};
   const note = typeof body.note === 'string' ? body.note.trim() : '';
 
-  // The note is checked before the database is touched: without it there is
-  // nothing to do (the requirements say a return always comes with a note).
   if (note === '') {
     sendError(response, 400, 'Please write a note telling the reporter what to fix');
     return;
@@ -659,25 +524,15 @@ async function returnArticleToReporter(request, response) {
 }
 
 /**
- * DELETE /api/editor/articles/:id - deletes an article together with everything
- * that belongs to it: its comments, its hourly view statistics and the devices'
- * "viewed" marks. Without this, those documents would stay in the database forever,
- * pointing to an article that no longer exists. The browser asks the editor to
- * confirm before calling this.
+ * DELETE /api/editor/articles/:id - deletes an article (any status) with its comments,
+ * view counters and device marks. The browser asks for confirmation first.
  *
- * Order matters because our MongoDB is a single server, which has no transactions
- * (all-or-nothing writes need a replica set). We delete the article FIRST: if a
- * later step failed, what is left are only leftovers nobody can see (the article
- * page and chart answer 404 without the article). The other order could fail
- * halfway and leave a live article whose comments and statistics are gone.
- *
- * Any status can be deleted: the requirements let the editor delete content
- * "as needed", so this is not a status change and canTransition isn't asked.
- * Deleting is permanent (there is no "deleted" flag to undo it), which is why the
- * dashboard asks for confirmation first.
+ * Our single MongoDB server has no transactions, so the article is deleted first: if a
+ * later step failed, only invisible leftovers remain, never a live article without its
+ * comments.
  *
  * Answers 200 { success: true, data: { id, deletedComments, deletedViewStats,
- * deletedDeviceViews } }, 400 for a malformed id, 404 if the article doesn't exist.
+ * deletedDeviceViews } }, 400 for a malformed id, 404 if not found.
  *
  * @param {import('express').Request} request - params.id; session.user is the editor.
  * @param {import('express').Response} response - The JSON answer.
@@ -691,7 +546,7 @@ async function deleteArticle(request, response) {
 
   await article.deleteOne();
 
-  // The three related deletes don't depend on each other, so they run at the same time.
+  // Independent deletes, so they run at the same time.
   const [commentsResult, viewStatsResult, deviceViewsResult] = await Promise.all([
     Comment.deleteMany({ article: article._id }),
     ArticleViewStats.deleteMany({ article: article._id }),

@@ -1,31 +1,19 @@
 /**
  * utils/isApiRequest.js
  *
- * Tells whether a request is for the JSON API (/api/...) or for a normal page.
- * The answer decides how we reply to an error: an API call gets JSON
- * ({ success: false, error }), which the browser's fetch code can read, while
- * a page gets the HTML error page (or a redirect to /login), which a person can read.
+ * Tells whether a request is for the JSON API (/api/...) or a page, which decides how an
+ * error is answered: JSON for fetch code, or an HTML page (or a redirect) for a person.
  *
- * Not a middleware itself (it never calls next), so it lives in utils/ with the other
- * small helpers, not in middleware/.
- *
- * Used by: middleware/errorHandler.js (JSON or error page), middleware/requireLogin.js
- * (401 JSON or a redirect to /login; requireRole.js uses it through requireLogin).
+ * Used by: middleware/errorHandler.js, middleware/requireLogin.js.
  * Owner: OS.
  */
 
 /**
- * Checks whether the request is for the JSON API.
+ * Inside a router mounted at "/api", request.path is relative ("/users"), so the full
+ * path is baseUrl + path. (Using request.path alone once made /api calls get a redirect
+ * to /login instead of 401 JSON.)
  *
- * Inside a router, Express makes request.path relative to where the router is
- * mounted: in a router mounted at "/api", a request for "/api/users" has
- * request.path "/users". request.baseUrl holds the mount prefix ("/api" there,
- * "" in middleware on the whole app), so baseUrl + path is always the full path,
- * without the query string. requireLogin and requireRole run inside routers,
- * so this matters: a first version used request.path alone, and testing every route
- * as a guest showed that /api calls got a redirect to /login instead of 401 JSON.
- *
- * @param {import('express').Request} request - The incoming request.
+ * @param {import('express').Request} request
  * @returns {boolean} true for "/api" and anything under "/api/".
  */
 function isApiRequest(request) {

@@ -1,34 +1,26 @@
 /**
  * public/js/editor/users.js
  *
- * Runs the editor's user management page (views/editor/users.ejs). Everything happens
- * with Ajax through apiClient, so the page never reloads:
- * - the table shows 20 users at a time from GET /api/users, with Previous/Next buttons,
- * - typing in the search box filters the table (300 ms after the last key),
- * - the "Add a user" form sends POST /api/users,
- * - Edit turns a row into a small form (display name, role, new password) that sends
- *   PATCH /api/users/:id with only the fields that changed,
- * - Delete asks for confirmation, then sends DELETE /api/users/:id.
- * The server checks everything again (editor only, field rules, the 409 safety rules);
- * this script only shows its answers.
+ * The user management page, all through the API without reloading: the table (20 per
+ * page), the search, "Add a user", editing a row (only changed fields are sent) and
+ * deleting with confirmation. The server checks everything again (role, field rules,
+ * the 409 safety rules); this script shows its answers. Server text goes in with
+ * textContent or .value, never innerHTML.
  *
- * Every value from the server is put on the page with textContent or .value, never
- * innerHTML, so a display name containing HTML can't change the page.
- *
- * Load after apiClient.js. Owner: OS.
+ * Loaded by: views/editor/users.ejs, after public/js/shared/apiClient.js.
+ * Owner: OS.
  */
 
-// How long to wait after the last key in the search box before searching, so typing
-// "maya" sends one request instead of four.
+// Wait this long after the last key before searching.
 const SEARCH_DELAY_MS = 300;
 
 const ROLE_LABELS = { reporter: 'Reporter', editor: 'Editor' };
 
 /**
- * Creates an element with optional text, as plain text.
+ * Creates an element with optional text (as text).
  *
  * @param {string} tagName - For example 'td'.
- * @param {string} [text] - Text content.
+ * @param {string} [text]
  * @returns {HTMLElement}
  */
 function createElementWithText(tagName, text) {
@@ -43,7 +35,7 @@ function createElementWithText(tagName, text) {
  * Creates a button.
  *
  * @param {string} label - The button text.
- * @param {string} className - CSS classes, for example 'btn btn-danger'.
+ * @param {string} className - For example 'btn btn-danger'.
  * @returns {HTMLButtonElement}
  */
 function createButton(label, className) {
@@ -64,8 +56,7 @@ function formatDate(isoDate) {
 }
 
 /**
- * Connects the whole page. The functions inside share the page's state (current page,
- * search text) and elements without making them global.
+ * Connects the page. The inner functions share its state without making it global.
  *
  * @returns {void}
  */
@@ -90,13 +81,13 @@ function setUpUserManagement() {
   let currentPage = 1;
   let totalPages = 1;
   let searchTimer = null;
-  // Counts the list requests, so only the answer to the newest one is shown.
+  // Only the answer to the newest list request is shown.
   let latestRequestNumber = 0;
 
   /**
-   * Shows an error above the table, or hides it when message is empty.
+   * Shows an error above the table, or hides it for ''.
    *
-   * @param {string} message - The text to show, or '' to hide.
+   * @param {string} message
    * @returns {void}
    */
   function showListError(message) {
@@ -105,14 +96,8 @@ function setUpUserManagement() {
   }
 
   /**
-   * Loads one page of users from the API and shows it.
-   *
-   * Why the request number: searches are sent while the editor types, and the answers
-   * don't always come back in the order the requests were sent. Without this check, a
-   * slow answer for "ma" could arrive after the answer for "maya" and replace it, so
-   * the table would show results for text that is no longer in the box. Each call
-   * takes a new number, and an answer is shown only if no newer request started since.
-   * (The same technique as in public/js/editor/comments.js.)
+   * Loads one page of users. Answers don't always arrive in order, so a slow answer for
+   * "ma" must not replace the newer one for "maya": only the newest request is shown.
    *
    * @returns {Promise<void>}
    */
@@ -123,7 +108,6 @@ function setUpUserManagement() {
     listStatus.textContent = 'Loading users...';
     listStatus.hidden = false;
 
-    // URLSearchParams encodes the search text, so characters like & or # are safe.
     const query = new URLSearchParams({ page: String(currentPage) });
     if (searchInput.value.trim() !== '') {
       query.set('search', searchInput.value.trim());
@@ -155,7 +139,7 @@ function setUpUserManagement() {
   }
 
   /**
-   * Builds the normal (not editing) table row for one user.
+   * Builds the normal table row for one user.
    *
    * @param {{id: string, username: string, displayName: string, role: string, createdAt: string}} user
    * @returns {HTMLTableRowElement}
@@ -174,9 +158,7 @@ function setUpUserManagement() {
     const deleteButton = createButton('Delete', 'btn btn-danger');
     editButton.addEventListener('click', () => row.replaceWith(createEditRow(user)));
     deleteButton.addEventListener('click', () => deleteUser(user));
-    // Greying out the editor's own Delete button is only a convenience. The real rule
-    // is on the server (userController.deleteUser answers 409), because anyone can
-    // call the API directly without this page.
+    // Only a convenience: the server refuses deleting your own account anyway (409).
     if (user.id === currentUserId) {
       deleteButton.disabled = true;
       deleteButton.title = "You can't delete your own account.";
@@ -187,8 +169,7 @@ function setUpUserManagement() {
   }
 
   /**
-   * Builds the editing version of a row: inputs for display name, role and a new
-   * password, with Save and Cancel. The username can't be changed.
+   * Builds the editing row: display name, role and a new password (the username can't change).
    *
    * @param {{id: string, username: string, displayName: string, role: string, createdAt: string}} user
    * @returns {HTMLTableRowElement}
@@ -213,8 +194,7 @@ function setUpUserManagement() {
 
     const passwordInput = document.createElement('input');
     passwordInput.type = 'password';
-    // "new-password" tells the browser this is a password being set, so it doesn't fill
-    // in the editor's own saved password here by mistake.
+    // "new-password": the browser won't fill in the editor's own saved password here.
     passwordInput.autocomplete = 'new-password';
     passwordInput.placeholder = 'New password (optional)';
     passwordInput.setAttribute('aria-label', `New password for ${user.username}`);
@@ -242,9 +222,8 @@ function setUpUserManagement() {
   }
 
   /**
-   * Sends only the fields that changed. On success the row goes back to normal with
-   * the server's version of the user; on failure the row stays in edit mode and the
-   * server's message (for example a 409 safety rule) is shown above the table.
+   * Sends only the changed fields (PATCH = change these parts; an empty password box
+   * means "keep the old one"). On failure the row stays in edit mode with the message.
    *
    * @param {Object} user - The user before editing.
    * @param {HTMLTableRowElement} row - The editing row.
@@ -253,10 +232,6 @@ function setUpUserManagement() {
    * @returns {Promise<void>}
    */
   async function saveUser(user, row, saveButton, values) {
-    // Why only the changed fields: PATCH means "change these parts", unlike PUT, which
-    // would replace the whole user. Sending the role unchanged would still run the
-    // server's role rules for nothing, and an empty password box means "keep the old
-    // password", so it is left out.
     const changes = {};
     if (values.displayName !== user.displayName) {
       changes.displayName = values.displayName;
@@ -285,14 +260,13 @@ function setUpUserManagement() {
   }
 
   /**
-   * Asks for confirmation, deletes the user, then reloads the current page of the
-   * list (so the page stays full and the page count stays right).
+   * Asks for confirmation (it can't be undone), deletes the user and reloads the page of
+   * the list.
    *
    * @param {Object} user - The user to delete.
    * @returns {Promise<void>}
    */
   async function deleteUser(user) {
-    // confirm() is the browser's own yes/no box; deleting can't be undone.
     if (!window.confirm(`Delete the user "${user.username}"? This can't be undone.`)) {
       return;
     }
@@ -303,7 +277,7 @@ function setUpUserManagement() {
       return;
     }
     await loadUsers();
-    // If that was the last user on the last page, step back one page.
+    // That was the last user on the last page: step back one page.
     if (tableBody.children.length === 0 && currentPage > 1) {
       currentPage -= 1;
       await loadUsers();
@@ -311,9 +285,9 @@ function setUpUserManagement() {
   }
 
   /**
-   * Sends the "Add a user" form. On success the form is cleared and the list reloaded.
+   * Sends the "Add a user" form, then clears it and reloads the list.
    *
-   * @param {SubmitEvent} event - The form's submit event.
+   * @param {SubmitEvent} event
    * @returns {Promise<void>}
    */
   async function addUser(event) {
@@ -341,10 +315,7 @@ function setUpUserManagement() {
     await loadUsers();
   }
 
-  // Search: wait until the editor stops typing, then start again from page 1.
-  // Every key press cancels the timer of the previous key (clearTimeout) and starts a
-  // new one, so the search runs only once no key has been pressed for SEARCH_DELAY_MS.
-  // This technique is called "debouncing".
+  // Debounce: every key restarts the timer, so the search runs once typing pauses.
   searchInput.addEventListener('input', () => {
     clearTimeout(searchTimer);
     searchTimer = setTimeout(() => {
@@ -352,7 +323,7 @@ function setUpUserManagement() {
       loadUsers();
     }, SEARCH_DELAY_MS);
   });
-  // Pressing Enter in the search box must not reload the page.
+  // Enter in the search box must not reload the page.
   searchForm.addEventListener('submit', (event) => event.preventDefault());
 
   previousButton.addEventListener('click', () => {
@@ -368,8 +339,6 @@ function setUpUserManagement() {
   loadUsers();
 }
 
-// The page may load this script in <head> or at the end of <body>. If the page is
-// still loading, wait until all elements exist; otherwise start right away.
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', setUpUserManagement);
 } else {

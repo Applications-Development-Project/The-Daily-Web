@@ -1,43 +1,18 @@
 <%#
   views/reporter/dashboard.ejs
 
-  The reporter's dashboard: a table of the logged-in reporter's own articles, newest
-  update first, each with its status label and the actions allowed for that status.
-  The whole table is rendered on the server, so no browser script is needed for it. The
-  only script is public/js/reporter/dashboard.js, for the "New article" button and the
-  "Submit for approval" buttons.
+  The reporter's dashboard: their own articles, newest update first, with the status and
+  the actions that status allows (Edit for draft, returned and published; Submit for draft
+  and returned; nothing while pending). The server enforces the same rules; hiding a
+  button is never the protection. User text is printed with the escaping tag.
 
-  Rendered by: controllers/reporterController.js (showReporterDashboard), for GET /reporter.
-  Locals: title (the page title), articles (items from findReporterArticles: id, title,
-  summary, category, status, statusLabel, isLive, editorNote, updatedAt),
-  STATUS (the status names from services/articleWorkflow.js).
-  Includes: the shared head, header and footer (views/partials).
+  Rendered by: showReporterDashboard (controllers/reporterController.js), for GET /reporter.
+  Locals: title, articles (from findReporterArticles), STATUS.
+  Script: public/js/reporter/dashboard.js (New article, Submit for approval).
   Owner: EZ.
-
-  Why it is written this way (questions a lecturer may ask):
-  - XSS: every piece of text a user wrote (title, category, the editor's note) is printed
-    with the escaping output tag, the one with an equals sign. It turns < and > into
-    harmless text, so a title like "<script>alert(1)</script>" is shown as text and
-    never runs. The raw output tag (with a dash) does NOT escape; it is used here only
-    to include our own partials (head, header, footer), which are trusted files and
-    never user text.
-  - Comments: these are EJS comments (the tag with a hash sign), not HTML comments. An
-    HTML comment is sent to the browser and anyone can read it with "View page source";
-    an EJS comment is removed on the server. Never write the closing percent-and-bracket
-    characters inside one, because EJS would end the comment there.
-  - Actions per status: Edit for draft, returned and published; "Submit for approval"
-    only for draft and returned; no button for pending, because a pending article is
-    waiting for the editor and the reporter must not change it (requirements: transitions
-    are only allowed along the defined process). The server enforces this too (409 on a
-    pending article, and canTransition on submit); hiding a button is never the real permission.
-  - The "New article" button and the "Submit for approval" buttons are handled by
-    public/js/reporter/dashboard.js. Edit leads to the editor page (articleEditor.ejs).
-  - The editor's note is shown while an article is returned or pending again, so it is
-    still readable after the reporter resubmits.
 %>
 <!DOCTYPE html>
 <html lang="en">
-<%# Trusted partial of ours (raw output is fine); the title is escaped inside head.ejs. %>
 <%- include('../partials/head', { title: title }) %>
 
 <body class="page-container">
@@ -46,21 +21,16 @@
   <main class="main-content">
     <h2>My articles</h2>
 
-    <%# The button is outside the if below, so a reporter with no articles can still create the first one.
-        public/js/reporter/dashboard.js finds these two elements by id: it sends the request when the
-        button is clicked and writes any error message into the empty paragraph (role="alert" makes
-        screen readers announce it). %>
+    <%# Outside the "if" below, so a reporter with no articles can create the first one. %>
     <p>
       <button type="button" id="new-article-button" class="btn btn-primary">New article</button>
     </p>
     <p id="new-article-error" class="form-error" role="alert"></p>
 
-    <%# A new reporter has no articles. Say so, instead of showing an empty table. %>
     <% if (articles.length === 0) { %>
       <p class="empty-state">You have no articles yet.</p>
     <% } else { %>
-      <%# On a narrow screen the table scrolls sideways inside this box, not the whole page
-          (table-scroll is the shared class in public/css/main.css, used by every table). %>
+      <%# On a narrow screen the table scrolls sideways inside this box. %>
       <div class="table-scroll">
         <table class="data-table">
           <thead>
@@ -73,62 +43,37 @@
             </tr>
           </thead>
           <tbody>
-            <%# One row per article. The controller already sorted them, newest update first. %>
             <% articles.forEach(function (article) { %>
               <tr>
                 <td>
-                  <%# An empty draft has no title yet, so show a placeholder instead of an empty cell. %>
-                  <%# The title is typed by a user, so it is printed escaped (XSS protection). %>
                   <%= article.title || '(Untitled)' %>
 
-                  <%# The editor's reason for returning the article, shown right next to its title.
-                      It stays visible after the reporter resubmits (the article is "pending" again),
-                      so the reporter can still read what was asked of them until the editor decides. %>
-                  <%# The controller sends a note only for returned and pending articles; the status
-                      check here is a second guard. The note is text an editor typed, so it is escaped too. %>
+                  <%# The note stays visible after a resubmit (pending), until the editor decides. %>
                   <% if ((article.status === STATUS.RETURNED || article.status === STATUS.PENDING) && article.editorNote) { %>
                     <p class="form-error"><strong>Editor's note:</strong> <%= article.editorNote %></p>
                   <% } %>
                 </td>
                 <td><%= article.category || '-' %></td>
                 <td>
-                  <%# status-badge plus status-draft / status-pending / ... gives each status its colour. %>
                   <span class="status-badge status-<%= article.status %>"><%= article.statusLabel %></span>
 
-                  <%# Readers still see the approved version while a new one is being prepared. %>
-                  <%# Example: a live article the reporter is editing has the status badge "In
-                      preparation" AND this second badge. If the status is already "Published", the
-                      first badge says it, so a second one would only repeat it. %>
+                  <%# Readers still see the approved version while a new one is prepared. %>
                   <% if (article.isLive && article.status !== STATUS.PUBLISHED) { %>
                     <span class="status-badge status-published">Live version online</span>
                   <% } %>
                 </td>
                 <td>
-                  <%# datetime holds the exact machine-readable moment; the text shows the same
-                      moment in the format used elsewhere on the site. It is formatted on the
-                      server, so it uses the server's time zone. %>
                   <time datetime="<%= new Date(article.updatedAt).toISOString() %>">
                     <%= new Date(article.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
                   </time>
                 </td>
                 <td>
-                  <%# A pending article is waiting for the editor, so the reporter can't change it. %>
                   <% if (article.status === STATUS.PENDING) { %>
                     Waiting for the editor
                   <% } else { %>
-                    <%# Draft, returned and published articles can be edited. This link opens the editor
-                        page (articleEditor.ejs). Editing a published article is allowed: its first
-                        change moves the working copy back to "In preparation". %>
                     <a href="/reporter/articles/<%= article.id %>/edit" class="btn btn-primary">Edit</a>
 
-                    <%# Submit only for "In preparation" and "Returned for corrections" (this includes a
-                        live article whose new version is in preparation). An article that is plain
-                        "Published" has nothing new to submit; the reporter edits it first, which moves
-                        it back to "In preparation". The server checks all of this again, and also that a
-                        live article really differs from its published version: if not it answers 409
-                        "There are no changes to submit", which the script shows in this row.
-                        public/js/reporter/dashboard.js handles the click for every such button, using
-                        data-article-id, and writes errors into the paragraph with class "submit-error". %>
+                    <%# A plain "Published" article has nothing new to submit until it is edited. %>
                     <% if (article.status === STATUS.DRAFT || article.status === STATUS.RETURNED) { %>
                       <button type="button" class="btn btn-primary submit-article-button" data-article-id="<%= article.id %>">Submit for approval</button>
                       <p class="form-error submit-error" role="alert"></p>
@@ -145,7 +90,6 @@
 
   <%- include('../partials/footer') %>
 
-  <%# Order matters: public/js/reporter/dashboard.js calls apiClient, so apiClient.js must load first. %>
   <script src="/js/shared/apiClient.js"></script>
   <script src="/js/reporter/dashboard.js"></script>
 </body>
