@@ -84,6 +84,15 @@ img {
   max-width: 100%;
 }
 
+/* The reset above also removes the browser's indent from lists, and a list's numbers or
+   bullets sit in that indent, so without it they hang on the edge of their card (the
+   publish history on the review page, the analytics page's lists). Lists that hide
+   their markers (the comments, the editor menu) set padding-left: 0 again below. */
+ol,
+ul {
+  padding-left: 1.5rem;
+}
+
 /* Form controls use the page's font instead of the browser's smaller default. */
 input,
 select,
@@ -476,6 +485,7 @@ nav[aria-label="User list pages"] {
 /* Comments (views/public/article.ejs and the same markup from articleComments.js) */
 #comment-list {
   list-style: none;
+  padding-left: 0;
   margin-bottom: var(--spacing-lg);
 }
 
@@ -561,6 +571,7 @@ nav[aria-label="User list pages"] {
   flex-wrap: wrap;
   gap: var(--spacing-xs) var(--spacing-lg);
   list-style: none;
+  padding-left: 0;
   max-width: var(--content-width);
   margin: 0 auto;
 }
