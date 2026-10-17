@@ -1,0 +1,77 @@
+Here are both journeys, file by file. Each link opens the exact line. Both requests share the first part of the path and split at the routers.
+
+The shared start: app.js, for both
+Every request passes these in order (Part 6.5):
+
+Step	Line
+Body parsers	app.js:59, app.js:61
+Static files: neither path is a file in public/, so it continues	app.js:64
+Session: fills request.session	app.js:66
+Device id	app.js:69
+Current user: refreshes the role from the database	app.js:72 → setCurrentUser.js:28
+Then the routers are tried in order, and this is where the two separate.
+
+Journey 1: GET /editor (the browser opens the page)
+1. Which router matches. The page routers are mounted at /, app.js:76-83. The one that matches is app.js:80:
+
+
+app.use('/', editorPageRoutes);
+2. The route. editorPageRoutes.js:17:
+
+
+router.get('/editor', requireRole('editor'), editorController.showEditorDashboard);
+3. The permission check. requireRole.js:41, checkRole:
+
+Editor: passes the check at line 48 and reaches next() at line 54. Go to step 4.
+Reporter: a 403 error is created at line 50, then goes to errorHandler (below).
+Guest: line 44 finds no user, and line 45 hands over to requireLogin:
+requireLogin.js:27 asks isApiRequest (isApiRequest.js:20-21). /editor doesn't start with /api, so the answer is false;
+requireLogin.js:33 answers response.redirect('/login'). The journey ends here.
+4. The handler. editorController.js:253, showEditorDashboard. It sends the dashboard page, with its empty table (Part 1.8). What's inside it is Part 7.
+
+Journey 2: GET /api/editor/articles (the dashboard's script asks for the rows)
+1. Which router matches. The page routers are tried first, but none of them has this path, so Express moves on. The API routers are mounted at /api, app.js:85-92. The one that matches is app.js:89:
+
+
+app.use('/api', editorApiRoutes);
+Inside this router, Express sees the path as /editor/articles, without the /api prefix.
+
+2. The route. editorApiRoutes.js:20:
+
+
+router.get('/editor/articles', requireRole('editor'), editorController.listAllArticles);
+3. The permission check. The same checkRole, requireRole.js:41:
+
+Editor: reaches next() at line 54. Go to step 4.
+Reporter: a 403 error at line 50, then errorHandler.
+Guest: line 45 → requireLogin:
+requireLogin.js:27 asks isApiRequest. Here baseUrl is /api and path is /editor/articles, so the full path is /api/editor/articles and the answer is true;
+requireLogin.js:29 creates a 401 error and passes it on with next(error).
+4. The handler. editorController.js:308, listAllArticles. It answers with JSON: { success: true, data: { articles: [...] } }. What's inside it is Part 7.
+
+Where the errors end: errorHandler.js:86
+The reporter's 403 (from either journey) and the guest's 401 (from journey 2) arrive at handleError, registered last in app.js:98. It asks isApiRequest again:
+
+/api/... → errorHandler.js:104-105 answers response.json({ success: false, error: message });
+a page → errorHandler.js:110 sends the site's error page.
+So a reporter opening /editor in the browser sees a 403 page, and a reporter's script calling /api/editor/articles gets 403 JSON.
+
+The whole picture
+
+                       app.js:59-72  (parsers, static, session, deviceId, currentUser)
+                                │
+              ┌─────────────────┴──────────────────┐
+     GET /editor                              GET /api/editor/articles
+     app.js:80  editorPageRoutes              app.js:89  editorApiRoutes
+     editorPageRoutes.js:17                   editorApiRoutes.js:20
+              │                                    │
+              └──────── requireRole.js:41 ─────────┘   (the same checkRole)
+                         │        │        │
+                      editor   reporter   guest → requireLogin.js:22 → isApiRequest
+                         │        │                 │                    │
+                         │      403 ──┐        page: redirect      api: 401 ──┐
+                         │            │        /login (line 33)    (line 29)   │
+                         ▼            ▼                                        ▼
+        showEditorDashboard (253)   errorHandler.js:86 ── isApiRequest ── JSON (104) or error page (110)
+        listAllArticles (308)
+A tip for the room: to trace any URL yourself, find its route line in routes/ (page routes for pages, API routes without the /api prefix). That one line names the permission check and the handler, so it tells you exactly where the request goes next.
