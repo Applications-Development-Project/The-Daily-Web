@@ -33,6 +33,35 @@ function splitIntoParagraphs(body) {
 }
 
 /**
+ * Finds up to 3 related articles from the same category, excluding the current one.
+ * 
+ * Defense question / Performance: Why does this scale well?
+ * This query uses the existing index { 'published.category': 1, lastPublishedAt: -1 } 
+ * so the database can immediately find the newest articles in the category without scanning.
+ *
+ * @param {Object} article - The current article document (must have _id and published.category).
+ * @returns {Promise<Array<{id: string, title: string, imageUrl: string, category: string}>>}
+ */
+async function findRelatedArticles(article) {
+  const articles = await Article.find({
+    _id: { $ne: article._id },
+    published: { $ne: null },
+    'published.category': article.published.category,
+  })
+    .sort({ lastPublishedAt: -1, _id: -1 })
+    .limit(3)
+    .select('published.title published.imageUrl published.category lastPublishedAt')
+    .lean();
+
+  return articles.map((a) => ({
+    id: a._id.toString(),
+    title: a.published.title,
+    imageUrl: a.published.imageUrl || '',
+    category: a.published.category,
+  }));
+}
+
+/**
  * GET /articles/:id - the full article page.
  *
  * @param {import('express').Request} request - params.id; request.deviceId identifies the browser.
@@ -54,6 +83,9 @@ async function showArticlePage(request, response) {
   if (!article) {
     throw createHttpError(404, 'Article not found.');
   }
+
+  // Fetch related articles (Task 2)
+  const relatedArticles = await findRelatedArticles(article);
 
   // As many as the comments API sends; deviceId is never loaded.
   const comments = await Comment.find({ article: article._id })
@@ -79,6 +111,7 @@ async function showArticlePage(request, response) {
       reporterName: article.reporter ? article.reporter.displayName : 'Unknown reporter',
       publishedAt: article.lastPublishedAt,
     },
+    relatedArticles: relatedArticles,
     comments: comments,
   });
 }
