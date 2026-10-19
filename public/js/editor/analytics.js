@@ -506,8 +506,9 @@ function setUpAnalyticsPage() {
     if (!chosenArticle) {
       return;
     }
-    const confirmed = window.confirm(
-      `Reset the statistics of "${chosenArticle.title}"?\n\nEvery counted view will be deleted and its total set to 0. This can't be undone.`
+    const confirmed = await showConfirmDialog(
+      `Reset the statistics of "${chosenArticle.title}"?\n\nEvery counted view will be deleted and its total set to 0. This can't be undone.`,
+      'Delete'
     );
     if (!confirmed) {
       return;
