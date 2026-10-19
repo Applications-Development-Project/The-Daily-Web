@@ -66,10 +66,31 @@ async function showArticlePage(request, response) {
   await recordView(article._id, request.deviceId);
 
   const published = article.published;
+  
+  // --- Task 3: Build Open Graph tags with absolute URLs ---
+  const hostBaseUrl = `${request.protocol}://${request.get('host')}`;
+  const absoluteUrl = `${hostBaseUrl}/articles/${article._id}`;
+  
+  let absoluteImageUrl = null;
+  if (published.imageUrl) {
+    absoluteImageUrl = published.imageUrl.startsWith('http') 
+        ? published.imageUrl 
+        : `${hostBaseUrl}${published.imageUrl}`;
+  }
+
+  const openGraph = {
+    type: 'article',
+    title: published.title,
+    description: published.summary,
+    url: absoluteUrl,
+    image: absoluteImageUrl
+  };
+
   response.render('public/article', {
     title: `${published.title} - The Daily Web`,
     // The meta description search engines show under the link.
     description: published.summary,
+    openGraph: openGraph,
     article: {
       id: article._id.toString(),
       title: published.title,

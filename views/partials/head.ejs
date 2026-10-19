@@ -2,7 +2,7 @@
   views/partials/head.ejs
 
   The head shared by every page: character set, viewport, title, icon and the stylesheet.
-  Locals (optional): title, description (for search engines). "locals.title": reading a
+  Locals (optional): title, description (for search engines), openGraph. "locals.title": reading a
   local a page didn't pass would make EJS throw.
   The viewport tag makes phones use their real width, which the responsive CSS needs.
 
@@ -16,6 +16,18 @@
     <% if (locals.description) { %>
     <meta name="description" content="<%= locals.description %>">
     <% } %>
+
+    <%# Task 3: Open Graph tags for rich social sharing %>
+    <% if (locals.openGraph) { %>
+    <meta property="og:type" content="<%= openGraph.type %>">
+    <meta property="og:title" content="<%= openGraph.title %>">
+    <meta property="og:description" content="<%= openGraph.description %>">
+    <meta property="og:url" content="<%= openGraph.url %>">
+    <% if (openGraph.image) { %>
+    <meta property="og:image" content="<%= openGraph.image %>">
+    <% } %>
+    <% } %>
+
     <%# Declaring the icon stops browsers from asking for /favicon.ico, which doesn't exist. %>
     <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/main.css">
