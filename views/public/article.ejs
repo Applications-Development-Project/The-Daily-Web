@@ -20,7 +20,7 @@
 <html lang="en">
 <%- include('../partials/head', { title: title, description: description }) %>
 
-<body class="page-container" id="top">
+<body class="page-container">
     <%# Task 4: Reading progress bar (decorative only, ignored by screen readers) %>
     <div id="reading-progress" aria-hidden="true" style="width: 0%;"></div>
 
@@ -30,7 +30,8 @@
         <main class="main-content">
             <p><a href="/">&larr; Back to all news</a></p>
 
-            <article class="card article-full">
+            <%# Added id="top" for the back-to-top link target %>
+            <article id="top" class="card article-full">
                 <header>
                     <span class="category-badge"><%= article.category %></span>
                     <h2 class="article-full-title"><%= article.title %></h2>
@@ -56,6 +57,9 @@
                         <p><%= paragraph %></p>
                     <% }); %>
                 </div>
+
+                <%# Task 4: Back to top link %>
+                <a href="#top" class="back-to-top">Back to top ↑</a>
             </article>
 
             <section id="comments" class="card" data-article-id="<%= article.id %>" aria-labelledby="comments-title">
