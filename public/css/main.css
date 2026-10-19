@@ -586,6 +586,30 @@ nav[aria-label="User list pages"] {
   border-radius: var(--radius);
 }
 
+/* Shared confirm dialog (public/js/shared/confirmDialog.js) */
+.confirm-dialog {
+  margin: auto;
+  max-width: 400px;
+  padding: var(--spacing-lg);
+  border: none;
+}
+
+/* The dark overlay behind the dialog */
+.confirm-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.confirm-message {
+  white-space: pre-line;
+  margin-bottom: var(--spacing-lg);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
