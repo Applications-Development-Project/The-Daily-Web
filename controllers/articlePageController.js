@@ -33,6 +33,18 @@ function splitIntoParagraphs(body) {
 }
 
 /**
+ * Estimates reading time in minutes (based on ~200 words per minute).
+ * 
+ * @param {string} body - The article body text.
+ * @returns {number} The estimated reading time in minutes (at least 1).
+ */
+function estimateReadingMinutes(body) {
+  if (!body) return 1;
+  const wordCount = body.trim().split(/\s+/).length;
+  return Math.max(1, Math.ceil(wordCount / 200));
+}
+
+/**
  * GET /articles/:id - the full article page.
  *
  * @param {import('express').Request} request - params.id; request.deviceId identifies the browser.
@@ -78,6 +90,7 @@ async function showArticlePage(request, response) {
       paragraphs: splitIntoParagraphs(published.body),
       reporterName: article.reporter ? article.reporter.displayName : 'Unknown reporter',
       publishedAt: article.lastPublishedAt,
+      readingMinutes: estimateReadingMinutes(published.body), // Task 4
     },
     comments: comments,
   });
