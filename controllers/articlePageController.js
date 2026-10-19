@@ -86,18 +86,37 @@ async function showArticlePage(request, response) {
     image: absoluteImageUrl
   };
 
+  // --- Task 3: Build NewsArticle structured data ---
+  const reporterName = article.reporter ? article.reporter.displayName : 'Unknown reporter';
+  const newsArticleSchema = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    "headline": published.title,
+    "datePublished": article.lastPublishedAt ? new Date(article.lastPublishedAt).toISOString() : undefined,
+    "author": {
+      "@type": "Person",
+      "name": reporterName
+    },
+    "image": absoluteImageUrl ? [absoluteImageUrl] : [],
+    "articleSection": published.category
+  };
+
+  // Turn it into text and replace < with \u003c so article text can never close the tag.
+  const structuredData = JSON.stringify(newsArticleSchema).replace(/</g, '\\u003c');
+
   response.render('public/article', {
     title: `${published.title} - The Daily Web`,
     // The meta description search engines show under the link.
     description: published.summary,
     openGraph: openGraph,
+    structuredData: structuredData,
     article: {
       id: article._id.toString(),
       title: published.title,
       category: published.category,
       imageUrl: published.imageUrl,
       paragraphs: splitIntoParagraphs(published.body),
-      reporterName: article.reporter ? article.reporter.displayName : 'Unknown reporter',
+      reporterName: reporterName,
       publishedAt: article.lastPublishedAt,
     },
     comments: comments,
