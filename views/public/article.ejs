@@ -21,6 +21,9 @@
 <%- include('../partials/head', { title: title, description: description }) %>
 
 <body class="page-container" id="top">
+    <%# Task 4: Reading progress bar (decorative only, ignored by screen readers) %>
+    <div id="reading-progress" aria-hidden="true" style="width: 0%;"></div>
+
     <%- include('../partials/header') %>
 
     <div class="main-content-wrapper">
@@ -97,6 +100,8 @@
 
     <script src="/js/shared/apiClient.js"></script>
     <script src="/js/public/articleComments.js"></script>
+    <%# Loaded after articleComments.js as requested %>
+    <script src="/js/public/readingProgress.js"></script>
     <script src="/js/public/weatherWidget.js"></script>
 </body>
 </html>
