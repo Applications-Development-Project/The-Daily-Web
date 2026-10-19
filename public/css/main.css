@@ -586,6 +586,28 @@ nav[aria-label="User list pages"] {
   border-radius: var(--radius);
 }
 
+/* Article page extras (views/public/article.ejs) */
+#reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 3px;
+  background-color: var(--color-accent);
+  z-index: 1000;
+  transition: width 0.1s ease-out;
+}
+
+.back-to-top {
+  display: inline-block;
+  margin-top: var(--spacing-lg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back-to-top:hover {
+  text-decoration: underline;
+}
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
