@@ -20,7 +20,7 @@
 <html lang="en">
 <%- include('../partials/head', { title: title, description: description }) %>
 
-<body class="page-container">
+<body class="page-container" id="top">
     <%- include('../partials/header') %>
 
     <div class="main-content-wrapper">
@@ -36,6 +36,7 @@
                         <% if (article.publishedAt) { %>
                             | Published <time datetime="<%= article.publishedAt.toISOString() %>"><%= article.publishedAt.toLocaleString('en-GB', dateFormat) %></time>
                         <% } %>
+                        | <%= article.readingMinutes %> min read
                     </p>
                 </header>
 
