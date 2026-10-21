@@ -4,7 +4,7 @@ Written 2026-10-17. Paste the prompt at the bottom into a new Claude Code conver
 The-Daily-Web folder) to continue exactly where we stopped.
 
 ---
-I'm OS, preparing for the oral defense of our project The Daily Web. We're in the middle of a part-by-part study plan. Read C:\Users\orizx\Documents\Git_Repositories\Defense-study-handoff.md first and follow its rules exactly (one part per response, wait for me, no terms before they're taught). Then start Part 7: MVC in this project.
+I'm preparing for the oral defense of our project The Daily Web. We're in the middle of a part-by-part study plan. Read C:\Users\orizx\Documents\Git_Repositories\Defense-study-handoff.md first and follow its rules exactly (one part per response, wait for me, no terms before they're taught). Then start Part 7: MVC in this project.
 ---
 
 
