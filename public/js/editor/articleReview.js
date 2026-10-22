@@ -80,10 +80,10 @@ function setUpArticleReview() {
   /**
    * Approve, after a confirmation, because readers see the new version at once.
    *
-   * @returns {void}
+   * @returns {Promise<void>}
    */
-  function approveArticle() {
-    const confirmed = window.confirm('Publish this version? Readers will see it immediately.');
+  async function approveArticle() {
+    const confirmed = await showConfirmDialog('Publish this version? Readers will see it immediately.', 'Publish');
     if (confirmed) {
       sendDecision('approve');
     }
@@ -116,7 +116,7 @@ function setUpArticleReview() {
   async function saveEdit(event) {
     event.preventDefault();
     const publishesOnSave = event.target.dataset.publishesOnSave === 'true';
-    if (publishesOnSave && !window.confirm('Publish these changes? Readers will see them immediately.')) {
+    if (publishesOnSave && !(await showConfirmDialog('Publish these changes? Readers will see them immediately.', 'Publish'))) {
       return;
     }
     const editMessage = document.getElementById('edit-message');

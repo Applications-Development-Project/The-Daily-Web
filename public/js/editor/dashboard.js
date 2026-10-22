@@ -258,8 +258,10 @@ function setUpEditorDashboard() {
    * @returns {Promise<void>}
    */
   async function deleteArticle(article, deleteButton) {
-    const confirmed = window.confirm(
-      `Delete "${article.title}"?\n\nIts comments and view statistics will be deleted too. This can't be undone.`
+    const confirmed = await showConfirmDialog(
+      `Delete "${article.title}"?\n\nIts comments and view statistics will be deleted too. This can't be undone.`,
+      'Delete',
+      true
     );
     if (!confirmed) {
       return;

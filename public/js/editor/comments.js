@@ -267,7 +267,12 @@ function setUpCommentModeration() {
    */
   async function deleteComment(comment, deleteButton) {
     const preview = comment.text.length > 60 ? `${comment.text.slice(0, 60)}...` : comment.text;
-    if (!window.confirm(`Delete this comment by ${comment.authorName}?\n\n"${preview}"\n\nThis can't be undone.`)) {
+    const confirmed = await showConfirmDialog(
+      `Delete this comment by ${comment.authorName}?\n\n"${preview}"\n\nThis can't be undone.`,
+      'Delete',
+      true
+    );
+    if (!confirmed) {
       return;
     }
 
