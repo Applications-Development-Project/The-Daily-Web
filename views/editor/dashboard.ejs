@@ -6,7 +6,7 @@
   API, so the row layout exists in one place only.
 
   Rendered by: showEditorDashboard (controllers/editorController.js), for GET /editor.
-  Locals: title, statusOptions ([{ value, label }] for the filter).
+  Locals: title, statusOptions ([{ value, label }] for the filter), statusCounts.
   Owner: SM.
 %>
 <!DOCTYPE html>
@@ -19,6 +19,20 @@
 
   <main class="main-content">
     <h2>All articles</h2>
+
+    <%# 
+      Task 1: Editor dashboard counters
+      Note: The numbers are from when the page opened. A delete doesn't update them,
+      but it's enough for an overview.
+    %>
+    <section id="status-summary">
+      <% statusOptions.forEach(function (option) { %>
+        <button type="button" class="card status-summary-card" data-status="<%= option.value %>">
+          <div class="summary-count" style="font-size: 2rem; font-weight: bold; margin-bottom: var(--spacing-sm);"><%= statusCounts[option.value] || 0 %></div>
+          <span class="status-badge status-<%= option.value %>"><%= option.label %></span>
+        </button>
+      <% }); %>
+    </section>
 
     <%# maxlength matches the server's limit; the server checks it again. %>
     <form id="article-filters" class="card" role="search">
