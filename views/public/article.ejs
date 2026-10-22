@@ -21,8 +21,11 @@
 <%- include('../partials/head', { title: title, description: description }) %>
 
 <body class="page-container">
-    <%# Task 4: Reading progress bar (decorative only, ignored by screen readers) %>
-    <div id="reading-progress" aria-hidden="true" style="width: 0%;"></div>
+    <%#
+      Reading progress bar, filled by readingProgress.js as the reader scrolls. It only
+      decorates (the scroll bar says the same), so screen readers skip it.
+    %>
+    <div id="reading-progress" aria-hidden="true"></div>
 
     <%- include('../partials/header') %>
 
@@ -30,7 +33,7 @@
         <main class="main-content">
             <p><a href="/">&larr; Back to all news</a></p>
 
-            <%# Added id="top" for the back-to-top link target %>
+            <%# id="top": the target of the "Back to top" link at the end of the article. %>
             <article id="top" class="card article-full">
                 <header>
                     <span class="category-badge"><%= article.category %></span>
@@ -58,8 +61,8 @@
                     <% }); %>
                 </div>
 
-                <%# Task 4: Back to top link %>
-                <a href="#top" class="back-to-top">Back to top ↑</a>
+                <%# A plain link: it works without JavaScript. %>
+                <a href="#top" class="back-to-top">Back to top &uarr;</a>
             </article>
 
             <%# Task 2: Related articles %>
@@ -118,7 +121,6 @@
 
     <script src="/js/shared/apiClient.js"></script>
     <script src="/js/public/articleComments.js"></script>
-    <%# Loaded after articleComments.js as requested %>
     <script src="/js/public/readingProgress.js"></script>
     <script src="/js/public/weatherWidget.js"></script>
 </body>

@@ -602,6 +602,7 @@ nav[aria-label="User list pages"] {
   position: fixed;
   top: 0;
   left: 0;
+  width: 0;
   height: 3px;
   background-color: var(--color-accent);
   z-index: 1000;
