@@ -482,6 +482,30 @@ nav[aria-label="User list pages"] {
   white-space: pre-line;
 }
 
+/* The article page's reading progress bar (public/js/public/readingProgress.js sets the width)
+   and its "Back to top" link. */
+#reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 3px;
+  background-color: var(--color-accent);
+  z-index: 1000;
+  transition: width 0.1s ease-out;
+}
+
+.back-to-top {
+  display: inline-block;
+  margin-top: var(--spacing-lg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back-to-top:hover {
+  text-decoration: underline;
+}
+
 /* Comments (views/public/article.ejs and the same markup from articleComments.js) */
 #comment-list {
   list-style: none;
@@ -595,29 +619,6 @@ nav[aria-label="User list pages"] {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius);
-}
-
-/* Article page extras (views/public/article.ejs) */
-#reading-progress {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 0;
-  height: 3px;
-  background-color: var(--color-accent);
-  z-index: 1000;
-  transition: width 0.1s ease-out;
-}
-
-.back-to-top {
-  display: inline-block;
-  margin-top: var(--spacing-lg);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.back-to-top:hover {
-  text-decoration: underline;
 }
 
 /* Editor dashboard counters (views/editor/dashboard.ejs) */
