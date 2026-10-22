@@ -2,8 +2,9 @@
   views/partials/head.ejs
 
   The head shared by every page: character set, viewport, title, icon and the stylesheet.
-  Locals (optional): title, description (for search engines). "locals.title": reading a
-  local a page didn't pass would make EJS throw.
+  Locals (optional): title, description (for search engines), openGraph (link previews when the
+  page is shared), structuredData (the article page's NewsArticle JSON-LD, already escaped).
+  "locals.title": reading a local a page didn't pass would make EJS throw.
   The viewport tag makes phones use their real width, which the responsive CSS needs.
 
   Included by: every page view.
@@ -16,6 +17,30 @@
     <% if (locals.description) { %>
     <meta name="description" content="<%= locals.description %>">
     <% } %>
+
+    <%# Open Graph: the title, text and image that social sites show when the link is shared. %>
+    <% if (locals.openGraph) { %>
+    <meta property="og:type" content="<%= openGraph.type %>">
+    <meta property="og:title" content="<%= openGraph.title %>">
+    <meta property="og:description" content="<%= openGraph.description %>">
+    <meta property="og:url" content="<%= openGraph.url %>">
+    <% if (openGraph.image) { %>
+    <meta property="og:image" content="<%= openGraph.image %>">
+    <% } %>
+    <% } %>
+
+    <%#
+      NewsArticle structured data, so search engines know the headline, date and reporter.
+      This one value is printed with the raw tag, not the escaping one: escaping would turn the quotes
+      into &quot; and break the JSON. It is safe because the controller built it with JSON.stringify
+      and replaced every less-than sign with \u003c, so article text can never close the script
+      element. The browser never runs it (it is data, not JavaScript), so the "no inline scripts"
+      rule doesn't apply.
+    %>
+    <% if (locals.structuredData) { %>
+    <script type="application/ld+json"><%- structuredData %></script>
+    <% } %>
+
     <%# Declaring the icon stops browsers from asking for /favicon.ico, which doesn't exist. %>
     <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/css/main.css">
