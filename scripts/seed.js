@@ -64,89 +64,184 @@ const DEMO_USERS = [
   { username: 'reporter5', displayName: 'Tamar Avraham', role: 'reporter' },
 ];
 
-// Places put in front of a sample headline ("Haifa: City council approves ..."), the
-// way news sites mark local stories. There are 56 sample stories, so without this a
-// 500-article seed would repeat each headline about nine times, and searching for one
-// would show nine identical results. 10 places x 56 stories = 560 different titles.
+// There are 144 sample stories (below), so a 510-article seed uses each one three or
+// four times. Without something in front of the repeats, searching for a headline
+// would show the same title several times. Repeats get a prefix, chosen per story:
+// - a local story (local: true) gets a city, the way news sites mark local news
+//   ("Haifa: Street music festival returns to the city centre");
+// - any other story gets a news label ("Analysis: Central bank keeps interest rate
+//   unchanged"), so a national or world story never shows an Israeli city.
 const STORY_PLACES = [
   'Jerusalem', 'Tel Aviv', 'Haifa', 'Beersheba', 'Eilat',
   'Nazareth', 'Ashdod', 'Netanya', 'Tiberias', 'Rishon LeZion',
 ];
 
-// Fictional headlines and summaries, 7 for each of the 8 categories in
+// No "Update" label: buildUpdatedDraft() already puts "Update:" in front of a title.
+const STORY_LABELS = ['Analysis', 'Explainer', 'In depth', 'Follow-up', 'Q&A'];
+
+// Fictional headlines and summaries, 18 for each of the 8 categories in
 // Article.CATEGORIES. The article body is built from them by buildArticleBody().
+// "local: true" marks stories that happen in one city (see STORY_PLACES above).
 const SAMPLE_STORIES = {
   Politics: [
-    ['City council approves new public transport budget', 'The plan adds night buses and two light-rail stops, funded over the next four years.'],
-    ['Parliament committee debates changes to the election law', 'Members disagree on how to count absentee votes; a final vote is expected next month.'],
-    ['First-time voters turn out in record numbers', 'Young voters led the rise in turnout, according to the central elections committee.'],
-    ['Government plans to cut paperwork for small businesses', 'Owners will be able to file most permits online starting next year.'],
-    ['Opposition calls for a review of housing policy', 'Rents rose faster than wages for the third year in a row.'],
-    ['New law requires public bodies to publish their budgets online', 'Every ministry and city must post its spending data in an open format.'],
-    ['Mayors meet to coordinate a regional water plan', 'Seven cities agree to share the cost of a new pipeline.'],
+    { headline: 'City council approves new public transport budget', summary: 'The plan adds night buses and new bus lanes, funded over the next four years.', local: true },
+    { headline: 'Parliament committee debates changes to the election law', summary: 'Members disagree on how to count absentee votes; a final vote is expected next month.' },
+    { headline: 'First-time voters turn out in record numbers', summary: 'Young voters led the rise in turnout, according to the central elections committee.' },
+    { headline: 'Government plans to cut paperwork for small businesses', summary: 'Owners will be able to file most permits online starting next year.' },
+    { headline: 'Opposition calls for a review of housing policy', summary: 'Rents rose faster than wages for the third year in a row.' },
+    { headline: 'New law requires public bodies to publish their budgets online', summary: 'Every ministry and city must post its spending data in an open format.' },
+    { headline: 'Mayors meet to coordinate a regional water plan', summary: 'Seven cities agree to share the cost of a new pipeline.', local: true },
+    { headline: 'Municipality extends opening hours of public pools', summary: 'Pools will stay open until 10 p.m. during the summer months.', local: true },
+    { headline: 'Residents protest a plan to build on a city park', summary: 'Hundreds signed a petition asking the council to keep the green space.', local: true },
+    { headline: 'Three candidates enter the race for mayor', summary: 'The local elections are set for the autumn; debates start next month.', local: true },
+    { headline: 'Cabinet approves a plan to hire more teachers', summary: 'The ministry wants smaller classes in primary schools within three years.' },
+    { headline: 'Supreme Court hears petition on freedom of information', summary: 'The judges asked the government to explain why some records stay secret.' },
+    { headline: 'Parliament opens its winter session', summary: 'The opening speech called on lawmakers to work across party lines.' },
+    { headline: 'Ministers agree on a plan to cut road deaths', summary: 'The plan adds speed cameras and safer crossings near schools.' },
+    { headline: 'City hall moves its services online', summary: 'Residents can now pay fees and request permits from their phones.', local: true },
+    { headline: 'Poll: most voters want shorter election campaigns', summary: 'Six in ten say the current campaign period is too long.' },
+    { headline: 'Council approves new bike lanes in the city centre', summary: 'Twelve kilometres of protected lanes will be built over two years.', local: true },
+    { headline: 'Lawmakers back a bill to protect whistleblowers', summary: 'Workers who report wrongdoing in public bodies would be shielded from dismissal.' },
   ],
   Economy: [
-    ['Central bank keeps interest rate unchanged', 'Inflation slowed for a second month, but the bank says it is too early to cut.'],
-    ['Unemployment falls to its lowest level in five years', 'Hiring was strongest in technology, health care and construction.'],
-    ['Food prices rise ahead of the holiday season', 'Fruit and vegetables cost on average 6% more than a year ago.'],
-    ['Start-up funding recovers after a slow year', 'Local companies raised more in the last quarter than in the first half of the year.'],
-    ['New port terminal expected to shorten import times', 'Shipping companies say waiting times could fall by half.'],
-    ['Survey: more workers choose hybrid jobs', 'Two out of three office workers now spend at least one day a week at home.'],
-    ['Electricity prices to drop slightly next year', 'The regulator points to cheaper solar power and lower gas costs.'],
+    { headline: 'Central bank keeps interest rate unchanged', summary: 'Inflation slowed for a second month, but the bank says it is too early to cut.' },
+    { headline: 'Unemployment falls to its lowest level in five years', summary: 'Hiring was strongest in technology, health care and construction.' },
+    { headline: 'Food prices rise ahead of the holiday season', summary: 'Fruit and vegetables cost on average 6% more than a year ago.' },
+    { headline: 'Start-up funding recovers after a slow year', summary: 'Local companies raised more in the last quarter than in the first half of the year.' },
+    { headline: 'New port terminal expected to shorten import times', summary: 'Shipping companies say waiting times could fall by half.' },
+    { headline: 'Survey: more workers choose hybrid jobs', summary: 'Two out of three office workers now spend at least one day a week at home.' },
+    { headline: 'Electricity prices to drop slightly next year', summary: 'The regulator points to cheaper solar power and lower gas costs.' },
+    { headline: 'Market traders hit by rising rents', summary: 'Stall owners say their rent has doubled since the market was renovated.', local: true },
+    { headline: 'Shopping centre to open with 150 stores', summary: 'The developer expects about 2,000 new jobs in the area.', local: true },
+    { headline: 'New industrial park approved on the edge of the city', summary: 'Workshops and small factories will move there from residential streets.', local: true },
+    { headline: 'Hotels report their best season in ten years', summary: 'Foreign and local tourists filled rooms through the summer.' },
+    { headline: 'Minimum wage to rise at the start of the year', summary: 'About 400,000 workers will see higher hourly pay.' },
+    { headline: 'Banks lower fees for online transfers', summary: 'The change follows pressure from the competition authority.' },
+    { headline: 'Exports grow for the third quarter in a row', summary: 'Technology and medical devices make up most of the growth.' },
+    { headline: 'Building of new homes picks up', summary: 'Work began on more apartments than in any quarter for two years.' },
+    { headline: 'City offers grants to shops that stay open in the evening', summary: 'The council hopes to bring more life to the main shopping streets.', local: true },
+    { headline: 'Fuel prices fall for the second month', summary: 'Drivers will pay about 20 agorot less per litre.' },
+    { headline: 'Pension funds post strong yearly returns', summary: 'Savers gained on average 9% after fees.' },
   ],
   World: [
-    ['Climate summit ends with new emissions targets', 'More than 100 countries agree to report their progress every year.'],
-    ['Neighbouring countries sign a cross-border rail agreement', 'Passenger trains could run between the two capitals within five years.'],
-    ['Aid groups warn of food shortages after floods', 'Heavy rains destroyed crops across a wide region.'],
-    ['Space station welcomes a new international crew', 'Four astronauts from three countries will stay for six months.'],
-    ['Global tourism returns to pre-pandemic levels', 'Airlines report full flights on most long-haul routes.'],
-    ['Ocean treaty enters into force', 'The agreement protects marine life in international waters.'],
-    ['World leaders discuss rules for artificial intelligence', 'The talks focus on safety testing and transparency.'],
+    { headline: 'Climate summit ends with new emissions targets', summary: 'More than 100 countries agree to report their progress every year.' },
+    { headline: 'Neighbouring countries sign a cross-border rail agreement', summary: 'Passenger trains could run between the two capitals within five years.' },
+    { headline: 'Aid groups warn of food shortages after floods', summary: 'Heavy rains destroyed crops across a wide region.' },
+    { headline: 'Space station welcomes a new international crew', summary: 'Four astronauts from three countries will stay for six months.' },
+    { headline: 'Global tourism returns to pre-pandemic levels', summary: 'Airlines report full flights on most long-haul routes.' },
+    { headline: 'Ocean treaty enters into force', summary: 'The agreement protects marine life in international waters.' },
+    { headline: 'World leaders discuss rules for artificial intelligence', summary: 'The talks focus on safety testing and transparency.' },
+    { headline: 'Close election result in a neighbouring country', summary: 'Counting went on through the night before a winner was declared.' },
+    { headline: 'Peace talks resume after a two-year pause', summary: 'Both sides called the first meeting constructive.' },
+    { headline: 'Wildfires force thousands to leave their homes', summary: 'Firefighters from several countries joined the effort.' },
+    { headline: 'UN reports a rise in the number of refugees', summary: 'The agency calls for more funding for the countries hosting them.' },
+    { headline: 'Earthquake shakes a coastal region; no deaths reported', summary: 'Buildings were checked overnight and schools stayed closed for a day.' },
+    { headline: 'European Parliament approves new rules for online platforms', summary: 'Large platforms will have to explain how they rank content.' },
+    { headline: 'Global vaccine programme reaches 50 million children', summary: 'Health workers travelled to remote villages to give the shots.' },
+    { headline: 'Leaders agree to protect a rainforest the size of a country', summary: 'Logging will be banned in the protected area.' },
+    { headline: 'City signs a twin-town agreement with a European capital', summary: 'Schools and orchestras from both cities will visit each other.', local: true },
+    { headline: 'Container ship freed after blocking a major canal', summary: 'Traffic is expected to return to normal within days.' },
+    { headline: 'Foreign ministers meet to discuss sharing water', summary: 'The region faces its driest decade on record.' },
   ],
   Technology: [
-    ['New smartphone battery promises two days of use', 'Engineers say the design charges fully in 20 minutes.'],
-    ['Schools add coding classes from first grade', 'The program teaches problem solving through simple games.'],
-    ["Cyber attack hits a regional hospital's booking system", 'Patient records were not affected, the hospital says.'],
-    ['Electric car sales double in a year', 'Lower prices and more charging stations are behind the jump.'],
-    ['City launches free Wi-Fi in public parks', 'The service covers twenty parks and will expand next year.'],
-    ['Study: most people reuse the same password', 'Experts recommend a password manager and two-step login.'],
-    ['Local start-up builds drones to inspect power lines', 'The drones can find damage before it causes power cuts.'],
+    { headline: 'New smartphone battery promises two days of use', summary: 'Engineers say the design charges fully in 20 minutes.' },
+    { headline: 'Schools add coding classes from first grade', summary: 'The program teaches problem solving through simple games.' },
+    { headline: "Cyber attack hits a regional hospital's booking system", summary: 'Patient records were not affected, the hospital says.', local: true },
+    { headline: 'Electric car sales double in a year', summary: 'Lower prices and more charging stations are behind the jump.' },
+    { headline: 'City launches free Wi-Fi in public parks', summary: 'The service covers twenty parks and will expand next year.', local: true },
+    { headline: 'Study: most people reuse the same password', summary: 'Experts recommend a password manager and two-step login.' },
+    { headline: 'Local start-up builds drones to inspect power lines', summary: 'The drones can find damage before it causes power cuts.', local: true },
+    { headline: 'Smart traffic lights installed at busy junctions', summary: 'The lights adjust to traffic and cut waiting times by a quarter.', local: true },
+    { headline: 'Fibre-optic internet reaches every neighbourhood', summary: 'The last homes were connected this month.', local: true },
+    { headline: 'Government launches a digital ID card app', summary: 'Citizens can show the app instead of a plastic card.' },
+    { headline: 'Messaging app adds end-to-end encryption for groups', summary: 'Only the people in a chat can read its messages.' },
+    { headline: 'Robot vacuum maker recalls batteries over fire risk', summary: 'Owners can get a free replacement.' },
+    { headline: 'Students build a satellite that will launch next year', summary: 'The small satellite will measure air pollution.' },
+    { headline: 'Tech companies agree on a common phone charger', summary: 'All new phones will use the same plug from next year.' },
+    { headline: 'Hackathon brings together 500 young developers', summary: 'Teams built apps for public services in 48 hours.', local: true },
+    { headline: 'AI tool helps doctors read X-rays faster', summary: 'In tests it flagged problems that doctors had missed.' },
+    { headline: 'Electric scooter sharing expands to new neighbourhoods', summary: 'Riders must now park in marked spots.', local: true },
+    { headline: 'Report: phone scams up 30% this year', summary: 'Police advise never to share a code sent by text message.' },
   ],
   Science: [
-    ["Astronomers find a planet in its star's habitable zone", 'The planet is about one and a half times the size of Earth.'],
-    ['Researchers map the brain of a fruit fly in full detail', 'The map shows every one of its 140,000 nerve cells.'],
-    ['Ancient village uncovered during road works', 'Archaeologists date the site to about 7,000 years ago.'],
-    ['New material pulls drinking water from desert air', 'A prototype produced several litres a day.'],
-    ['Coral reefs show signs of recovery', 'Divers counted more young coral than in any year since monitoring began.'],
-    ['Scientists grow a tomato that needs less water', 'The plant kept its yield with a third less irrigation.'],
-    ['Rare comet visible to the naked eye this week', 'It is best seen just after sunset, low in the western sky.'],
+    { headline: "Astronomers find a planet in its star's habitable zone", summary: 'The planet is about one and a half times the size of Earth.' },
+    { headline: 'Researchers map the brain of a fruit fly in full detail', summary: 'The map shows every one of its 140,000 nerve cells.' },
+    { headline: 'Ancient village uncovered during road works', summary: 'Archaeologists date the site to about 7,000 years ago.', local: true },
+    { headline: 'New material pulls drinking water from desert air', summary: 'A prototype produced several litres a day.' },
+    { headline: 'Coral reefs show signs of recovery', summary: 'Divers counted more young coral than in any year since monitoring began.' },
+    { headline: 'Scientists grow a tomato that needs less water', summary: 'The plant kept its yield with a third less irrigation.' },
+    { headline: 'Rare comet visible to the naked eye this week', summary: 'It is best seen just after sunset, low in the western sky.' },
+    { headline: 'University opens a new centre for quantum research', summary: 'It will host 40 research groups from around the country.', local: true },
+    { headline: 'Rare bird spotted at a city reservoir', summary: 'Bird watchers came from across the country to see it.', local: true },
+    { headline: 'Telescope captures the clearest image of a distant galaxy', summary: 'The galaxy is more than 10 billion light years away.' },
+    { headline: 'Scientists develop a plastic that breaks down in weeks', summary: 'The material is made from food waste.' },
+    { headline: 'Study: bees can recognise human faces', summary: 'In experiments the insects learned to tell photos of faces apart.' },
+    { headline: 'Science museum opens a hands-on space gallery', summary: 'Visitors can steer a model rover across a Mars landscape.', local: true },
+    { headline: 'Researchers store solar heat in salt for the night', summary: 'Heat kept in molten salt ran a test plant for hours after sunset.' },
+    { headline: 'Partial solar eclipse visible on Sunday morning', summary: 'Experts warn never to look at the sun without special glasses.' },
+    { headline: 'High school students win an international science prize', summary: 'Their project measured noise pollution with cheap sensors.', local: true },
+    { headline: 'Fossil of an ancient whale found in the desert', summary: 'The area was covered by sea about 40 million years ago.' },
+    { headline: 'Archaeologists find a 1,500-year-old mosaic under a car park', summary: 'The mosaic will be moved to a museum after restoration.', local: true },
   ],
   Health: [
-    ['Flu vaccine campaign starts in clinics', 'Vaccines are free for children, pregnant women and people over 65.'],
-    ['Study links short walks after meals to lower blood sugar', 'Ten minutes of walking was enough to see a difference.'],
-    ['Hospitals cut emergency room waiting times', 'A new system sends minor cases to nearby clinics.'],
-    ['Doctors warn about heat stroke as temperatures climb', 'Drink water often and avoid the sun at midday.'],
-    ['New app lets patients book appointments in minutes', 'Over a million people used it in its first month.'],
-    ['Researchers test a blood test for early cancer detection', 'Early results are promising, but more trials are needed.'],
-    ['Survey: teenagers get too little sleep', 'Most sleep fewer than the recommended eight hours a night.'],
+    { headline: 'Flu vaccine campaign starts in clinics', summary: 'Vaccines are free for children, pregnant women and people over 65.' },
+    { headline: 'Study links short walks after meals to lower blood sugar', summary: 'Ten minutes of walking was enough to see a difference.' },
+    { headline: 'Hospitals cut emergency room waiting times', summary: 'A new system sends minor cases to nearby clinics.' },
+    { headline: 'Doctors warn about heat stroke as temperatures climb', summary: 'Drink water often and avoid the sun at midday.' },
+    { headline: 'New app lets patients book appointments in minutes', summary: 'Over a million people used it in its first month.' },
+    { headline: 'Researchers test a blood test for early cancer detection', summary: 'Early results are promising, but more trials are needed.' },
+    { headline: 'Survey: teenagers get too little sleep', summary: 'Most sleep fewer than the recommended eight hours a night.' },
+    { headline: "Hospital opens a new children's ward", summary: 'The ward has 60 beds and a play area for young patients.', local: true },
+    { headline: 'Free health checks offered in the city square', summary: 'Nurses will test blood pressure and blood sugar on Friday.', local: true },
+    { headline: 'Ambulance service adds motorbike medics', summary: 'The bikes can reach patients through traffic within minutes.', local: true },
+    { headline: 'Health ministry approves a new drug for migraines', summary: 'The monthly injection halved the number of attacks in trials.' },
+    { headline: 'Study: Mediterranean diet linked to a longer life', summary: 'People who ate more vegetables, fish and olive oil lived about two years longer.' },
+    { headline: 'Shortage of family doctors in rural areas', summary: 'Some patients wait three weeks for an appointment.' },
+    { headline: 'Mental health hotline gets more volunteers', summary: 'Calls rose by a fifth over the past year.' },
+    { headline: 'Clinic opens a late-night service for working parents', summary: 'Children can see a doctor until 11 p.m.', local: true },
+    { headline: 'Blood donation drive beats its target', summary: 'More than 3,000 people gave blood in one week.', local: true },
+    { headline: 'New guidelines cut antibiotics for children', summary: 'Doctors are asked to wait two days before prescribing for ear infections.' },
+    { headline: 'Air pollution warning issued for the weekend', summary: 'People with asthma are advised to stay indoors in the afternoon.', local: true },
   ],
   Sports: [
-    ['National team qualifies for the European championship', 'A late goal sealed a 2-1 win in the final qualifier.'],
-    ['City marathon breaks its participation record', 'More than 40,000 runners took part this year.'],
-    ['Basketball club signs a young star from the youth league', 'The 19-year-old guard averaged 25 points last season.'],
-    ["Women's football league gets a new TV deal", 'Every match will be shown live for the first time.'],
-    ['Tennis player wins her first major title', 'She won the final in three sets after losing the first.'],
-    ["Mountain stage added to next year's cycling tour", 'The race will finish in the mountains for the first time.'],
-    ['Swimmer sets a new national record', 'She broke a record that had stood for twelve years.'],
+    { headline: 'National team qualifies for the European championship', summary: 'A late goal sealed a 2-1 win in the final qualifier.' },
+    { headline: 'City marathon breaks its participation record', summary: 'More runners took part than in any year before.', local: true },
+    { headline: 'Basketball club signs a young star from the youth league', summary: 'The 19-year-old guard averaged 25 points last season.', local: true },
+    { headline: "Women's football league gets a new TV deal", summary: 'Every match will be shown live for the first time.' },
+    { headline: 'Tennis player wins her first major title', summary: 'She won the final in three sets after losing the first.' },
+    { headline: "Mountain stage added to next year's cycling tour", summary: 'The race will finish in the mountains for the first time.' },
+    { headline: 'Swimmer sets a new national record', summary: 'She broke a record that had stood for twelve years.' },
+    { headline: 'Football club promoted to the top division', summary: 'Fans celebrated in the streets after the final whistle.', local: true },
+    { headline: 'New sports centre opens with an Olympic-size pool', summary: 'Schools will use it for free in the mornings.', local: true },
+    { headline: 'Youth league final decided on penalties', summary: 'The goalkeeper saved two shots in the shoot-out.', local: true },
+    { headline: 'Judo team wins three medals at the world championship', summary: "One gold and two bronze, the team's best result yet." },
+    { headline: 'Football league to use video replays in every match', summary: 'The system will be used from the start of next season.' },
+    { headline: 'National basketball coach steps down', summary: 'The coach leaves after six years and two European tournaments.' },
+    { headline: 'Windsurfer qualifies for the Olympics', summary: 'She finished second at the qualifying regatta.' },
+    { headline: 'Night run closes city streets on Friday', summary: 'Roads in the centre will be closed from 8 p.m. to midnight.', local: true },
+    { headline: 'Chess player, 12, becomes the youngest national champion', summary: 'She won every game in the final round.' },
+    { headline: 'Stadium renovation finished ahead of the new season', summary: 'The stadium now has 5,000 more seats and a new roof.', local: true },
+    { headline: 'Wheelchair basketball team wins the European cup', summary: 'The team beat the defending champions by four points.' },
   ],
   Culture: [
-    ['Film festival opens with a record number of premieres', 'Sixty new films will be shown over ten days.'],
-    ['City museum reopens after a two-year renovation', 'The new wing doubles the space for modern art.'],
-    ['Bestselling novelist announces a new trilogy', 'The first book is due out next spring.'],
-    ['Street music festival returns to the old city', 'More than 200 musicians will play on 30 stages.'],
-    ['National theatre stages a modern version of a classic', 'The play is set in a present-day tech company.'],
-    ['Library launches late-night reading evenings', 'The main branch will stay open until midnight on Thursdays.'],
-    ['Photography exhibition shows everyday life in the city', 'The photos were taken by residents over one year.'],
+    { headline: 'Film festival opens with a record number of premieres', summary: 'Sixty new films will be shown over ten days.', local: true },
+    { headline: 'City museum reopens after a two-year renovation', summary: 'The new wing doubles the space for modern art.', local: true },
+    { headline: 'Bestselling novelist announces a new trilogy', summary: 'The first book is due out next spring.' },
+    { headline: 'Street music festival returns to the city centre', summary: 'More than 200 musicians will play on 30 stages.', local: true },
+    { headline: 'National theatre stages a modern version of a classic', summary: 'The play is set in a present-day tech company.' },
+    { headline: 'Library launches late-night reading evenings', summary: 'The main branch will stay open until midnight on Thursdays.', local: true },
+    { headline: 'Photography exhibition shows everyday life in the city', summary: 'The photos were taken by residents over one year.', local: true },
+    { headline: 'Open-air cinema returns for the summer', summary: 'Free screenings will be held in the park every Tuesday.', local: true },
+    { headline: "Food festival celebrates the city's markets", summary: 'Chefs will cook with produce from local stalls.', local: true },
+    { headline: "Young singer's album tops the charts for six weeks", summary: 'The record mixes folk songs with electronic music.' },
+    { headline: 'TV drama series wins an international award', summary: 'The show follows three generations of one family.' },
+    { headline: 'Street art tour shows murals in old neighbourhoods', summary: 'Guided walks run every Saturday morning.', local: true },
+    { headline: 'Orchestra announces a season of free concerts', summary: 'The first concert is set for the end of the month.', local: true },
+    { headline: 'Book week opens with readings by 100 authors', summary: 'Stalls will offer discounts on new books.' },
+    { headline: 'Dance company returns from a world tour', summary: 'The company performed in 15 countries over a year.' },
+    { headline: 'Historic cinema building to become a cultural centre', summary: 'The 1930s building will host films, talks and exhibitions.', local: true },
+    { headline: 'Poetry prize goes to a first-time author', summary: "The judges praised the book's simple, direct language." },
+    { headline: "Children's book fair draws record crowds", summary: 'Families lined up for signings by favourite authors.', local: true },
   ],
 };
 
@@ -298,9 +393,11 @@ function buildArticleBody(title, summary, category) {
  *
  * Numbers go round the categories in order (0 Politics, 1 Economy, ... 8 Politics
  * again), so every category gets a similar share, and each number in a category
- * gets the next story. After all 56 stories are used, the next round puts the next
- * place from STORY_PLACES in front of the title, so titles don't repeat until 560
- * articles (the first round has no place, so the original headlines stay too).
+ * gets the next story. The first round uses the headlines as they are. After all
+ * 144 stories are used, each later round puts a prefix in front of the title: a
+ * city for a local story, a label like "Analysis" for any other (see STORY_PLACES).
+ * Each round gives a story a different prefix, so titles don't repeat until
+ * 864 articles (6 rounds, the first plus one per label).
  *
  * @param {number} articleNumber - 0, 1, 2... one per article the seed creates.
  * @returns {{title: string, summary: string, body: string, imageUrl: string, category: string}}
@@ -310,11 +407,18 @@ function buildArticleContent(articleNumber) {
   const category = categories[articleNumber % categories.length];
   const stories = SAMPLE_STORIES[category];
   const storyNumber = Math.floor(articleNumber / categories.length);
-  const [headline, summary] = stories[storyNumber % stories.length];
+  const storyIndex = storyNumber % stories.length;
+  const { headline, summary, local } = stories[storyIndex];
 
-  // Which round of the 56 stories this is: 0 for the first, 1 for the second...
+  // Which round of the 144 stories this is: 0 for the first, 1 for the second...
   const round = Math.floor(storyNumber / stories.length);
-  const title = round === 0 ? headline : `${STORY_PLACES[(round - 1) % STORY_PLACES.length]}: ${headline}`;
+  let title = headline;
+  if (round > 0) {
+    // "+ storyIndex" starts each story at a different city or label, so the repeats
+    // don't all say "Jerusalem:" or "Analysis:".
+    const prefixes = local ? STORY_PLACES : STORY_LABELS;
+    title = `${prefixes[(round - 1 + storyIndex) % prefixes.length]}: ${headline}`;
+  }
 
   return {
     title: title,
