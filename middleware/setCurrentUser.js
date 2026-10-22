@@ -8,6 +8,8 @@
  * 2. Sets res.locals.currentUser ({ id, role, displayName } or null), which every view
  *    gets automatically (the header's login state). Display only: permissions are
  *    checked by requireLogin and requireRole, which run after this.
+ * 3. Tells the browser not to keep pages shown to a logged-in user, so Back after logout
+ *    asks the server again instead of showing an old page that still looks logged in.
  *
  * Used by: app.js (after the session, before the routers).
  * Owner: OS.
@@ -39,6 +41,14 @@ async function setCurrentUser(request, response, next) {
     } else if (user.role !== sessionUser.role || user.displayName !== sessionUser.displayName) {
       request.session.user = { id: sessionUser.id, role: user.role, displayName: user.displayName };
     }
+  }
+
+  // no-store: the browser keeps no copy of this answer, not even for the Back button. Without
+  // it, Back after logout shows the old page from the browser's cache (the server is never
+  // asked). Only while logged in, so guest pages keep normal caching; static files are
+  // answered before this middleware, so they are not affected.
+  if (request.session.user) {
+    response.set('Cache-Control', 'no-store');
   }
 
   // null, not undefined, so views can write "if (currentUser)".
