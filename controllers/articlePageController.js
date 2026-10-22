@@ -32,16 +32,18 @@ function splitIntoParagraphs(body) {
     .filter((paragraph) => paragraph !== '');
 }
 
+// An adult reads about 200 words a minute; the usual figure for "min read" labels.
+const WORDS_READ_PER_MINUTE = 200;
+
 /**
- * Estimates reading time in minutes (based on ~200 words per minute).
- * 
- * @param {string} body - The article body text.
- * @returns {number} The estimated reading time in minutes (at least 1).
+ * Estimates how long the article takes to read, for the "5 min read" label.
+ *
+ * @param {string} body - The article text as typed.
+ * @returns {number} Whole minutes, rounded up, at least 1 (a short text still says "1 min read").
  */
 function estimateReadingMinutes(body) {
-  if (!body) return 1;
-  const wordCount = body.trim().split(/\s+/).length;
-  return Math.max(1, Math.ceil(wordCount / 200));
+  const words = (body || '').split(/\s+/).filter((word) => word !== '');
+  return Math.max(1, Math.ceil(words.length / WORDS_READ_PER_MINUTE));
 }
 
 /**
@@ -122,7 +124,7 @@ async function showArticlePage(request, response) {
       paragraphs: splitIntoParagraphs(published.body),
       reporterName: article.reporter ? article.reporter.displayName : 'Unknown reporter',
       publishedAt: article.lastPublishedAt,
-      readingMinutes: estimateReadingMinutes(published.body), // Task 4
+      readingMinutes: estimateReadingMinutes(published.body),
     },
     relatedArticles: relatedArticles,
     comments: comments,
