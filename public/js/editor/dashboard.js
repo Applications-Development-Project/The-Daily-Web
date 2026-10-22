@@ -124,6 +124,7 @@ function setUpEditorDashboard() {
   const previousButton = document.getElementById('previous-page');
   const nextButton = document.getElementById('next-page');
   const pageInfo = document.getElementById('page-info');
+  const statusSummaryCards = document.querySelectorAll('.status-summary-card');
 
   // '' for status or search means "no filter". page and totalPages come from the server.
   const listState = { status: '', search: '', page: 1, totalPages: 1 };
@@ -327,6 +328,19 @@ function setUpEditorDashboard() {
   }
 
   /**
+   * Task 1: Handles clicks on a summary card. 
+   * Sets the dropdown to match the card's status and reuses applyFilters().
+   *
+   * @param {MouseEvent} event 
+   * @returns {void}
+   */
+  function handleSummaryCardClick(event) {
+    const button = event.currentTarget;
+    statusFilter.value = button.dataset.status;
+    applyFilters();
+  }
+
+  /**
    * On every key press: cancels the waiting search and waits again, so the search runs
    * only once typing pauses.
    *
@@ -348,11 +362,18 @@ function setUpEditorDashboard() {
     applyFilters();
   }
 
+  // Event Listeners
   statusFilter.addEventListener('change', applyFilters);
   titleSearch.addEventListener('input', searchAfterTyping);
   filterForm.addEventListener('submit', searchNow);
   previousButton.addEventListener('click', showPreviousPage);
   nextButton.addEventListener('click', showNextPage);
+  
+  // Attach listeners to summary cards
+  statusSummaryCards.forEach(card => {
+    card.addEventListener('click', handleSummaryCardClick);
+  });
+
   loadArticles();
 }
 
