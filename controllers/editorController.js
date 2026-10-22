@@ -248,14 +248,31 @@ function toArticleRow(article) {
  *
  * @param {import('express').Request} request
  * @param {import('express').Response} response - Renders views/editor/dashboard.ejs.
- * @returns {void}
+ * @returns {Promise<void>}
  */
-function showEditorDashboard(request, response) {
+async function showEditorDashboard(request, response) {
+  const statusValues = Object.values(STATUS);
+
+  // Defense question: "Why countDocuments and not loading the articles and counting them?"
+  // MongoDB counts with the index and sends back one number, instead of sending hundreds of documents.
+  // Note: The numbers are from when the page opened. A delete doesn't update them, 
+  // but it's enough for an overview.
+  const counts = await Promise.all(
+    statusValues.map(status => Article.countDocuments({ status }))
+  );
+
+  const statusCounts = {};
+  statusValues.forEach((status, i) => {
+    statusCounts[status] = counts[i];
+  });
+
   // From the shared status list, so the filter offers exactly what the API accepts.
-  const statusOptions = Object.values(STATUS).map((status) => ({ value: status, label: STATUS_LABELS[status] }));
+  const statusOptions = statusValues.map((status) => ({ value: status, label: STATUS_LABELS[status] }));
+  
   response.render('editor/dashboard', {
     title: 'Articles - Editor - The Daily Web',
     statusOptions: statusOptions,
+    statusCounts: statusCounts,
   });
 }
 
