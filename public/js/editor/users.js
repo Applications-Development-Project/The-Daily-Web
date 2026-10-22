@@ -267,7 +267,8 @@ function setUpUserManagement() {
    * @returns {Promise<void>}
    */
   async function deleteUser(user) {
-    if (!window.confirm(`Delete the user "${user.username}"? This can't be undone.`)) {
+    const confirmed = await showConfirmDialog(`Delete the user "${user.username}"? This can't be undone.`, 'Delete', true);
+    if (!confirmed) {
       return;
     }
 
