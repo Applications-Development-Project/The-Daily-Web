@@ -9,7 +9,7 @@
   with public/js/public/articleComments.js: the element ids and the markup of one comment.
 
   Rendered by: showArticlePage (controllers/articlePageController.js), for GET /articles/:id.
-  Locals: title, description, article, comments, structuredData.
+  Locals: title, description, openGraph, structuredData, article, comments, relatedArticles.
   Owner: SH (page). The comments script is OS's.
 %>
 <%
@@ -66,6 +66,20 @@
                     <% }); %>
                 </div>
             </article>
+
+            <%# Task 2: Related articles %>
+            <% if (typeof relatedArticles !== 'undefined' && relatedArticles.length > 0) { %>
+                <section class="related-articles" aria-labelledby="related-heading">
+                    <h3 id="related-heading">Related articles</h3>
+                    <div class="related-articles-grid">
+                        <% relatedArticles.forEach(function (relArticle) { %>
+                            <div class="card">
+                                <a href="/articles/<%= relArticle.id %>"><%= relArticle.title %></a>
+                            </div>
+                        <% }); %>
+                    </div>
+                </section>
+            <% } %>
 
             <section id="comments" class="card" data-article-id="<%= article.id %>" aria-labelledby="comments-title">
                 <h3 id="comments-title">Comments</h3>
