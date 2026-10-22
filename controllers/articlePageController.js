@@ -98,43 +98,43 @@ async function showArticlePage(request, response) {
   await recordView(article._id, request.deviceId);
 
   const published = article.published;
-  
-  // --- Task 3: Build Open Graph tags with absolute URLs ---
-  const hostBaseUrl = `${request.protocol}://${request.get('host')}`;
-  const absoluteUrl = `${hostBaseUrl}/articles/${article._id}`;
-  
-  let absoluteImageUrl = null;
-  if (published.imageUrl) {
-    absoluteImageUrl = published.imageUrl.startsWith('http') 
-        ? published.imageUrl 
-        : `${hostBaseUrl}${published.imageUrl}`;
-  }
+  const reporterName = article.reporter ? article.reporter.displayName : 'Unknown reporter';
+
+  // Social sites and search engines need absolute addresses, so they are built from the
+  // address this request came to. The image is already absolute (draftValidation.js only
+  // accepts http:// and https://); new URL() would also complete a relative one.
+  const siteAddress = `${request.protocol}://${request.get('host')}`;
+  const pageUrl = `${siteAddress}/articles/${article._id}`;
+  const imageUrl = published.imageUrl ? new URL(published.imageUrl, siteAddress).href : '';
 
   const openGraph = {
     type: 'article',
     title: published.title,
     description: published.summary,
-    url: absoluteUrl,
-    image: absoluteImageUrl
+    url: pageUrl,
+    image: imageUrl,
   };
 
-  // --- Task 3: Build NewsArticle structured data ---
-  const reporterName = article.reporter ? article.reporter.displayName : 'Unknown reporter';
-  const newsArticleSchema = {
-    "@context": "https://schema.org",
-    "@type": "NewsArticle",
-    "headline": published.title,
-    "datePublished": article.lastPublishedAt ? new Date(article.lastPublishedAt).toISOString() : undefined,
-    "author": {
-      "@type": "Person",
-      "name": reporterName
-    },
-    "image": absoluteImageUrl ? [absoluteImageUrl] : [],
-    "articleSection": published.category
+  const newsArticle = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: published.title,
+    description: published.summary,
+    url: pageUrl,
+    author: { '@type': 'Person', name: reporterName },
+    articleSection: published.category,
   };
+  // Left out when unknown rather than sent empty.
+  if (article.lastPublishedAt) {
+    newsArticle.datePublished = article.lastPublishedAt.toISOString();
+  }
+  if (imageUrl) {
+    newsArticle.image = [imageUrl];
+  }
 
-  // Turn it into text and replace < with \u003c so article text can never close the tag.
-  const structuredData = JSON.stringify(newsArticleSchema).replace(/</g, '\\u003c');
+  // Printed raw inside <script type="application/ld+json"> (views/partials/head.ejs), so every
+  // "<" becomes \u003c: article text can never close the script element. JSON reads it back as "<".
+  const structuredData = JSON.stringify(newsArticle).replace(/</g, '\\u003c');
 
   response.render('public/article', {
     title: `${published.title} - The Daily Web`,
