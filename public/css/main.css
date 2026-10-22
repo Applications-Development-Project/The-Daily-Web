@@ -378,6 +378,31 @@ nav[aria-label="User list pages"] {
   margin: var(--spacing-md) 0;
 }
 
+/* Shared confirm dialog (public/js/shared/confirmDialog.js). The min() keeps a gap at the
+   sides on a phone narrower than 400px. */
+.confirm-dialog {
+  margin: auto;
+  max-width: min(400px, calc(100% - 2 * var(--spacing-md)));
+  padding: var(--spacing-lg);
+  border: none;
+}
+
+/* The dark overlay behind the dialog */
+.confirm-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.confirm-message {
+  white-space: pre-line;
+  margin-bottom: var(--spacing-lg);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
 /* ---------- 5. Area styles ---------- */
 
 /* Feed (views/public/feed.ejs, public/js/public/feed.js). A card has the same classes
@@ -595,30 +620,6 @@ nav[aria-label="User list pages"] {
   max-width: 100%;
   height: auto;
   border-radius: var(--radius);
-}
-
-/* Shared confirm dialog (public/js/shared/confirmDialog.js) */
-.confirm-dialog {
-  margin: auto;
-  max-width: 400px;
-  padding: var(--spacing-lg);
-  border: none;
-}
-
-/* The dark overlay behind the dialog */
-.confirm-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.5);
-}
-
-.confirm-message {
-  white-space: pre-line;
-  margin-bottom: var(--spacing-lg);
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--spacing-sm);
 }
 
 /* Editor dashboard counters (views/editor/dashboard.ejs) */
