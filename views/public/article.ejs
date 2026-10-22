@@ -18,21 +18,12 @@
 %>
 <!DOCTYPE html>
 <html lang="en">
-<%- include('../partials/head', { title: title, description: description }) %>
-
-<%# 
-  Task 3: NewsArticle structured data.
-  Defense question: "Why is <%- safe here?"
-  We control the content: JSON.stringify escapes the quotes, and we escape '<' to '\u003c' in the controller,
-  so nothing can end the script element. We must use <%- because <%= would turn the quotes into &quot; and break the JSON.
-  Note: This is data, not code, so the browser never runs it. The project rule "no inline scripts" is about JavaScript.
-%>
-<% if (locals.structuredData) { %>
-<script type="application/ld+json">
-<%- structuredData %>
-</script>
-<% } %>
-
+<%- include('../partials/head', {
+    title: title,
+    description: description,
+    openGraph: openGraph,
+    structuredData: structuredData
+}) %>
 <body class="page-container">
     <%- include('../partials/header') %>
 
