@@ -44,6 +44,8 @@
   /* Light fills: neutral buttons, table headers; the soft accent behind category badges. */
   --color-surface-muted: #f3ece2;
   --color-accent-soft: #fbe6d8;
+  /* A darker accent for small text on the soft accent (the accent itself is under 4.5:1 there). */
+  --color-accent-strong: #9a3412;
   --color-text: #2b2420;
   --color-muted: #75675d;
   --color-border: #ece3d8;
@@ -84,8 +86,44 @@ a {
   color: var(--color-accent);
 }
 
+/* Headings: heavier and slightly tighter than body text, so they read as titles. */
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
 h2 {
+  font-size: 1.75rem;
   margin-bottom: var(--spacing-md);
+}
+
+/* Text the reader selects is highlighted in the soft accent instead of the browser's blue. */
+::selection {
+  background-color: var(--color-accent-soft);
+}
+
+/* "Back to top" and other in-page links glide instead of jumping, unless the reader's
+   system asks for less motion (then every animation below is switched off too). */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* A jump to #top or #comments stops below the sticky header instead of under it. */
+html {
+  scroll-padding-top: 6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+  }
 }
 
 h3,
@@ -153,9 +191,16 @@ form label {
   min-height: 100vh;
 }
 
-/* A light header, separated from the page by a thin line and a soft shadow. */
+/* A light header, separated from the page by a thin line and a soft shadow. sticky: it
+   stays at the top while the page scrolls (not on a phone, section 6, where it would take
+   too much of the screen); the see-through background with blur lets the page show
+   faintly underneath. */
 .site-header {
-  background-color: var(--color-surface);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: rgba(255, 253, 249, 0.88);
+  backdrop-filter: blur(10px);
   color: var(--color-text);
   border-bottom: 1px solid var(--color-border);
   box-shadow: var(--shadow);
@@ -171,6 +216,7 @@ form label {
   font-size: 1.8rem;
   font-weight: 800;
   line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .site-header a {
@@ -229,7 +275,7 @@ form label {
   background-color: var(--color-secondary);
   color: white;
   text-align: center;
-  padding: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-md);
   margin-top: auto;
 }
 
@@ -255,6 +301,10 @@ form label {
     transform: translateY(-2px);
     box-shadow: var(--shadow-raised);
   }
+
+  .article-card:hover .article-card-title a {
+    color: var(--color-accent);
+  }
 }
 
 /* A plain .btn is a neutral button (for example Previous / Next); the colour classes
@@ -270,6 +320,7 @@ form label {
   cursor: pointer;
   text-decoration: none;
   line-height: 1.4;
+  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .btn-primary {
@@ -291,6 +342,19 @@ form label {
 
 .btn:hover:not(:disabled) {
   filter: brightness(0.92);
+}
+
+/* The coloured buttons rise a little under the mouse and sink back when pressed, so a
+   click feels physical. */
+.btn-primary:hover:not(:disabled),
+.btn-danger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 button:disabled,
@@ -341,22 +405,44 @@ div.form-field {
   margin: 0;
 }
 
+/* A table in a rounded box with lines only between rows (lighter than a full grid).
+   border-collapse: separate is needed for the rounded corners; overflow: hidden clips
+   the header's background to them. */
 .data-table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
 }
 
 .data-table th,
 .data-table td {
-  padding: var(--spacing-sm);
-  border: 1px solid var(--color-border);
+  padding: 0.75rem var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
   text-align: left;
   vertical-align: top;
 }
 
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Column titles: small capitals in the muted colour, so the data stands out. */
 .data-table th {
   background-color: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* The row under the mouse is tinted, which helps follow a wide row to its buttons. */
+.data-table tbody tr:hover {
+  background-color: var(--color-background);
 }
 
 /* Buttons inside a table cell get a little space between them. */
@@ -492,15 +578,24 @@ nav[aria-label="User list pages"] {
   min-width: 0;
 }
 
-/* The article's category (feed cards and the article page). */
+/* The article's category (feed cards and the article page): small capitals in the accent
+   colour, like a section label in a magazine. */
 .category-badge {
   display: inline-block;
-  padding: 0.15rem 0.6rem;
-  border-radius: 12px;
-  font-size: 0.8rem;
-  font-weight: bold;
+  padding: 0.2rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   background-color: var(--color-accent-soft);
-  color: var(--color-primary);
+  color: var(--color-accent-strong);
+}
+
+/* position: relative lets the title's link (below) cover the whole card. */
+.article-card {
+  position: relative;
+  padding: 1.25rem;
 }
 
 .article-card-title {
@@ -510,6 +605,17 @@ nav[aria-label="User list pages"] {
 .article-card-title a {
   color: inherit;
   text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+/* The whole card is clickable: an empty layer from the title's link stretches over the
+   card. There is still one link per card (screen readers and keyboards see no change),
+   and nothing else in a card is clickable, so the layer hides nothing. */
+.article-card-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
 }
 
 .article-card-title a:hover,
@@ -542,20 +648,66 @@ nav[aria-label="User list pages"] {
 }
 
 /* Full article page (views/public/article.ejs) */
+.article-full {
+  padding: var(--spacing-lg);
+}
+
 .article-full-title {
   margin: var(--spacing-sm) 0;
-  font-size: 1.8rem;
-  line-height: 1.3;
+  font-size: 2.3rem;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
 }
 
 .article-full figure {
-  margin: 0 0 var(--spacing-md);
+  margin: var(--spacing-md) 0 var(--spacing-lg);
+}
+
+/* Long text is easiest to read in lines of about 70 characters, slightly larger and with
+   more space between lines than the rest of the site. */
+.article-body {
+  max-width: 70ch;
+  font-size: 1.1rem;
+  line-height: 1.8;
 }
 
 .article-body p {
   margin-bottom: var(--spacing-md);
   /* A single line break inside a paragraph is kept, as the reporter typed it. */
   white-space: pre-line;
+}
+
+/* The opening paragraph is the lead: larger, like in a magazine. */
+.article-body p:first-child {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+/* Related articles under the article: cards side by side, wrapping on narrow screens. */
+.related-articles-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.related-articles-grid > .card {
+  flex: 1 1 14rem;
+  margin-bottom: 0;
+  font-weight: 700;
+}
+
+/* Titles like the feed's: plain text that turns to the accent under the mouse. */
+.related-articles-grid a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.related-articles-grid a:hover,
+.related-articles-grid a:focus {
+  color: var(--color-accent);
+  text-decoration: underline;
 }
 
 /* The article page's reading progress bar (public/js/public/readingProgress.js sets the width)
@@ -589,13 +741,16 @@ nav[aria-label="User list pages"] {
   margin-bottom: var(--spacing-lg);
 }
 
+/* Each comment is a soft speech bubble. */
 .comment {
-  border-bottom: 1px solid var(--color-border);
-  padding: var(--spacing-md) 0;
+  background-color: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem var(--spacing-md);
+  margin-bottom: 0.75rem;
 }
 
 .comment:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .comment-meta {
@@ -616,7 +771,13 @@ nav[aria-label="User list pages"] {
   overflow-wrap: anywhere;
 }
 
-/* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js) */
+/* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js): a warm
+   sunrise gradient sets it apart from the white cards. */
+#weather-widget {
+  background: linear-gradient(135deg, #fff4e8, #fde2cc);
+  border-color: #f7d4b8;
+}
+
 .weather-info {
   display: flex;
   align-items: center;
@@ -628,7 +789,7 @@ nav[aria-label="User list pages"] {
 }
 
 .weather-icon {
-  font-size: 2.5rem;
+  font-size: 3rem;
   line-height: 1;
 }
 
@@ -642,6 +803,9 @@ nav[aria-label="User list pages"] {
   max-width: 26rem;
   margin: var(--spacing-lg) auto;
   padding: var(--spacing-lg);
+  box-shadow: var(--shadow-raised);
+  /* A thin accent line along the top edge, as on a ticket. */
+  border-top: 4px solid var(--color-accent);
 }
 
 .login-card h2,
@@ -690,6 +854,10 @@ nav[aria-label="User list pages"] {
   color: var(--color-accent);
 }
 
+.editor-nav-link[aria-current="page"] {
+  font-weight: 800;
+}
+
 /* An article's image on the editor's review page. */
 .review-image {
   max-width: 100%;
@@ -718,11 +886,13 @@ nav[aria-label="User list pages"] {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* Lifts like the feed cards (it used to fade, which looked like "disabled"). */
 .status-summary-card:hover {
-  opacity: 0.8;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raised);
 }
 
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
@@ -736,6 +906,19 @@ nav[aria-label="User list pages"] {
 
   .site-title {
     font-size: 1.4rem;
+  }
+
+  /* On a phone the header wraps to two rows; kept at the top it would cover too much. */
+  .site-header {
+    position: static;
+  }
+
+  .article-full {
+    padding: var(--spacing-md);
+  }
+
+  .article-full-title {
+    font-size: 1.7rem;
   }
 
   /* Flexbox: the sidebar moves below the content instead of beside it. */
