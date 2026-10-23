@@ -67,7 +67,8 @@
                                 loading="lazy" onerror="this.onerror=null; this.src='/images/placeholder.svg';">
                         <% } %>
                         <div class="article-card-text">
-                            <span class="category-badge"><%= article.category %></span>
+                            <%# data-category: the stylesheet colours the pill's dot by category. %>
+                            <span class="category-badge" data-category="<%= article.category %>"><%= article.category %></span>
                             <h3 class="article-card-title">
                                 <a href="/articles/<%= article.id %>"><%= article.title %></a>
                             </h3>

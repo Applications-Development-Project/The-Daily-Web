@@ -40,7 +40,8 @@
             <%# id="top": the target of the "Back to top" link at the end of the article. %>
             <article id="top" class="card article-full">
                 <header>
-                    <span class="category-badge"><%= article.category %></span>
+                    <%# data-category: the stylesheet colours the pill's dot by category. %>
+                    <span class="category-badge" data-category="<%= article.category %>"><%= article.category %></span>
                     <h2 class="article-full-title"><%= article.title %></h2>
                     <p class="article-card-meta">
                         By <%= article.reporterName %>
