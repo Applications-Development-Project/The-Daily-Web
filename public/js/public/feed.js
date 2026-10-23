@@ -50,6 +50,8 @@ function createArticleCard(card) {
 
   const badge = document.createElement('span');
   badge.className = 'category-badge';
+  // The stylesheet colours the pill's dot by its category (.category-badge[data-category]).
+  badge.dataset.category = card.category;
   badge.textContent = card.category;
 
   const heading = document.createElement('h3');
