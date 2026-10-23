@@ -28,41 +28,61 @@
 
 /* ---------- 1. Design tokens ---------- */
 
-/* The "ocean blue" look: a cool light background, a deep blue accent, rounded corners and
-   gentle shadows. Every colour on the site comes from here, so the whole look changes in
-   this one block. Text colours keep a contrast of at least 4.5:1 on their background
-   (the accessibility guideline for normal text). */
+/* The "sand and rust" look: a sand-coloured page with the content on a big white rounded
+   panel, warm cards, pill-shaped buttons in rust, and a colour per news category. Every
+   colour on the site comes from here, so the whole look changes in this one block. Text
+   colours keep a contrast of at least 4.5:1 on their background (the accessibility
+   guideline for normal text). */
 :root {
-  --color-primary: #16324f;
-  --color-secondary: #1b2d42;
-  --color-accent: #1d5fa8;
-  /* Rose, so the analytics chart's red publish markers stand out from its blue line (both
-     colours are read from here by analytics.js). */
+  --color-primary: #231c18;
+  --color-secondary: #3a2e27;
+  --color-accent: #a0462a;
+  /* Crimson: reads as a warning, and the analytics chart's publish markers (this colour)
+     stand out from its rust line (the accent); analytics.js reads both from here. */
   --color-danger: #be123c;
-  --color-background: #f4f7fb;
-  --color-surface: #ffffff;
-  /* Light fills: neutral buttons, table headers; the soft accent behind category badges. */
-  --color-surface-muted: #e9eff6;
-  --color-accent-soft: #e1ecf8;
-  /* A darker accent for small text on the soft accent, so it stays easy to read. */
-  --color-accent-strong: #174a85;
-  --color-text: #1b2533;
-  --color-muted: #5b6878;
-  --color-border: #dde5ee;
-  /* The sticky header: the card colour, slightly see-through (the page shows faintly under it). */
-  --color-header: rgba(255, 255, 255, 0.85);
-  /* The weather widget's sky gradient, which sets it apart from the white cards. */
-  --gradient-feature: linear-gradient(135deg, #eef6ff, #d6e8fb);
+  /* The page behind the panel, the panel itself, and the cards on the panel. */
+  --color-background: #efe6dc;
+  --color-panel: #ffffff;
+  --color-surface: #fbf7f2;
+  /* Light fills: neutral buttons, table headers, comment bubbles; the soft accent for the
+     text selection and the focus ring. */
+  --color-surface-muted: #f3ece3;
+  --color-accent-soft: #f6e2d9;
+  --color-text: #231c18;
+  --color-muted: #6b5f57;
+  --color-border: #ece3d8;
+  /* The sticky header: a darker sand than the page, so it reads as its own bar; slightly
+     see-through (the page shows faintly under it). The header's text is --color-text,
+     11.7:1 on it. */
+  --color-header: rgba(227, 213, 197, 0.94);
+  --color-header-border: #d6c4b0;
+  /* The weather widget: a warm peach fade, so it stands out from the cards. */
+  --gradient-feature: linear-gradient(135deg, #fff1e6, #fbdcc8);
+  /* The four article statuses (badges and dashboard counters). */
+  --status-draft: #f1c40f;
+  --status-pending: #b35c00;
+  --status-published: #1e8449;
+  --status-returned: var(--color-danger);
+  /* One colour per news category, for the dot in its pill (see .category-badge). */
+  --category-politics: #a0462a;
+  --category-economy: #c98a1b;
+  --category-world: #2b7a78;
+  --category-technology: #4f5bd5;
+  --category-science: #3a8a4f;
+  --category-health: #d14d72;
+  --category-sports: #2f80c4;
+  --category-culture: #8a4fbf;
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
   --spacing-lg: 2rem;
-  --radius: 14px;
-  /* Smaller controls (buttons, inputs) get a smaller curve, or they look like pills. */
+  --radius: 16px;
+  /* Smaller controls (inputs) get a smaller curve; buttons and badges are full pills. */
   --radius-sm: 10px;
+  --radius-panel: 28px;
   /* Two soft layers tinted with the text colour: a close edge plus a wide, faint glow. */
-  --shadow: 0 1px 2px rgba(27, 37, 51, 0.06), 0 4px 14px rgba(27, 37, 51, 0.06);
-  --shadow-raised: 0 2px 4px rgba(27, 37, 51, 0.08), 0 10px 24px rgba(27, 37, 51, 0.1);
+  --shadow: 0 1px 2px rgba(35, 28, 24, 0.05), 0 4px 14px rgba(35, 28, 24, 0.05);
+  --shadow-raised: 0 2px 4px rgba(35, 28, 24, 0.07), 0 12px 28px rgba(35, 28, 24, 0.1);
   /* Nunito (rounded letters) is loaded in views/partials/head.ejs; without the internet the
      browser's own font is used, so the site still works. */
   --font: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -195,10 +215,9 @@ form label {
   min-height: 100vh;
 }
 
-/* A light header, separated from the page by a thin line and a soft shadow. sticky: it
-   stays at the top while the page scrolls (not on a phone, section 6, where it would take
-   too much of the screen); the see-through background with blur lets the page show
-   faintly underneath. */
+/* The header is a darker sand bar above the white panel. sticky: it stays at the top while
+   the page scrolls (not on a phone, section 6, where it would take too much of the
+   screen); the see-through background with blur lets the page show faintly underneath. */
 .site-header {
   position: sticky;
   top: 0;
@@ -206,8 +225,7 @@ form label {
   background-color: var(--color-header);
   backdrop-filter: blur(10px);
   color: var(--color-text);
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow);
+  border-bottom: 1px solid var(--color-header-border);
   padding: var(--spacing-md) var(--spacing-lg);
   display: flex;
   flex-wrap: wrap;
@@ -216,11 +234,12 @@ form label {
   gap: var(--spacing-sm) var(--spacing-md);
 }
 
+/* The logo is the name itself, in heavy, tight letters. */
 .site-title {
-  font-size: 1.8rem;
-  font-weight: 800;
+  font-size: 1.7rem;
+  font-weight: 900;
   line-height: 1.2;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .site-header a {
@@ -228,7 +247,7 @@ form label {
 }
 
 .site-title a {
-  color: var(--color-accent);
+  color: var(--color-text);
 }
 
 .site-nav {
@@ -254,6 +273,19 @@ form label {
   gap: var(--spacing-lg);
 }
 
+/* Every page's content sits on one big white rounded panel over the sand: the public
+   pages' wrapper, and the main element of the pages without a sidebar. */
+.main-content-wrapper,
+.page-container > .main-content {
+  background-color: var(--color-panel);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow);
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  /* A strip of sand stays visible at the sides on screens narrower than the panel. */
+  width: calc(100% - 2 * var(--spacing-md));
+}
+
 .main-content {
   flex: 3;
   /* min-width: 0 lets a flex item shrink below the width of a long word or a wide
@@ -269,17 +301,17 @@ form label {
    child of the body, so it gets the same centred width and padding as the public pages. */
 .page-container > .main-content {
   flex: 1;
-  width: 100%;
   max-width: var(--content-width);
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
   padding: var(--spacing-lg);
 }
 
+/* The footer is quiet text on the sand, under the panel. */
 .site-footer {
-  background-color: var(--color-secondary);
-  color: white;
+  color: var(--color-muted);
   text-align: center;
-  padding: var(--spacing-lg) var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-lg);
   margin-top: auto;
 }
 
@@ -294,8 +326,8 @@ form label {
   box-shadow: var(--shadow);
 }
 
-/* A feed card lifts a little under the mouse, so it reads as something to click.
-   Only for a mouse: on a touch screen "hover" would stick after a tap. */
+/* A feed story lifts a little under the mouse and its headline turns rust, so it reads as
+   something to click. Only for a mouse: on a touch screen "hover" would stick after a tap. */
 @media (hover: hover) {
   .article-card {
     transition: transform 0.15s ease, box-shadow 0.15s ease;
@@ -312,19 +344,19 @@ form label {
 }
 
 /* A plain .btn is a neutral button (for example Previous / Next); the colour classes
-   below mark the main action and the dangerous one. */
+   below mark the main action and the dangerous one. Every button is a pill. */
 .btn {
   display: inline-block;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-sm) 1.25rem;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
+  border-radius: 999px;
   background-color: var(--color-surface-muted);
   color: var(--color-text);
   font-weight: 700;
   cursor: pointer;
   text-decoration: none;
   line-height: 1.4;
-  transition: filter 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition: filter 0.15s ease;
 }
 
 .btn-primary {
@@ -343,22 +375,8 @@ form label {
   background-color: var(--color-surface-muted);
   color: var(--color-text);
 }
-
 .btn:hover:not(:disabled) {
   filter: brightness(0.92);
-}
-
-/* The coloured buttons rise a little under the mouse and sink back when pressed, so a
-   click feels physical. */
-.btn-primary:hover:not(:disabled),
-.btn-danger:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: var(--shadow);
-}
-
-.btn:active:not(:disabled) {
-  transform: translateY(0);
-  box-shadow: none;
 }
 
 button:disabled,
@@ -488,10 +506,10 @@ div.form-field {
   white-space: nowrap;
 }
 
-.status-draft { background-color: #f1c40f; color: #222; }
-.status-pending { background-color: #b35c00; color: white; }
-.status-published { background-color: #1e8449; color: white; }
-.status-returned { background-color: var(--color-danger); color: white; }
+.status-draft { background-color: var(--status-draft); color: var(--color-text); }
+.status-pending { background-color: var(--status-pending); color: white; }
+.status-published { background-color: var(--status-published); color: white; }
+.status-returned { background-color: var(--status-returned); color: white; }
 
 /* Two versions side by side (the editor's review page): a Flexbox row of two equal columns;
    one column on a phone (section 6). */
@@ -561,45 +579,64 @@ nav[aria-label="User list pages"] {
   width: auto;
 }
 
-/* A card with an image (article-card-with-image) is a Flexbox row on a wide screen: the image
-   on the left with a fixed width, the text taking the rest, so a page of 20 cards is easy to
-   scan. On a phone (section 6) the row becomes a column: the image above the text. */
-.article-card-with-image {
+/* The feed is a grid of stories: Flexbox rows that wrap, two cards per row (one on a
+   phone, section 6), each card with its image on top. Everything else in the list (the
+   featured first story, the sentinel, a message) takes a whole row. */
+#feed-list {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--spacing-md);
-  align-items: flex-start;
 }
 
-.article-card-with-image .article-card-image {
-  flex: 0 0 16rem;
-  width: 16rem;
+#feed-list > * {
+  flex: 0 0 100%;
+}
+
+#feed-list > .article-card {
+  /* Half the row, minus half the gap between the two cards. */
+  flex: 0 0 calc(50% - var(--spacing-md) / 2);
+  min-width: 0;
   margin-bottom: 0;
 }
 
-.article-card-text {
-  /* Takes the rest of the row; min-width: 0 lets long titles wrap instead of overflowing. */
-  flex: 1;
-  min-width: 0;
+/* The article's category (feed cards and the article page): a pill with a dot in the
+   category's own colour, on a light tint of the same colour. data-category says which
+   category it is; the rules below pick its colour from the tokens. */
+.category-badge {
+  --category-color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text);
+  /* The plain fill is for a browser without color-mix(); the next line overrides it. */
+  background-color: var(--color-surface-muted);
+  background-color: color-mix(in srgb, var(--category-color) 14%, white);
 }
 
-/* The article's category (feed cards and the article page): small capitals in the accent
-   colour, like a section label in a magazine. */
-.category-badge {
-  display: inline-block;
-  padding: 0.2rem 0.65rem;
-  border-radius: 999px;
-  font-size: 0.72rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  background-color: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+.category-badge::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--category-color);
 }
+
+.category-badge[data-category="Politics"] { --category-color: var(--category-politics); }
+.category-badge[data-category="Economy"] { --category-color: var(--category-economy); }
+.category-badge[data-category="World"] { --category-color: var(--category-world); }
+.category-badge[data-category="Technology"] { --category-color: var(--category-technology); }
+.category-badge[data-category="Science"] { --category-color: var(--category-science); }
+.category-badge[data-category="Health"] { --category-color: var(--category-health); }
+.category-badge[data-category="Sports"] { --category-color: var(--category-sports); }
+.category-badge[data-category="Culture"] { --category-color: var(--category-culture); }
 
 /* position: relative lets the title's link (below) cover the whole card. */
 .article-card {
   position: relative;
-  padding: 1.25rem;
 }
 
 .article-card-title {
@@ -639,8 +676,63 @@ nav[aria-label="User list pages"] {
   height: auto;
   aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   margin-bottom: var(--spacing-sm);
+}
+
+/* The first story of the list is featured, as on a news site's front page: the whole row,
+   a bigger title, and (with an image) the text over the image. CSS picks it (the first
+   card in #feed-list), so it follows the list after every search, filter or sort. */
+#feed-list > .article-card:first-child {
+  flex-basis: 100%;
+}
+
+#feed-list > .article-card:first-child .article-card-title {
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+/* The image fills the card behind the text: absolute, under it (z-index: -1 inside the
+   card's own layer, isolation: isolate). The text stays in the normal flow, so a long
+   title makes the card taller instead of overflowing, and the title's link still covers
+   the whole card. */
+#feed-list > .article-card-with-image:first-child {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 24rem;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  isolation: isolate;
+}
+
+#feed-list > .article-card-with-image:first-child .article-card-image {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  height: 100%;
+  aspect-ratio: auto;
+  margin: 0;
+  border-radius: 0;
+}
+
+/* A dark fade from the bottom, so the white text is readable on any photo (the top of the
+   text box is padding, where the fade is still clear). */
+#feed-list > .article-card-with-image:first-child .article-card-text {
+  padding: 6rem var(--spacing-lg) var(--spacing-lg);
+  background: linear-gradient(to top, rgba(28, 20, 16, 0.92), rgba(28, 20, 16, 0.7) 60%, rgba(28, 20, 16, 0));
+  color: white;
+}
+
+#feed-list > .article-card-with-image:first-child .article-card-meta {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* On the dark photo the title stays white under the mouse (rust would be hard to read). */
+#feed-list > .article-card-with-image:first-child:hover .article-card-title a {
+  color: white;
+  text-decoration: underline;
 }
 
 /* The element the IntersectionObserver watches; 1px tall so it can be "seen" even when empty. */
@@ -652,19 +744,27 @@ nav[aria-label="User list pages"] {
 }
 
 /* Full article page (views/public/article.ejs) */
+/* The article sits directly on the white panel, not in a second box. */
 .article-full {
-  padding: var(--spacing-lg);
+  padding: 0 0 var(--spacing-lg);
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
 .article-full-title {
   margin: var(--spacing-sm) 0;
-  font-size: 2.3rem;
-  line-height: 1.2;
+  font-size: 2.6rem;
+  line-height: 1.15;
   letter-spacing: -0.02em;
 }
 
 .article-full figure {
   margin: var(--spacing-md) 0 var(--spacing-lg);
+}
+
+.article-full figure .article-card-image {
+  border-radius: var(--radius);
 }
 
 /* Long text is easiest to read in lines of about 70 characters, slightly larger and with
@@ -683,8 +783,9 @@ nav[aria-label="User list pages"] {
 
 /* The opening paragraph is the lead: larger, like in a magazine. */
 .article-body p:first-child {
-  font-size: 1.25rem;
-  font-weight: 600;
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.5;
   color: var(--color-primary);
 }
 
@@ -826,18 +927,17 @@ nav[aria-label="User list pages"] {
   width: 100%;
 }
 
-/* Editor navigation (views/editor/partials/editorNav.ejs): a row of links; the current
-   page (aria-current="page") is highlighted, so the editor sees where they are. */
+/* Editor navigation (views/editor/partials/editorNav.ejs): a row of pill links on the sand,
+   above the panel; the current page (aria-current="page") is a white pill in the accent
+   colour, so the editor sees where they are. */
 .editor-nav {
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
   padding: 0 var(--spacing-lg);
 }
 
 .editor-nav-list {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs) var(--spacing-lg);
+  gap: var(--spacing-xs) var(--spacing-sm);
   list-style: none;
   padding-left: 0;
   max-width: var(--content-width);
@@ -846,20 +946,17 @@ nav[aria-label="User list pages"] {
 
 .editor-nav-link {
   display: inline-block;
-  padding: var(--spacing-sm) 0;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
   color: var(--color-text);
+  font-weight: 700;
   text-decoration: none;
-  border-bottom: 3px solid transparent;
 }
 
 .editor-nav-link:hover,
 .editor-nav-link[aria-current="page"] {
-  border-bottom-color: var(--color-accent);
+  background-color: var(--color-panel);
   color: var(--color-accent);
-}
-
-.editor-nav-link[aria-current="page"] {
-  font-weight: 800;
 }
 
 /* An article's image on the editor's review page. */
@@ -899,6 +996,17 @@ nav[aria-label="User list pages"] {
   box-shadow: var(--shadow-raised);
 }
 
+/* Each counter has a top edge in its status colour. :has() looks at the badge inside the
+   card, so the view needs no extra class. */
+.status-summary-card {
+  border-top-width: 4px;
+}
+
+.status-summary-card:has(.status-draft) { border-top-color: var(--status-draft); }
+.status-summary-card:has(.status-pending) { border-top-color: var(--status-pending); }
+.status-summary-card:has(.status-published) { border-top-color: var(--status-published); }
+.status-summary-card:has(.status-returned) { border-top-color: var(--status-returned); }
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
@@ -917,12 +1025,9 @@ nav[aria-label="User list pages"] {
     position: static;
   }
 
-  .article-full {
-    padding: var(--spacing-md);
-  }
-
-  .article-full-title {
-    font-size: 1.7rem;
+  .article-full-title,
+  #feed-list > .article-card:first-child .article-card-title {
+    font-size: 1.45rem;
   }
 
   /* Flexbox: the sidebar moves below the content instead of beside it. */
@@ -934,14 +1039,26 @@ nav[aria-label="User list pages"] {
     padding: 0 var(--spacing-md);
   }
 
-  /* Flexbox: rows become columns. */
-  .two-column,
-  .article-card-with-image {
-    flex-direction: column;
+  /* A smaller panel corner, and the feed in one column. */
+  .main-content-wrapper,
+  .page-container > .main-content {
+    border-radius: var(--radius);
   }
 
-  .article-card-with-image .article-card-image {
-    flex-basis: auto;
-    width: 100%;
+  #feed-list > .article-card {
+    flex-basis: 100%;
+  }
+
+  #feed-list > .article-card-with-image:first-child {
+    min-height: 20rem;
+  }
+
+  #feed-list > .article-card-with-image:first-child .article-card-text {
+    padding: 5rem var(--spacing-md) var(--spacing-md);
+  }
+
+  /* Flexbox: rows become columns. */
+  .two-column {
+    flex-direction: column;
   }
 }
