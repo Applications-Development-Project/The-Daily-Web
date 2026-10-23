@@ -28,21 +28,38 @@
 
 /* ---------- 1. Design tokens ---------- */
 
+/* The "warm and soft" look: a cream background, a terracotta accent, rounded corners and
+   gentle shadows. Every colour on the site comes from here, so the whole look changes in
+   this one block. Text colours keep a contrast of at least 4.5:1 on their background
+   (the accessibility guideline for normal text). */
 :root {
-  --color-primary: #2c3e50;
-  --color-secondary: #34495e;
-  --color-accent: #2f7fc1;
-  --color-danger: #c0392b;
-  --color-background: #f8f9fa;
-  --color-surface: #ffffff;
-  --color-text: #222;
-  --color-muted: #5f6b76;
-  --color-border: #dcdfe3;
+  --color-primary: #3d2c24;
+  --color-secondary: #4a3a32;
+  --color-accent: #c2410c;
+  /* Rose rather than orange, so the analytics chart's red publish markers stand out from
+     its terracotta line (both colours are read from here by analytics.js). */
+  --color-danger: #be123c;
+  --color-background: #faf6f0;
+  --color-surface: #fffdf9;
+  /* Light fills: neutral buttons, table headers; the soft accent behind category badges. */
+  --color-surface-muted: #f3ece2;
+  --color-accent-soft: #fbe6d8;
+  --color-text: #2b2420;
+  --color-muted: #75675d;
+  --color-border: #ece3d8;
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
   --spacing-lg: 2rem;
-  --radius: 8px;
+  --radius: 14px;
+  /* Smaller controls (buttons, inputs) get a smaller curve, or they look like pills. */
+  --radius-sm: 10px;
+  /* Two soft layers tinted with the text colour: a close edge plus a wide, faint glow. */
+  --shadow: 0 1px 2px rgba(61, 44, 36, 0.06), 0 4px 14px rgba(61, 44, 36, 0.06);
+  --shadow-raised: 0 2px 4px rgba(61, 44, 36, 0.08), 0 10px 24px rgba(61, 44, 36, 0.1);
+  /* Nunito (rounded letters) is loaded in views/partials/head.ejs; without the internet the
+     browser's own font is used, so the site still works. */
+  --font: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
   --content-width: 1200px;
 }
 
@@ -57,7 +74,7 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font);
   background-color: var(--color-background);
   color: var(--color-text);
   line-height: 1.6;
@@ -136,9 +153,12 @@ form label {
   min-height: 100vh;
 }
 
+/* A light header, separated from the page by a thin line and a soft shadow. */
 .site-header {
-  background-color: var(--color-primary);
-  color: white;
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
   padding: var(--spacing-md) var(--spacing-lg);
   display: flex;
   flex-wrap: wrap;
@@ -149,12 +169,16 @@ form label {
 
 .site-title {
   font-size: 1.8rem;
+  font-weight: 800;
   line-height: 1.2;
 }
 
 .site-header a {
-  color: white;
   text-decoration: none;
+}
+
+.site-title a {
+  color: var(--color-accent);
 }
 
 .site-nav {
@@ -217,7 +241,20 @@ form label {
   border-radius: var(--radius);
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--shadow);
+}
+
+/* A feed card lifts a little under the mouse, so it reads as something to click.
+   Only for a mouse: on a touch screen "hover" would stick after a tap. */
+@media (hover: hover) {
+  .article-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .article-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-raised);
+  }
 }
 
 /* A plain .btn is a neutral button (for example Previous / Next); the colour classes
@@ -226,9 +263,10 @@ form label {
   display: inline-block;
   padding: var(--spacing-sm) var(--spacing-md);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background-color: #e9ecef;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-muted);
   color: var(--color-text);
+  font-weight: 700;
   cursor: pointer;
   text-decoration: none;
   line-height: 1.4;
@@ -247,7 +285,7 @@ form label {
 }
 
 .btn-secondary {
-  background-color: #e9ecef;
+  background-color: var(--color-surface-muted);
   color: var(--color-text);
 }
 
@@ -276,8 +314,17 @@ select:disabled {
   padding: var(--spacing-sm);
   margin-bottom: var(--spacing-sm);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background-color: var(--color-surface);
+}
+
+/* The field being typed in gets the accent border and a soft ring (a keyboard user
+   also gets the :focus-visible outline from section 2). */
+.form-field:is(input, select, textarea):focus,
+.form-field :is(input, select, textarea):focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+  outline: none;
 }
 
 div.form-field {
@@ -309,7 +356,7 @@ div.form-field {
 }
 
 .data-table th {
-  background-color: #eef1f4;
+  background-color: var(--color-surface-muted);
 }
 
 /* Buttons inside a table cell get a little space between them. */
@@ -385,6 +432,10 @@ nav[aria-label="User list pages"] {
   max-width: min(400px, calc(100% - 2 * var(--spacing-md)));
   padding: var(--spacing-lg);
   border: none;
+  border-radius: var(--radius);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-raised);
 }
 
 /* The dark overlay behind the dialog */
@@ -448,7 +499,7 @@ nav[aria-label="User list pages"] {
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: bold;
-  background-color: #e3eef8;
+  background-color: var(--color-accent-soft);
   color: var(--color-primary);
 }
 
@@ -665,6 +716,7 @@ nav[aria-label="User list pages"] {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   cursor: pointer;
   transition: opacity 0.2s ease;
 }
