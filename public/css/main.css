@@ -28,27 +28,31 @@
 
 /* ---------- 1. Design tokens ---------- */
 
-/* The "warm and soft" look: a cream background, a terracotta accent, rounded corners and
+/* The "ocean blue" look: a cool light background, a deep blue accent, rounded corners and
    gentle shadows. Every colour on the site comes from here, so the whole look changes in
    this one block. Text colours keep a contrast of at least 4.5:1 on their background
    (the accessibility guideline for normal text). */
 :root {
-  --color-primary: #3d2c24;
-  --color-secondary: #4a3a32;
-  --color-accent: #c2410c;
-  /* Rose rather than orange, so the analytics chart's red publish markers stand out from
-     its terracotta line (both colours are read from here by analytics.js). */
+  --color-primary: #16324f;
+  --color-secondary: #1b2d42;
+  --color-accent: #1d5fa8;
+  /* Rose, so the analytics chart's red publish markers stand out from its blue line (both
+     colours are read from here by analytics.js). */
   --color-danger: #be123c;
-  --color-background: #faf6f0;
-  --color-surface: #fffdf9;
+  --color-background: #f4f7fb;
+  --color-surface: #ffffff;
   /* Light fills: neutral buttons, table headers; the soft accent behind category badges. */
-  --color-surface-muted: #f3ece2;
-  --color-accent-soft: #fbe6d8;
-  /* A darker accent for small text on the soft accent (the accent itself is under 4.5:1 there). */
-  --color-accent-strong: #9a3412;
-  --color-text: #2b2420;
-  --color-muted: #75675d;
-  --color-border: #ece3d8;
+  --color-surface-muted: #e9eff6;
+  --color-accent-soft: #e1ecf8;
+  /* A darker accent for small text on the soft accent, so it stays easy to read. */
+  --color-accent-strong: #174a85;
+  --color-text: #1b2533;
+  --color-muted: #5b6878;
+  --color-border: #dde5ee;
+  /* The sticky header: the card colour, slightly see-through (the page shows faintly under it). */
+  --color-header: rgba(255, 255, 255, 0.85);
+  /* The weather widget's sky gradient, which sets it apart from the white cards. */
+  --gradient-feature: linear-gradient(135deg, #eef6ff, #d6e8fb);
   --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
@@ -57,8 +61,8 @@
   /* Smaller controls (buttons, inputs) get a smaller curve, or they look like pills. */
   --radius-sm: 10px;
   /* Two soft layers tinted with the text colour: a close edge plus a wide, faint glow. */
-  --shadow: 0 1px 2px rgba(61, 44, 36, 0.06), 0 4px 14px rgba(61, 44, 36, 0.06);
-  --shadow-raised: 0 2px 4px rgba(61, 44, 36, 0.08), 0 10px 24px rgba(61, 44, 36, 0.1);
+  --shadow: 0 1px 2px rgba(27, 37, 51, 0.06), 0 4px 14px rgba(27, 37, 51, 0.06);
+  --shadow-raised: 0 2px 4px rgba(27, 37, 51, 0.08), 0 10px 24px rgba(27, 37, 51, 0.1);
   /* Nunito (rounded letters) is loaded in views/partials/head.ejs; without the internet the
      browser's own font is used, so the site still works. */
   --font: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -199,7 +203,7 @@ form label {
   position: sticky;
   top: 0;
   z-index: 100;
-  background-color: rgba(255, 253, 249, 0.88);
+  background-color: var(--color-header);
   backdrop-filter: blur(10px);
   color: var(--color-text);
   border-bottom: 1px solid var(--color-border);
@@ -771,11 +775,11 @@ nav[aria-label="User list pages"] {
   overflow-wrap: anywhere;
 }
 
-/* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js): a warm
-   sunrise gradient sets it apart from the white cards. */
+/* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js): a
+   gradient sets it apart from the white cards. */
 #weather-widget {
-  background: linear-gradient(135deg, #fff4e8, #fde2cc);
-  border-color: #f7d4b8;
+  background: var(--gradient-feature);
+  border-color: var(--color-accent-soft);
 }
 
 .weather-info {
