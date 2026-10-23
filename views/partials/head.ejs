@@ -43,5 +43,13 @@
 
     <%# Declaring the icon stops browsers from asking for /favicon.ico, which doesn't exist. %>
     <link rel="icon" href="/images/favicon.svg" type="image/svg+xml">
+    <%#
+      The Nunito font (--font in main.css). preconnect opens the connection to Google Fonts
+      early; display=swap shows the text at once in the browser's own font and switches when
+      Nunito arrives, so a slow or missing connection never hides the text.
+    %>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap">
     <link rel="stylesheet" href="/css/main.css">
 </head>
