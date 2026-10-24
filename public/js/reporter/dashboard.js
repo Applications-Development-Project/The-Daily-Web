@@ -2,8 +2,9 @@
  * public/js/reporter/dashboard.js
  *
  * The reporter dashboard's buttons: "New article" (creates an empty draft and opens its
- * edit page) and "Submit for approval" (then the page reloads with the new status). The
- * table itself is rendered on the server.
+ * edit page) and "Submit for approval" (then the page reloads with the new status), and
+ * the status filter (hides the rows of other statuses). The table itself is rendered on
+ * the server.
  *
  * Loaded by: views/reporter/dashboard.ejs, after public/js/shared/apiClient.js.
  * Owner: EZ.
@@ -98,5 +99,48 @@ async function submitArticleFromDashboard(submitButton) {
   window.location.reload();
 }
 
+/**
+ * Connects the status filter: choosing a status hides the rows of every other status.
+ * The server already sent all of the reporter's articles, so this only shows or hides
+ * rows (no request). Does nothing on a page without the filter (no articles yet).
+ *
+ * @returns {void}
+ */
+function setUpStatusFilter() {
+  const statusFilter = document.getElementById('status-filter');
+  const emptyMessage = document.getElementById('status-filter-empty');
+
+  if (!statusFilter || !emptyMessage) {
+    return;
+  }
+
+  const rows = document.querySelectorAll('tbody tr[data-status]');
+
+  /**
+   * Shows the rows of the chosen status (all of them for ""), and a message if none match.
+   *
+   * @returns {void}
+   */
+  function applyStatusFilter() {
+    const chosenStatus = statusFilter.value;
+    let visibleRows = 0;
+
+    rows.forEach(function (row) {
+      const matches = chosenStatus === '' || row.dataset.status === chosenStatus;
+      row.hidden = !matches;
+      if (matches) {
+        visibleRows += 1;
+      }
+    });
+
+    emptyMessage.hidden = visibleRows > 0;
+  }
+
+  statusFilter.addEventListener('change', applyStatusFilter);
+  // Once at the start too: after Back, the browser may restore the chosen status.
+  applyStatusFilter();
+}
+
 document.addEventListener('DOMContentLoaded', setUpReporterDashboard);
 document.addEventListener('DOMContentLoaded', setUpSubmitButtons);
+document.addEventListener('DOMContentLoaded', setUpStatusFilter);
