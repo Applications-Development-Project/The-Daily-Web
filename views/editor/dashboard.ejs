@@ -28,7 +28,7 @@
     <section id="status-summary">
       <% statusOptions.forEach(function (option) { %>
         <button type="button" class="card status-summary-card" data-status="<%= option.value %>">
-          <div class="summary-count" style="font-size: 2rem; font-weight: bold; margin-bottom: var(--spacing-sm);"><%= statusCounts[option.value] || 0 %></div>
+          <span class="summary-count"><%= statusCounts[option.value] || 0 %></span>
           <span class="status-badge status-<%= option.value %>"><%= option.label %></span>
         </button>
       <% }); %>
