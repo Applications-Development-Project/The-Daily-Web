@@ -73,6 +73,9 @@ async function showReporterDashboard(request, response) {
     articles,
     // The view compares with STATUS names instead of typing 'draft' (a typo would be undefined).
     STATUS,
+    // The status filter's choices, from the shared status list (like the editor dashboard's),
+    // so a new status would appear here by itself.
+    statusOptions: Object.values(STATUS).map((status) => ({ value: status, label: STATUS_LABELS[status] })),
   });
 }
 
