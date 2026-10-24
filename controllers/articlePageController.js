@@ -67,11 +67,11 @@ async function findRelatedArticles(article) {
     .select('published.title published.imageUrl published.category lastPublishedAt')
     .lean();
 
-  return articles.map((a) => ({
-    id: a._id.toString(),
-    title: a.published.title,
-    imageUrl: a.published.imageUrl || '',
-    category: a.published.category,
+  return articles.map((relatedArticle) => ({
+    id: relatedArticle._id.toString(),
+    title: relatedArticle.published.title,
+    imageUrl: relatedArticle.published.imageUrl || '',
+    category: relatedArticle.published.category,
   }));
 }
 
