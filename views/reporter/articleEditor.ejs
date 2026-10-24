@@ -6,7 +6,7 @@
   types. The one button is "Submit for approval". User text is printed with the escaping tag.
 
   Rendered by: showArticleEditor (controllers/reporterController.js), for GET /reporter/articles/:id/edit.
-  Locals: title, article ({ id, statusLabel, isLive, editorNote, draft }), categories.
+  Locals: title, article ({ id, status, statusLabel, isLive, editorNote, draft }), categories.
   Owner: EZ.
 %>
 <!DOCTYPE html>
@@ -21,7 +21,8 @@
 
     <p><a href="/reporter">&larr; Back to my articles</a></p>
 
-    <p>Status: <span class="status-badge status-<%= article.isLive ? 'published' : 'draft' %>"><%= article.statusLabel %></span></p>
+    <%# The badge's colour follows the status, like on the dashboard; being live is said below. %>
+    <p>Status: <span class="status-badge status-<%= article.status %>"><%= article.statusLabel %></span></p>
 
     <% if (article.isLive) { %>
       <p class="empty-state">
