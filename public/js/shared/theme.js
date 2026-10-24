@@ -10,6 +10,9 @@
  * system asks for (prefers-color-scheme). It is a display preference of one browser, so it
  * is not stored on the server: guests have no account to attach it to.
  *
+ * It also runs the theme button in the header (#theme-toggle in views/partials/header.ejs):
+ * a click switches the theme and saves the choice.
+ *
  * Loaded by: views/partials/head.ejs, with a plain <script src> in the <head>, on purpose
  * WITHOUT defer or async. The browser then runs it before it draws the page, so a reader
  * who chose dark never sees a white flash first. It is small, so it delays nothing.
@@ -46,6 +49,30 @@
     return systemIsDark ? 'dark' : 'light';
   }
 
+  // The button in the header (views/partials/header.ejs). It does not exist yet while this
+  // script runs in the <head>; it is found once the page is built (see the end of the file).
+  let toggleButton = null;
+
+  /**
+   * Shows on the button the theme a click would switch TO: a moon in the light theme, a sun
+   * in the dark theme. The spoken name says the same, so a screen reader hears what the
+   * button will do. U+FE0E asks for the plain text symbol: without it some systems draw the
+   * sun as a coloured emoji that ignores the page's text colour.
+   *
+   * @param {('light'|'dark')} theme - The theme that is showing now.
+   * @returns {void}
+   */
+  function updateToggleButton(theme) {
+    if (!toggleButton) {
+      return;
+    }
+    const isDark = theme === 'dark';
+    toggleButton.textContent = isDark ? '☀︎' : '☾︎';
+    const label = isDark ? 'Switch to the light theme' : 'Switch to the dark theme';
+    toggleButton.setAttribute('aria-label', label);
+    toggleButton.setAttribute('title', label);
+  }
+
   /**
    * Puts a theme on the page.
    *
@@ -54,6 +81,22 @@
    */
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
+    updateToggleButton(theme);
+  }
+
+  /**
+   * Saves the reader's choice in this browser. A failure (private window, blocked site
+   * data) only means the choice is forgotten at the next page: the theme still switches.
+   *
+   * @param {('light'|'dark')} theme - The theme the reader chose.
+   * @returns {void}
+   */
+  function saveTheme(theme) {
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, theme);
+    } catch (storageError) {
+      // Nothing to do: see above.
+    }
   }
 
   applyTheme(readSavedTheme() || readSystemTheme());
@@ -67,4 +110,22 @@
       }
     });
   }
+
+  // The header exists once the page is built. The button is in the page hidden: without
+  // JavaScript it could not do anything, so it is only shown here, where it works.
+  document.addEventListener('DOMContentLoaded', function () {
+    toggleButton = document.getElementById('theme-toggle');
+    if (!toggleButton) {
+      return;
+    }
+
+    toggleButton.hidden = false;
+    updateToggleButton(document.documentElement.getAttribute('data-theme'));
+
+    toggleButton.addEventListener('click', function () {
+      const nextTheme = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+      applyTheme(nextTheme);
+      saveTheme(nextTheme);
+    });
+  });
 })();
