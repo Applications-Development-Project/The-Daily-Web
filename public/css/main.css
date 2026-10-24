@@ -1058,6 +1058,14 @@ nav[aria-label="User list pages"] {
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 
+/* The number on a counter. A span (a button may hold only inline content); the card is a
+   flex column, so it still sits on its own line above the badge. */
+.summary-count {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: var(--spacing-sm);
+}
+
 /* Lifts like the feed cards (it used to fade, which looked like "disabled"). */
 .status-summary-card:hover {
   transform: translateY(-2px);
