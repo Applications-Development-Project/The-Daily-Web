@@ -1074,6 +1074,19 @@ nav[aria-label="User list pages"] {
 .status-summary-card:has(.status-published) { border-top-color: var(--status-published); }
 .status-summary-card:has(.status-returned) { border-top-color: var(--status-returned); }
 
+/* Reduced motion, for a reader whose system asks for less movement: the cards no longer
+   lift on hover. The block near the top of this file already removes every transition and
+   the smooth scrolling (a transition of "none" would make the lift jump instead of glide,
+   but it would still move). This block comes AFTER every hover rule on purpose: they have
+   the same specificity, so only a later rule wins. The shadow change stays, because it is a
+   colour cue, not movement. */
+@media (prefers-reduced-motion: reduce) {
+  .article-card:hover,
+  .status-summary-card:hover {
+    transform: none;
+  }
+}
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
