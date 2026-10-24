@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Sports illustration 2: an original picture drawn for The Daily Web from simple shapes (no outside
+  source, so it is free to use). The seed (scripts/seed.js) uses it for sports articles.
+  Size 800x450 (16:9) like the photos it replaced; the background is the category colour.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Sports illustration 2">
+  <rect width="800" height="450" fill="#c2570c"/>
+  <rect x="0" y="330" width="800" height="120" fill="#000" opacity=".12"/>
+  <path d="M300 90 H500 V200 Q500 280 400 280 Q300 280 300 200 Z" fill="#fff" opacity=".95"/>
+     <path d="M300 120 H235 Q235 210 305 220 M500 120 H565 Q565 210 495 220" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+     <rect x="385" y="280" width="30" height="50" fill="#fff" opacity=".9"/><rect x="320" y="330" width="160" height="34" rx="8" fill="#fff" opacity=".95"/>
+</svg>

@@ -424,9 +424,12 @@ function buildArticleContent(articleNumber) {
     title: title,
     summary: summary,
     body: buildArticleBody(title, summary, category),
-    // A free placeholder photo service. "seed" makes each article always get the
-    // same photo. Images need internet; the site shows a fallback image without it.
-    imageUrl: `https://picsum.photos/seed/web-daily-${articleNumber}/800/450`,
+    // Our own pictures in public/images/categories/ (two per category), so the demo
+    // never depends on another server or on internet access. storyNumber, not
+    // articleNumber, picks the picture: the category is articleNumber % 8, so within
+    // one category articleNumber always has the same parity and would always give
+    // the same picture. storyNumber goes up by one for each article of a category.
+    imageUrl: `/images/categories/${category.toLowerCase()}-${(storyNumber % 2) + 1}.svg`,
     category: category,
   };
 }

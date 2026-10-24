@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Politics illustration 2: an original picture drawn for The Daily Web from simple shapes (no outside
+  source, so it is free to use). The seed (scripts/seed.js) uses it for politics articles.
+  Size 800x450 (16:9) like the photos it replaced; the background is the category colour.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Politics illustration 2">
+  <rect width="800" height="450" fill="#1f3a5f"/>
+  <rect x="0" y="330" width="800" height="120" fill="#000" opacity=".12"/>
+  <rect x="260" y="190" width="280" height="170" rx="12" fill="#fff" opacity=".85"/>
+     <rect x="340" y="215" width="120" height="14" rx="7" fill="#1f3a5f"/>
+     <rect x="355" y="80" width="90" height="120" fill="#fff" opacity=".95" transform="rotate(-12 400 140)"/>
+     <circle cx="150" cy="120" r="14" fill="#fff" opacity=".5"/><circle cx="650" cy="110" r="10" fill="#fff" opacity=".5"/><circle cx="640" cy="330" r="16" fill="#fff" opacity=".5"/>
+</svg>

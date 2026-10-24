@@ -42,15 +42,20 @@ function formatSavedTime(savedAt) {
 }
 
 /**
- * Checks that a text is empty or an http(s) address, the same rule as the server. Only a
- * convenience here (a half-typed address shouldn't block saving the rest); the server
- * checks again.
+ * Checks that a text is empty, a path on our own site (like the seed's
+ * "/images/categories/politics-1.svg") or an http(s) address, the same rule as the
+ * server. Only a convenience here (a half-typed address shouldn't block saving the
+ * rest); the server checks again.
  *
  * @param {string} imageUrl - The text to check.
- * @returns {boolean} true if it is empty or a valid http(s) address.
+ * @returns {boolean} true if it is empty, a site path or a valid http(s) address.
  */
 function isEmptyOrHttpUrl(imageUrl) {
   if (imageUrl === '') {
+    return true;
+  }
+  // "//" and "/\" are not site paths: a browser reads them as another website.
+  if (imageUrl.startsWith('/') && !imageUrl.startsWith('//') && !imageUrl.startsWith('/\\')) {
     return true;
   }
   try {

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Culture illustration 2: an original picture drawn for The Daily Web from simple shapes (no outside
+  source, so it is free to use). The seed (scripts/seed.js) uses it for culture articles.
+  Size 800x450 (16:9) like the photos it replaced; the background is the category colour.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Culture illustration 2">
+  <rect width="800" height="450" fill="#8a6d00"/>
+  <rect x="0" y="330" width="800" height="120" fill="#000" opacity=".12"/>
+  <rect x="190" y="90" width="420" height="270" rx="10" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/><rect x="225" y="125" width="350" height="200" rx="4" fill="#fff" opacity=".2"/>
+     <circle cx="330" cy="200" r="34" fill="#fff" opacity=".9"/><circle cx="440" cy="190" r="22" fill="#fff" opacity=".7"/>
+     <path d="M225 325 L330 255 L400 300 L480 235 L575 310 V325 Z" fill="#fff" opacity=".9"/>
+</svg>
