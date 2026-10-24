@@ -15,6 +15,7 @@
  *      data-table, status-badge, empty-state, loading...), which every area's views use.
  *   5. Area styles: feed and article (public), weather, comments, login, editor pages.
  *   6. Narrow screens: the changes for phones and small tablets (one media query).
+ *   7. Very narrow phones: the header shrinks a little more (one small media query).
  *
  * Why no inline style="" attributes in the views: styles written here can be changed in one
  * place for every page, and the views stay about structure and content only.
@@ -1082,7 +1083,11 @@ nav[aria-label="User list pages"] {
   }
 
   .site-title {
-    font-size: 1.4rem;
+    font-size: 1.25rem;
+    /* The site name never breaks over two lines. If the title and the buttons do not fit
+       in one row (a very small screen), the header wraps and the buttons go to a second
+       row, instead of squeezing the title into three short lines. */
+    white-space: nowrap;
   }
 
   /* The preview under the form takes the full width and scrolls with the page. */
@@ -1091,9 +1096,37 @@ nav[aria-label="User list pages"] {
     max-width: none;
   }
 
-  /* On a phone the header wraps to two rows; kept at the top it would cover too much. */
+  /* On a phone the header is one compact row (title on the left, buttons on the right) and
+     scrolls away with the page: kept at the top it would cover too much of a small screen.
+     It used to take three rows (title, "Welcome, ...", buttons). */
   .site-header {
     position: static;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  /* The welcome text is hidden on the screen but still read by screen readers (not
+     display: none, which would hide it from them too): the same technique as
+     .visually-hidden in section 2. */
+  .site-welcome {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Smaller buttons that never break their text over two lines. */
+  .site-nav {
+    flex-wrap: nowrap;
+    gap: var(--spacing-sm);
+  }
+
+  .site-nav .btn {
+    padding: 0.3rem 0.85rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
   }
 
   .article-full-title,
@@ -1131,5 +1164,28 @@ nav[aria-label="User list pages"] {
   /* Flexbox: rows become columns. */
   .two-column {
     flex-direction: column;
+  }
+}
+
+/* ---------- 7. Very narrow phones (400px and less) ---------- */
+
+/* The header's title and buttons shrink a little more, so they still fit on one row on the
+   narrowest common phones (320px and 360px wide). */
+@media (max-width: 400px) {
+  .site-header {
+    padding: var(--spacing-sm) 0.75rem;
+  }
+
+  .site-title {
+    font-size: 1.05rem;
+  }
+
+  .site-nav {
+    gap: var(--spacing-xs);
+  }
+
+  .site-nav .btn {
+    padding: 0.25rem 0.65rem;
+    font-size: 0.8rem;
   }
 }
