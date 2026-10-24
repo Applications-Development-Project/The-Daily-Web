@@ -54,14 +54,16 @@ function formatDateTime(date) {
 
 /**
  * Prepares one content object (draft or published) for the page, with the body split
- * into paragraphs (they are separated by a blank line).
+ * into paragraphs (they are separated by a blank line). A "blank" line may hold spaces,
+ * the same rule as the public article page (articlePageController.js), so the editor
+ * sees the paragraphs exactly as readers will.
  *
  * @param {{title: string, summary: string, body: string, imageUrl: string, category: string}} content
  * @returns {{title: string, summary: string, category: string, imageUrl: string, paragraphs: string[]}}
  */
 function toContentView(content) {
   const paragraphs = (content.body || '')
-    .split('\n\n')
+    .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => paragraph !== '');
   return {
@@ -253,22 +255,23 @@ function toArticleRow(article) {
 async function showEditorDashboard(request, response) {
   const statusValues = Object.values(STATUS);
 
-  // Defense question: "Why countDocuments and not loading the articles and counting them?"
-  // MongoDB counts with the index and sends back one number, instead of sending hundreds of documents.
-  // Note: The numbers are from when the page opened. A delete doesn't update them, 
-  // but it's enough for an overview.
+  // countDocuments, not loading the articles: MongoDB counts with the { status } index and
+  // sends back one number instead of hundreds of documents. The four counts run at once.
+  // Known limit: the numbers are from when the page opened (a delete doesn't update them),
+  // which is enough for an overview.
   const counts = await Promise.all(
-    statusValues.map(status => Article.countDocuments({ status }))
+    statusValues.map((status) => Article.countDocuments({ status: status }))
   );
 
+  // Promise.all keeps the order, so counts[statusIndex] belongs to statusValues[statusIndex].
   const statusCounts = {};
-  statusValues.forEach((status, i) => {
-    statusCounts[status] = counts[i];
+  statusValues.forEach((status, statusIndex) => {
+    statusCounts[status] = counts[statusIndex];
   });
 
   // From the shared status list, so the filter offers exactly what the API accepts.
   const statusOptions = statusValues.map((status) => ({ value: status, label: STATUS_LABELS[status] }));
-  
+
   response.render('editor/dashboard', {
     title: 'Articles - Editor - The Daily Web',
     statusOptions: statusOptions,

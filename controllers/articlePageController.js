@@ -48,10 +48,10 @@ function estimateReadingMinutes(body) {
 
 /**
  * Finds up to 3 related articles from the same category, excluding the current one.
- * 
- * Defense question / Performance: Why does this scale well?
- * This query uses the existing index { 'published.category': 1, lastPublishedAt: -1 } 
- * so the database can immediately find the newest articles in the category without scanning.
+ *
+ * Fast with thousands of articles: the { 'published.category': 1, lastPublishedAt: -1 }
+ * index already holds each category's articles newest first, so MongoDB reads only the
+ * first few instead of scanning and sorting.
  *
  * @param {Object} article - The current article document (must have _id and published.category).
  * @returns {Promise<Array<{id: string, title: string, imageUrl: string, category: string}>>}
@@ -67,11 +67,11 @@ async function findRelatedArticles(article) {
     .select('published.title published.imageUrl published.category lastPublishedAt')
     .lean();
 
-  return articles.map((a) => ({
-    id: a._id.toString(),
-    title: a.published.title,
-    imageUrl: a.published.imageUrl || '',
-    category: a.published.category,
+  return articles.map((relatedArticle) => ({
+    id: relatedArticle._id.toString(),
+    title: relatedArticle.published.title,
+    imageUrl: relatedArticle.published.imageUrl || '',
+    category: relatedArticle.published.category,
   }));
 }
 
@@ -98,7 +98,7 @@ async function showArticlePage(request, response) {
     throw createHttpError(404, 'Article not found.');
   }
 
-  // Fetch related articles (Task 2)
+  // "Related articles" under the text, so a reader has somewhere to go next.
   const relatedArticles = await findRelatedArticles(article);
 
   // As many as the comments API sends; deviceId is never loaded.
