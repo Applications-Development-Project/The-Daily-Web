@@ -1,0 +1,67 @@
+<%#
+  views/editor/comments.ejs
+
+  The comment moderation page, sent as an empty frame: public/js/editor/comments.js loads
+  the comments (newest first, with their article, search, pages of 20) and edits and
+  deletes them without reloading.
+
+  Rendered by: showCommentModerationPage (controllers/commentController.js), for GET /editor/comments.
+  Locals: title.
+  Owner: OS.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'comments' }) %>
+
+  <main class="main-content" id="comment-moderation">
+    <h2>Comments</h2>
+
+    <%# maxlength matches the server's search limit. %>
+    <form id="comment-search-form" class="card" role="search">
+      <label for="comment-search">Search comments or author names</label>
+      <input type="search" id="comment-search" name="search" class="form-field"
+        maxlength="100" placeholder="Part of a comment or a name..." autocomplete="off">
+    </form>
+
+    <%# aria-live: screen readers announce the message when it changes. %>
+    <p id="comment-list-status" class="loading" aria-live="polite">Loading comments...</p>
+    <p id="comment-list-error" class="form-error" role="alert" hidden></p>
+
+    <%# On a narrow screen the table scrolls sideways inside this box. %>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Comment</th>
+            <th scope="col">Author</th>
+            <th scope="col">Article</th>
+            <th scope="col">Posted</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="comment-rows"></tbody>
+      </table>
+    </div>
+
+    <nav id="pagination" aria-label="Pages of comments">
+      <button type="button" id="previous-page" class="btn" disabled>Previous</button>
+      <span id="page-info"></span>
+      <button type="button" id="next-page" class="btn" disabled>Next</button>
+    </nav>
+
+    <noscript>
+      <p class="form-error">Comment moderation needs JavaScript. Please turn it on.</p>
+    </noscript>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/shared/confirmDialog.js"></script>
+  <script src="/js/editor/comments.js"></script>
+</body>
+</html>

@@ -1,55 +1,48 @@
 /**
  * controllers/authController.js
  *
- * Logging in and out for reporters and editors.
- * - GET  /login           shows the login page (or sends a logged-in user to their area).
- * - POST /api/auth/login  checks username and password; on success stores
- *                         { id, role, displayName } in req.session.user (the shape fixed in
- *                         "Shared contracts") and answers where to go: /reporter or /editor.
- * - POST /logout          ends the session and goes back to the home page.
+ * Logging in and out: GET /login, POST /api/auth/login (on success the session gets
+ * { id, role, displayName } and the answer says where to go) and POST /logout.
  *
- * After login, every permission check (requireLogin, requireRole) reads the role from
- * this server-side session, never from anything the browser sends.
+ * An unknown username and a wrong password get the same message AND take the same time
+ * (an unknown username is still compared against DUMMY_PASSWORD_HASH), so neither the
+ * message nor the timing reveals which usernames exist.
  *
  * Used by: routes/pageRoutes/authPageRoutes.js, routes/apiRoutes/authApiRoutes.js.
- * Related: models/User.js, config/session.js, views/public/login.ejs, services/logger.js.
  * Owner: OS.
  */
 
+const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const User = require('../models/User');
 const logger = require('../services/logger');
 const { SESSION_COOKIE_NAME } = require('../config/session');
 
-// The same message for an unknown username and for a wrong password, so the login
-// form can't be used to find out which usernames exist.
 const LOGIN_FAILED_MESSAGE = 'Wrong username or password.';
 const MISSING_FIELDS_MESSAGE = 'Please enter your username and password.';
 
-// Same limit as the User model. A longer username can't exist, so we don't search for it.
+// Same limit as the model: a longer username can't exist.
 const MAX_USERNAME_LENGTH = 30;
-// bcrypt only uses the first 72 bytes of a password anyway. Refusing very long input
-// stops anyone from making the server hash megabytes of text.
+// bcrypt uses only the first 72 bytes; refusing long input stops hashing megabytes of text.
 const MAX_PASSWORD_LENGTH = 200;
 
-// Where each role lands after logging in (requirements: a reporter goes to their
-// work area, an editor to the management area).
+// A hash of a random password nobody knows, made once at startup; it can never match.
+// 10 rounds, the same cost as every real hash.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync(crypto.randomUUID(), 10);
+
+// Where each role lands after logging in; decided by the server from the database role.
 const HOME_PAGE_BY_ROLE = {
   reporter: '/reporter',
   editor: '/editor',
 };
 
 /**
- * Reads and checks the login fields from the request body.
+ * Reads the login fields. Both must be strings: { "username": { "$ne": "" } } would
+ * otherwise reach findOne as a query operator and match the first user (NoSQL injection).
  *
- * Both values must be strings. This blocks a NoSQL injection: without the check, a body
- * like { "username": { "$ne": "" } } would reach User.findOne as a query operator
- * ("username not empty") and match the first user in the database.
- *
- * @param {Object|undefined} body - req.body. In Express 5 it is undefined when the
- *   request had no body, so we never read it without checking first.
- * @returns {{username: string, password: string}|null} The cleaned values, or null if
- *   a field is missing, empty or not a string.
+ * @param {Object|undefined} body - req.body (undefined in Express 5 when there is no body).
+ * @returns {{username: string, password: string}|null} The values, or null if a field is
+ *   missing, empty or not a string.
  */
 function readLoginFields(body) {
   if (!body) {
@@ -61,7 +54,7 @@ function readLoginFields(body) {
     return null;
   }
 
-  // Usernames are stored lowercase (see models/User.js), so "Dana" finds "dana".
+  // Usernames are stored lowercase, so "Dana" finds "dana".
   const cleanUsername = username.trim().toLowerCase();
   if (cleanUsername === '' || password === '') {
     return null;
@@ -71,24 +64,23 @@ function readLoginFields(body) {
 }
 
 /**
- * Finds the user and checks the password.
+ * Finds the user and checks the password. bcrypt.compare hashes the typed password with
+ * the salt stored in passwordHash; the password itself is never stored or recovered.
  *
- * bcrypt.compare hashes the typed password with the salt stored inside passwordHash
- * and compares the results; the original password is never stored or recovered.
- *
- * @param {string} username - Lowercase, trimmed username.
- * @param {string} password - The password as typed.
- * @returns {Promise<Object|null>} The user document if both are right, otherwise null.
+ * @param {string} username - Lowercase, trimmed.
+ * @param {string} password - As typed.
+ * @returns {Promise<Object|null>} The user if both are right, otherwise null.
  */
 async function findUserWithPassword(username, password) {
   if (username.length > MAX_USERNAME_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
     return null;
   }
 
-  // passwordHash has select: false in the model, so we must ask for it explicitly.
-  // This is the only query in the app that reads it.
+  // passwordHash has select: false; this is the only query that reads it.
   const user = await User.findOne({ username: username }).select('+passwordHash');
   if (!user) {
+    // The same bcrypt work as a real check, so the timing doesn't reveal anything.
+    await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
     return null;
   }
 
@@ -97,13 +89,11 @@ async function findUserWithPassword(username, password) {
 }
 
 /**
- * Gives the visitor a brand-new session id before we store the user in it.
- * This prevents "session fixation": if an attacker had planted a known session id in
- * someone's browser before they logged in, that id stops working at login.
- * express-session's regenerate() uses a callback; we wrap it in a Promise so the
- * controller can simply "await" it.
+ * Gives the visitor a new session id before storing the user in it, against "session
+ * fixation" (a session id planted in the browser before login stops working).
+ * Wraps the callback of regenerate() in a Promise, so it can be awaited.
  *
- * @param {import('express').Request} request - The request whose session is replaced.
+ * @param {import('express').Request} request
  * @returns {Promise<void>}
  * @throws {Error} If the session store fails.
  */
@@ -120,10 +110,9 @@ function regenerateSession(request) {
 }
 
 /**
- * Deletes the session from the session store (MongoDB), so the old cookie no longer
- * logs anyone in, even if it was copied. Wrapped in a Promise like regenerateSession.
+ * Deletes the session from MongoDB, so the old cookie no longer works, even if copied.
  *
- * @param {import('express').Request} request - The request whose session is deleted.
+ * @param {import('express').Request} request
  * @returns {Promise<void>}
  * @throws {Error} If the session store fails.
  */
@@ -140,11 +129,10 @@ function destroySession(request) {
 }
 
 /**
- * GET /login - shows the login page. Someone who is already logged in goes straight
- * to their own area instead of seeing a form they don't need.
+ * GET /login - the login page; a logged-in user goes straight to their area.
  *
- * @param {import('express').Request} request - request.session.user is set if logged in.
- * @param {import('express').Response} response - Renders the page or redirects.
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
  * @returns {void}
  */
 function showLoginPage(request, response) {
@@ -157,14 +145,11 @@ function showLoginPage(request, response) {
 }
 
 /**
- * POST /api/auth/login - body { username, password }.
- * Answers 200 { success: true, data: { redirectTo } } on success,
- * 400 if a field is missing, and 401 with one generic message if the username or
- * password is wrong. Errors from the database or session store go to errorHandler
- * (Express 5 passes a rejected promise from an async controller on by itself).
+ * POST /api/auth/login - body { username, password }. Answers 200 { success: true,
+ * data: { redirectTo } }, 400 if a field is missing, 401 if the username or password is wrong.
  *
- * @param {import('express').Request} request - The login request.
- * @param {import('express').Response} response - The JSON answer.
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
  * @returns {Promise<void>}
  */
 async function logIn(request, response) {
@@ -176,17 +161,15 @@ async function logIn(request, response) {
 
   const user = await findUserWithPassword(loginFields.username, loginFields.password);
   if (!user) {
-    // JSON.stringify puts the username in quotes and escapes line breaks, so a username
-    // typed with a line break can't fake an extra line in the log.
+    // JSON.stringify quotes the name, so a typed line break can't fake a log line.
+    // The password is never logged.
     logger.info(`Failed login for username ${JSON.stringify(loginFields.username)}`);
     response.status(401).json({ success: false, error: LOGIN_FAILED_MESSAGE });
     return;
   }
 
   await regenerateSession(request);
-  // Only these three fields go in the session: enough for permission checks and the
-  // header, and never the password hash. express-session saves the session to MongoDB
-  // before the response is sent.
+  // Only these three fields go in the session, never the password hash.
   request.session.user = {
     id: user._id.toString(),
     role: user.role,
@@ -198,11 +181,11 @@ async function logIn(request, response) {
 }
 
 /**
- * POST /logout - sent by the plain HTML form in the site header (works without
- * JavaScript). Deletes the session, clears the cookie and goes back to the home page.
- * requireLogin runs before it, so request.session.user always exists here.
+ * POST /logout - from the header's plain form. Deletes the session, clears the cookie and
+ * goes home. POST, not GET: a POST started by another site arrives without our
+ * sameSite: 'lax' cookie, so requireLogin turns it away.
  *
- * @param {import('express').Request} request - The logout request.
+ * @param {import('express').Request} request
  * @param {import('express').Response} response - Redirects to "/".
  * @returns {Promise<void>}
  */
@@ -210,8 +193,7 @@ async function logOut(request, response) {
   const displayName = request.session.user.displayName;
 
   await destroySession(request);
-  // The cookie would be ignored anyway now that its session is gone, but clearing it
-  // leaves nothing behind in the browser.
+  // Useless without its session anyway, but nothing is left behind.
   response.clearCookie(SESSION_COOKIE_NAME);
 
   logger.info(`User "${displayName}" logged out`);

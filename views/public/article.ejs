@@ -1,0 +1,132 @@
+<%#
+  views/public/article.ejs
+
+  The full article page and its comments. Everything, the full text and the existing
+  comments included, is in the HTML the server sends, so search engines read it without
+  JavaScript. articleComments.js only adds a NEW comment to the top of the list.
+
+  Text from the database is printed with the escaping tag. The comments area is a contract
+  with public/js/public/articleComments.js: the element ids and the markup of one comment.
+
+  Rendered by: showArticlePage (controllers/articlePageController.js), for GET /articles/:id.
+  Locals: title, description, openGraph, structuredData, article, comments, relatedArticles.
+  Owner: SH (page). The comments script is OS's.
+%>
+<%
+  // For example "10 Oct 2026, 14:32", as on the rest of the site.
+  const dateFormat = { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' };
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', {
+    title: title,
+    description: description,
+    openGraph: openGraph,
+    structuredData: structuredData
+}) %>
+<body class="page-container">
+    <%#
+      Reading progress bar, filled by readingProgress.js as the reader scrolls. It only
+      decorates (the scroll bar says the same), so screen readers skip it.
+    %>
+    <div id="reading-progress" aria-hidden="true"></div>
+
+    <%- include('../partials/header') %>
+
+    <div class="main-content-wrapper">
+        <main class="main-content">
+            <p><a href="/">&larr; Back to all news</a></p>
+
+            <%# id="top": the target of the "Back to top" link at the end of the article. %>
+            <article id="top" class="card article-full">
+                <header>
+                    <%# data-category: the stylesheet colours the pill's dot by category. %>
+                    <span class="category-badge" data-category="<%= article.category %>"><%= article.category %></span>
+                    <h2 class="article-full-title"><%= article.title %></h2>
+                    <p class="article-card-meta">
+                        By <%= article.reporterName %>
+                        <% if (article.publishedAt) { %>
+                            | Published <time datetime="<%= article.publishedAt.toISOString() %>"><%= article.publishedAt.toLocaleString('en-GB', dateFormat) %></time>
+                        <% } %>
+                        | <%= article.readingMinutes %> min read
+                    </p>
+                </header>
+
+                <% if (article.imageUrl) { %>
+                    <%# onerror: a broken image shows our placeholder. %>
+                    <figure>
+                        <img class="article-card-image" src="<%= article.imageUrl %>" alt="<%= article.title %>"
+                            onerror="this.onerror=null; this.src='/images/placeholder.svg';">
+                    </figure>
+                <% } %>
+
+                <div class="article-body">
+                    <% article.paragraphs.forEach(function (paragraph) { %>
+                        <p><%= paragraph %></p>
+                    <% }); %>
+                </div>
+
+                <%# A plain link: it works without JavaScript. %>
+                <a href="#top" class="back-to-top">Back to top &uarr;</a>
+            </article>
+
+            <%# Up to 3 of the newest other articles in the same category (findRelatedArticles). %>
+            <% if (typeof relatedArticles !== 'undefined' && relatedArticles.length > 0) { %>
+                <section class="related-articles" aria-labelledby="related-heading">
+                    <h3 id="related-heading">Related articles</h3>
+                    <div class="related-articles-grid">
+                        <% relatedArticles.forEach(function (relatedArticle) { %>
+                            <div class="card">
+                                <a href="/articles/<%= relatedArticle.id %>"><%= relatedArticle.title %></a>
+                            </div>
+                        <% }); %>
+                    </div>
+                </section>
+            <% } %>
+
+            <section id="comments" class="card" data-article-id="<%= article.id %>" aria-labelledby="comments-title">
+                <h3 id="comments-title">Comments</h3>
+
+                <%# Newest first, as many as the comments API sends. %>
+                <ul id="comment-list">
+                    <% comments.forEach(function (comment) { %>
+                        <li class="comment">
+                            <p class="comment-meta">
+                                <span class="comment-author"><%= comment.authorName %></span>
+                                <time class="comment-date" datetime="<%= comment.createdAt.toISOString() %>"><%= comment.createdAt.toLocaleString('en-GB', dateFormat) %></time>
+                            </p>
+                            <p class="comment-text"><%= comment.text %></p>
+                        </li>
+                    <% }); %>
+                    <% if (comments.length === 0) { %>
+                        <li class="empty-state">No comments yet.</li>
+                    <% } %>
+                </ul>
+
+                <%#
+                  The script sends the form with fetch. method="post" matters only if the script
+                  failed to load (GET would put the comment in the address bar). The server checks
+                  the same rules again, and the 3-per-minute limit.
+                %>
+                <form id="comment-form" method="post">
+                    <label for="comment-author-name">Your name</label>
+                    <input type="text" id="comment-author-name" name="authorName" class="form-field" maxlength="50" required>
+                    <label for="comment-text">Your comment</label>
+                    <textarea id="comment-text" name="text" class="form-field" rows="4" maxlength="1000" required></textarea>
+                    <p id="comment-error" class="form-error" role="alert" hidden></p>
+                    <button type="submit" class="btn btn-primary">Post comment</button>
+                </form>
+            </section>
+        </main>
+
+        <%- include('../partials/sidebar') %>
+    </div>
+
+    <%- include('../partials/footer') %>
+
+    <script src="/js/shared/apiClient.js"></script>
+    <script src="/js/public/articleComments.js"></script>
+    <script src="/js/public/readingProgress.js"></script>
+    <script src="/js/public/weatherWidget.js"></script>
+</body>
+</html>

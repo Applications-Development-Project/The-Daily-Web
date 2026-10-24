@@ -1,0 +1,155 @@
+<%#
+  views/editor/articleReview.ejs
+
+  The review page of one article: details, the editor's note, the content, the Edit
+  form, the decision (approve or return with a note) and the publish history. For a
+  live article with an update in progress, the live version and the submitted changes
+  are shown side by side with the changed fields marked.
+
+  Everything a reporter typed is printed with the escaping tag (equals sign), so it is
+  shown as text; the minus-sign tag is used only to include our own templates.
+
+  Rendered by: showArticleReview (controllers/editorController.js), for GET /editor/articles/:id.
+  Locals: title, review (from toReviewView), categories (for the Edit form).
+  Script: public/js/editor/articleReview.js.
+  Owner: SM.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'dashboard' }) %>
+
+  <main class="main-content">
+    <p><a href="/editor">&larr; All articles</a></p>
+
+    <article id="article-review" data-article-id="<%= review.id %>">
+      <header>
+        <h2><%= review.title %></h2>
+        <p>
+          <span class="status-badge status-<%= review.status %>"><%= review.statusLabel %></span>
+          By <%= review.reporterName %> &middot;
+          <%= review.isLive ? 'Live on the site' : 'Not published yet' %> &middot;
+          Last change <%= review.updatedAt %>
+        </p>
+        <%# Only a live article has views to show. %>
+        <% if (review.isLive) { %>
+          <p><a href="/editor/analytics?article=<%= encodeURIComponent(review.id) %>">See its views over time (Impact Analytics)</a></p>
+        <% } %>
+      </header>
+
+      <% if (review.editorNote) { %>
+        <section class="card">
+          <h3>Note to the reporter</h3>
+          <p><%= review.editorNote %></p>
+        </section>
+      <% } %>
+
+      <% if (!review.isLive) { %>
+        <%- include('partials/articleContent', { heading: 'Submitted content', content: review.draft }) %>
+
+      <% } else if (review.changedFields.length === 0) { %>
+        <%- include('partials/articleContent', { heading: 'Live version (no changes in progress)', content: review.published }) %>
+
+      <% } else { %>
+        <p class="card"><strong>Changed in this update:</strong> <%= review.changedFieldLabels.join(', ') %></p>
+        <%# two-column (main.css): side by side, one column on a phone. %>
+        <div class="two-column">
+          <%- include('partials/articleContent', { heading: 'Currently live', content: review.published, changedFields: review.changedFields }) %>
+          <%- include('partials/articleContent', { heading: 'Submitted changes', content: review.draft, changedFields: review.changedFields }) %>
+        </div>
+      <% } %>
+
+      <%#
+        The Edit form, folded away by details/summary until opened. For a live article,
+        saving publishes at once, so the script asks for confirmation. The browser limits
+        match the server's checks, which run again on the server.
+      %>
+      <% if (review.canEdit) { %>
+        <details class="card" id="edit-section">
+          <% if (review.editPublishesOnSave) { %>
+            <summary><strong>Edit the live article</strong> (saving publishes your changes to readers at once)</summary>
+          <% } else { %>
+            <summary><strong>Edit the working version</strong> (the status stays "<%= review.statusLabel %>")</summary>
+          <% } %>
+          <form id="edit-form" data-publishes-on-save="<%= review.editPublishesOnSave ? 'true' : 'false' %>">
+            <label for="edit-title">Title</label>
+            <input type="text" id="edit-title" name="title" class="form-field" maxlength="200" required value="<%= review.editableDraft.title %>">
+
+            <label for="edit-summary">Summary</label>
+            <textarea id="edit-summary" name="summary" class="form-field" rows="3" maxlength="500" required><%= review.editableDraft.summary %></textarea>
+
+            <label for="edit-category">Category</label>
+            <select id="edit-category" name="category" class="form-field" required>
+              <option value="">Choose a category</option>
+              <% categories.forEach(function (category) { %>
+                <option value="<%= category %>"<% if (category === review.editableDraft.category) { %> selected<% } %>><%= category %></option>
+              <% }); %>
+            </select>
+
+            <%#
+              type="text", not "url": the browser's url check refuses a picture on our own site
+              (/images/categories/...), which most articles have, and then it blocks the whole
+              form. inputmode="url" still gives phones the address keyboard. The server checks
+              the address (services/draftValidation.js).
+            %>
+            <label for="edit-image">Main image address (optional: http://, https:// or a picture on this site)</label>
+            <input type="text" inputmode="url" id="edit-image" name="imageUrl" class="form-field" maxlength="2000" value="<%= review.editableDraft.imageUrl %>">
+
+            <label for="edit-body">Body (leave an empty line between paragraphs)</label>
+            <textarea id="edit-body" name="body" class="form-field" rows="14" maxlength="50000" required><%= review.editableDraft.body %></textarea>
+
+            <p id="edit-message" aria-live="polite" hidden></p>
+            <button type="submit" class="btn btn-primary"><%= review.editPublishesOnSave ? 'Save and publish' : 'Save changes' %></button>
+          </form>
+        </details>
+      <% } %>
+
+      <%# Shown only when the workflow allows a decision; the server checks again. %>
+      <% if (review.canApprove || review.canReturn) { %>
+        <section class="card" id="review-decision">
+          <h3>Your decision</h3>
+          <p id="decision-message" aria-live="polite" hidden></p>
+
+          <% if (review.canApprove) { %>
+            <button type="button" id="approve-button" class="btn btn-primary">Approve and publish</button>
+          <% } %>
+
+          <% if (review.canReturn) { %>
+            <form id="return-form">
+              <label for="return-note">Note to the reporter: what needs to be fixed? (required)</label>
+              <textarea id="return-note" name="note" class="form-field" rows="4" maxlength="2000" required></textarea>
+              <button type="submit" class="btn btn-danger">Return for corrections</button>
+            </form>
+          <% } %>
+        </section>
+      <% } else { %>
+        <p class="card">No decision is needed now: this article is "<%= review.statusLabel %>".
+          The editor decides only on articles awaiting approval.</p>
+      <% } %>
+
+      <section class="card">
+        <h3>Publish history</h3>
+        <% if (review.publishHistory.length === 0) { %>
+          <p class="empty-state">Never published.</p>
+        <% } else { %>
+          <%# reversed: newest first, but the first approval keeps number 1. %>
+          <ol reversed>
+            <% review.publishHistory.forEach(function (publishEvent) { %>
+              <li>Published <%= publishEvent.publishedAt %> by <%= publishEvent.editorName %></li>
+            <% }); %>
+          </ol>
+        <% } %>
+      </section>
+    </article>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/shared/confirmDialog.js"></script>
+  <script src="/js/editor/articleReview.js"></script>
+</body>
+</html>

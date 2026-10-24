@@ -1,0 +1,131 @@
+<%#
+  views/reporter/articleEditor.ejs
+
+  The reporter's article editor: the five draft fields, filled from the draft on the
+  server. No Save button: public/js/reporter/articleEditor.js saves while the reporter
+  types. The one button is "Submit for approval". User text is printed with the escaping tag.
+
+  Rendered by: showArticleEditor (controllers/reporterController.js), for GET /reporter/articles/:id/edit.
+  Locals: title, article ({ id, status, statusLabel, isLive, editorNote, draft }), categories.
+  Owner: EZ.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+
+  <main class="main-content">
+    <h2>Edit article</h2>
+
+    <p><a href="/reporter">&larr; Back to my articles</a></p>
+
+    <%# The badge's colour follows the status, like on the dashboard; being live is said below. %>
+    <p>Status: <span class="status-badge status-<%= article.status %>"><%= article.statusLabel %></span></p>
+
+    <% if (article.isLive) { %>
+      <p class="empty-state">
+        This article is live. Readers keep seeing the published version until an editor
+        approves your changes.
+      </p>
+    <% } %>
+
+    <% if (article.editorNote) { %>
+      <p class="form-error"><strong>Editor's note:</strong> <%= article.editorNote %></p>
+    <% } %>
+
+    <%# role="status": screen readers announce "Saved at ..." (there is no Save button to tell them). %>
+    <p id="save-status" role="status">Your work is saved automatically.</p>
+
+    <%#
+      Shown by the script when the login session ends (401). The link opens the login page
+      in a NEW tab, so the unsaved text in this tab isn't lost; the login cookie is shared
+      by all tabs.
+    %>
+    <p id="session-expired-notice" class="form-error" role="alert" hidden>
+      <strong>Your login session has ended.</strong> Your text is still on this page, but it is
+      not saved. <a href="/login" target="_blank" rel="noopener">Log in again in a new tab</a>,
+      then come back here: your work is saved automatically, or click "Submit for approval".
+    </p>
+
+    <%# The form and the preview of its card: side by side on a wide screen (see main.css). %>
+    <div class="editor-layout">
+    <%# No action or submit button: the script sends the fields with fetch (no page reload). %>
+    <form id="article-form" data-article-id="<%= article.id %>">
+      <div class="form-field">
+        <label for="article-title">Title</label>
+        <input type="text" id="article-title" name="title" maxlength="200" value="<%= article.draft.title %>">
+        <%# The script fills the counters (it reads each field's maxlength). aria-live: screen readers hear the change. %>
+        <p class="char-counter" id="title-counter" aria-live="polite"></p>
+      </div>
+
+      <div class="form-field">
+        <label for="article-summary">Summary</label>
+        <textarea id="article-summary" name="summary" rows="3" maxlength="500"><%= article.draft.summary %></textarea>
+        <p class="char-counter" id="summary-counter" aria-live="polite"></p>
+      </div>
+
+      <div class="form-field">
+        <label for="article-category">Category</label>
+        <select id="article-category" name="category">
+          <%# Empty is allowed while writing; submitting requires a category. %>
+          <option value="">Choose a category</option>
+          <% categories.forEach(function (category) { %>
+            <option value="<%= category %>"<%= article.draft.category === category ? ' selected' : '' %>><%= category %></option>
+          <% }); %>
+        </select>
+      </div>
+
+      <div class="form-field">
+        <%#
+          type="text", not "url": the browser's url check calls a picture on our own site
+          (/images/categories/...) invalid, though the server accepts it. inputmode="url" still
+          gives phones the address keyboard. articleEditor.js and the server check the address.
+        %>
+        <label for="article-image-url">Image URL</label>
+        <input type="text" inputmode="url" id="article-image-url" name="imageUrl" maxlength="2000" value="<%= article.draft.imageUrl %>">
+      </div>
+
+      <div class="form-field">
+        <label for="article-body">Article text</label>
+        <textarea id="article-body" name="body" rows="15" maxlength="50000"><%= article.draft.body %></textarea>
+        <p class="char-counter" id="body-counter" aria-live="polite"></p>
+      </div>
+    </form>
+
+    <%#
+      How the article's card will look in the feed: the same classes as a card in
+      views/public/feed.ejs, so it gets the same style. The script copies the form into it
+      while the reporter types (textContent only, never innerHTML). The text shown here
+      before the script runs is only a placeholder. It is not a live region (aria-live):
+      announcing every keystroke twice would only be noise for a screen reader.
+    %>
+    <section id="card-preview" class="editor-preview" aria-labelledby="card-preview-heading">
+      <h3 id="card-preview-heading">Preview in the feed</h3>
+      <article class="card article-card article-card-with-image">
+        <img class="article-card-image" id="preview-image" src="/images/placeholder.svg" alt="" hidden>
+        <div class="article-card-text">
+          <span class="category-badge" id="preview-category" hidden></span>
+          <h3 class="article-card-title" id="preview-title">Your headline appears here</h3>
+          <p class="article-card-meta">By <%= currentUser.displayName %> | Preview</p>
+          <p id="preview-summary">Your summary appears here.</p>
+        </div>
+      </article>
+    </section>
+    </div>
+
+    <%# type="button", outside the form: it never submits the form the normal way. The script saves first, then submits. %>
+    <p>After you submit, the editor reviews the article and you can't change it until they decide.</p>
+    <p>
+      <button type="button" id="submit-article-button" class="btn btn-primary">Submit for approval</button>
+    </p>
+    <p id="submit-error" class="form-error" role="alert"></p>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/reporter/articleEditor.js"></script>
+</body>
+</html>

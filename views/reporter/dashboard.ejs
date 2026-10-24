@@ -1,0 +1,112 @@
+<%#
+  views/reporter/dashboard.ejs
+
+  The reporter's dashboard: their own articles, newest update first, with the status and
+  the actions that status allows (Edit for draft, returned and published; Submit for draft
+  and returned; nothing while pending). The server enforces the same rules; hiding a
+  button is never the protection. User text is printed with the escaping tag.
+
+  Rendered by: showReporterDashboard (controllers/reporterController.js), for GET /reporter.
+  Locals: title, articles (from findReporterArticles), STATUS, statusOptions.
+  Script: public/js/reporter/dashboard.js (New article, Submit for approval, status filter).
+  Owner: EZ.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+
+  <main class="main-content">
+    <h2>My articles</h2>
+
+    <%# Outside the "if" below, so a reporter with no articles can create the first one. %>
+    <p>
+      <button type="button" id="new-article-button" class="btn btn-primary">New article</button>
+    </p>
+    <p id="new-article-error" class="form-error" role="alert"></p>
+
+    <% if (articles.length === 0) { %>
+      <p class="empty-state">You have no articles yet.</p>
+    <% } else { %>
+      <%#
+        Status filter. Every one of the reporter's articles is already in the table (no paging),
+        so dashboard.js filters the rows in the browser: no request, no reload. Each row's
+        data-status says which status it has.
+      %>
+      <form id="status-filter-form" class="card" role="search">
+        <label for="status-filter">Show articles that are</label>
+        <select id="status-filter" class="form-field">
+          <option value="">All statuses</option>
+          <% statusOptions.forEach(function (option) { %>
+            <option value="<%= option.value %>"><%= option.label %></option>
+          <% }); %>
+        </select>
+      </form>
+      <p id="status-filter-empty" class="empty-state" hidden>No articles with this status.</p>
+
+      <%# On a narrow screen the table scrolls sideways inside this box. %>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Title</th>
+              <th scope="col">Category</th>
+              <th scope="col">Status</th>
+              <th scope="col">Last update</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% articles.forEach(function (article) { %>
+              <tr data-status="<%= article.status %>">
+                <td>
+                  <%= article.title || '(Untitled)' %>
+
+                  <%# The note stays visible after a resubmit (pending), until the editor decides. %>
+                  <% if ((article.status === STATUS.RETURNED || article.status === STATUS.PENDING) && article.editorNote) { %>
+                    <p class="form-error"><strong>Editor's note:</strong> <%= article.editorNote %></p>
+                  <% } %>
+                </td>
+                <td><%= article.category || '-' %></td>
+                <td>
+                  <span class="status-badge status-<%= article.status %>"><%= article.statusLabel %></span>
+
+                  <%# Readers still see the approved version while a new one is prepared. %>
+                  <% if (article.isLive && article.status !== STATUS.PUBLISHED) { %>
+                    <span class="status-badge status-published">Live version online</span>
+                  <% } %>
+                </td>
+                <td>
+                  <time datetime="<%= new Date(article.updatedAt).toISOString() %>">
+                    <%= new Date(article.updatedAt).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %>
+                  </time>
+                </td>
+                <td>
+                  <% if (article.status === STATUS.PENDING) { %>
+                    Waiting for the editor
+                  <% } else { %>
+                    <a href="/reporter/articles/<%= article.id %>/edit" class="btn btn-primary">Edit</a>
+
+                    <%# A plain "Published" article has nothing new to submit until it is edited. %>
+                    <% if (article.status === STATUS.DRAFT || article.status === STATUS.RETURNED) { %>
+                      <button type="button" class="btn btn-primary submit-article-button" data-article-id="<%= article.id %>">Submit for approval</button>
+                      <p class="form-error submit-error" role="alert"></p>
+                    <% } %>
+                  <% } %>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    <% } %>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/reporter/dashboard.js"></script>
+</body>
+</html>

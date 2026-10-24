@@ -1,10 +1,9 @@
 /**
  * routes/pageRoutes/reporterPageRoutes.js
  *
- * Page routes for the reporter area. Mounted at "/" in app.js.
- * Created by OS in phase 0 with the paths and access from the routes table in
- * "Shared contracts"; the controller behind them is a PLACEHOLDER until EZ replaces it.
+ * Page routes for the reporter area (dashboard and article editor), mounted at "/" in app.js.
  *
+ * Related: controllers/reporterController.js, middleware/requireRole.js.
  * Owner: EZ.
  */
 
@@ -14,8 +13,8 @@ const reporterController = require('../../controllers/reporterController');
 
 const router = express.Router();
 
-// Reporters only. requireRole also sends guests to /login.
-// Whether the article belongs to this reporter is checked in the controller.
+// requireRole runs first, on the server: guests go to /login, editors get a 403 page.
+// The edit page's controller also checks that the article is this reporter's (403 otherwise).
 router.get('/reporter', requireRole('reporter'), reporterController.showReporterDashboard);
 router.get('/reporter/articles/:id/edit', requireRole('reporter'), reporterController.showArticleEditor);
 

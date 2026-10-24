@@ -1,23 +1,152 @@
 /**
  * public/css/main.css
- * Shared styles and Flexbox layouts for The Web Daily.
- * Owner: SH
+ *
+ * The one stylesheet of the whole site, loaded by views/partials/head.ejs on every page.
+ * One file means one download that the browser caches for every page after the first.
+ *
+ * Requirements this serves: an HTML5/CSS site whose layout is built with Flexbox, and an
+ * interface that works on a computer, a tablet and a phone (responsive).
+ *
+ * How it is organised (in this order):
+ *   1. Design tokens: colours and spacing as CSS variables, defined once and reused; right
+ *      after them the dark theme, which redefines only the colour tokens.
+ *   2. Base elements: body, links, headings, form controls.
+ *   3. Page layout (Flexbox): header, the content + sidebar row, pages without a sidebar, footer.
+ *   4. Shared components: the class names fixed in "Shared contracts" (btn, card, form-field,
+ *      data-table, status-badge, empty-state, loading...), which every area's views use.
+ *   5. Area styles: feed and article (public), weather, comments, login, editor pages.
+ *   6. Narrow screens: the changes for phones and small tablets (one media query).
+ *   7. Very narrow phones: the header shrinks a little more (one small media query).
+ *
+ * Why no inline style="" attributes in the views: styles written here can be changed in one
+ * place for every page, and the views stay about structure and content only.
+ *
+ * Why Flexbox for every layout (no floats, no CSS grid): the course teaches Flexbox and the
+ * requirements name it, and it lets the sidebar move below the content on a phone by changing
+ * one line (flex-direction), with no fixed widths.
+ *
+ * Owner: SH (shared classes and public pages). Every area's views use it.
  */
 
-/* Base Reset & Variables */
+/* ---------- 1. Design tokens ---------- */
+
+/* The "sand and rust" look: a sand-coloured page with the content on a big white rounded
+   panel, warm cards, pill-shaped buttons in rust, and a colour per news category. Every
+   colour on the site comes from here, so the whole look changes in this one block. Text
+   colours keep a contrast of at least 4.5:1 on their background (the accessibility
+   guideline for normal text). */
 :root {
-  --color-primary: #2c3e50;
-  --color-secondary: #34495e;
-  --color-accent: #3498db;
-  --color-danger: #e74c3c;
-  --color-background: #f8f9fa;
-  --color-text: #333;
-  --color-border: #ddd;
+  --color-primary: #231c18;
+  --color-secondary: #3a2e27;
+  --color-accent: #a0462a;
+  /* Crimson: reads as a warning, and the analytics chart's publish markers (this colour)
+     stand out from its rust line (the accent); analytics.js reads both from here. */
+  --color-danger: #be123c;
+  /* The text on a button filled with the accent or danger colour. A token, because in the
+     dark theme those fills are light, and white text on them would be unreadable. */
+  --color-on-accent: #ffffff;
+  /* The dim layer behind the confirm dialog. */
+  --color-overlay: rgba(0, 0, 0, 0.5);
+  /* The page behind the panel, the panel itself, and the cards on the panel. */
+  --color-background: #efe6dc;
+  --color-panel: #ffffff;
+  --color-surface: #fbf7f2;
+  /* Light fills: neutral buttons, table headers, comment bubbles; the soft accent for the
+     text selection and the focus ring. */
+  --color-surface-muted: #f3ece3;
+  --color-accent-soft: #f6e2d9;
+  --color-text: #231c18;
+  --color-muted: #6b5f57;
+  --color-border: #ece3d8;
+  /* The sticky header: a darker sand than the page, so it reads as its own bar; slightly
+     see-through (the page shows faintly under it). The header's text is --color-text,
+     11.7:1 on it. */
+  --color-header: rgba(227, 213, 197, 0.94);
+  --color-header-border: #d6c4b0;
+  /* The weather widget: a warm peach fade, so it stands out from the cards. */
+  --gradient-feature: linear-gradient(135deg, #fff1e6, #fbdcc8);
+  /* The four article statuses (badges and dashboard counters). */
+  --status-draft: #f1c40f;
+  --status-pending: #b35c00;
+  --status-published: #1e8449;
+  --status-returned: var(--color-danger);
+  /* One colour per news category, for the dot in its pill (see .category-badge). */
+  --category-politics: #a0462a;
+  --category-economy: #c98a1b;
+  --category-world: #2b7a78;
+  --category-technology: #4f5bd5;
+  --category-science: #3a8a4f;
+  --category-health: #d14d72;
+  --category-sports: #2f80c4;
+  --category-culture: #8a4fbf;
+  --spacing-xs: 0.25rem;
   --spacing-sm: 0.5rem;
   --spacing-md: 1rem;
   --spacing-lg: 2rem;
+  --radius: 16px;
+  /* Smaller controls (inputs) get a smaller curve; buttons and badges are full pills. */
+  --radius-sm: 10px;
+  --radius-panel: 28px;
+  /* Two soft layers tinted with the text colour: a close edge plus a wide, faint glow. */
+  --shadow: 0 1px 2px rgba(35, 28, 24, 0.05), 0 4px 14px rgba(35, 28, 24, 0.05);
+  --shadow-raised: 0 2px 4px rgba(35, 28, 24, 0.07), 0 12px 28px rgba(35, 28, 24, 0.1);
+  /* Nunito (rounded letters) is loaded in views/partials/head.ejs; without the internet the
+     browser's own font is used, so the site still works. */
+  --font: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --content-width: 1200px;
 }
 
+/* ---------- The dark theme ---------- */
+
+/* The dark theme redefines only the colour tokens (and the shadows); no rule below needs to
+   know about it. public/js/shared/theme.js puts data-theme="dark" on <html> before the page
+   draws. It keeps the same warm brown family as the light theme: a very dark brown page,
+   a slightly lighter panel, and a lighter orange accent (the light theme's rust is too dark
+   to read as a link on a dark background). Every text colour has a contrast of at least
+   4.5:1 on the colour it sits on, and the category dots at least 3:1.
+   color-scheme: dark makes what the browser draws itself (scrollbars, the checkbox,
+   the date picker, a form control with no style of its own) dark too. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-primary: #f1e7dd;
+  --color-secondary: #d8c9bb;
+  --color-accent: #e8895f;
+  --color-danger: #f0708c;
+  /* Dark text on the now light accent and danger buttons. */
+  --color-on-accent: #1d1410;
+  --color-overlay: rgba(0, 0, 0, 0.7);
+  --color-background: #14100e;
+  --color-panel: #1f1916;
+  --color-surface: #28211d;
+  --color-surface-muted: #322a25;
+  --color-accent-soft: #4a2e22;
+  --color-text: #f1e7dd;
+  --color-muted: #b3a498;
+  --color-border: #3a312b;
+  --color-header: rgba(42, 34, 29, 0.92);
+  --color-header-border: #3d332c;
+  --gradient-feature: linear-gradient(135deg, #2e231e, #3b2a21);
+  /* The statuses keep their strong fills with white text. "Returned" uses the light
+     theme's crimson, because the dark theme's danger colour is too light for white text. */
+  --status-returned: #be123c;
+  --category-politics: #d9714a;
+  --category-economy: #d9a033;
+  --category-world: #4fb3b0;
+  --category-technology: #8a94f5;
+  --category-science: #5fc07a;
+  --category-health: #ee7a9b;
+  --category-sports: #5aa7e6;
+  --category-culture: #b883e6;
+  /* Shadows are black here: a brown shadow would not show on a dark page. */
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+  --shadow-raised: 0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+
+/* ---------- 2. Base elements ---------- */
+
+/* box-sizing: border-box makes width include padding and border, so width: 100% never
+   overflows its container (a common cause of sideways scrolling on phones). */
 * {
   box-sizing: border-box;
   margin: 0;
@@ -25,150 +154,1126 @@
 }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: var(--font);
   background-color: var(--color-background);
   color: var(--color-text);
   line-height: 1.6;
 }
 
-/* Layout: Flexbox Grid */
+a {
+  color: var(--color-accent);
+}
+
+/* Headings: heavier and slightly tighter than body text, so they read as titles. */
+h1,
+h2,
+h3 {
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+h2 {
+  font-size: 1.75rem;
+  margin-bottom: var(--spacing-md);
+}
+
+/* Text the reader selects is highlighted in the soft accent instead of the browser's blue. */
+::selection {
+  background-color: var(--color-accent-soft);
+}
+
+/* "Back to top" and other in-page links glide instead of jumping, unless the reader's
+   system asks for less motion (then every animation below is switched off too). */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* A jump to #top or #comments stops below the sticky header instead of under it. */
+html {
+  scroll-padding-top: 6rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    transition: none !important;
+  }
+}
+
+h3,
+h4 {
+  margin: var(--spacing-md) 0 var(--spacing-sm);
+}
+
+p {
+  margin-bottom: var(--spacing-sm);
+}
+
+img {
+  max-width: 100%;
+}
+
+/* The reset above also removes the browser's indent from lists, and a list's numbers or
+   bullets sit in that indent, so without it they hang on the edge of their card (the
+   publish history on the review page, the analytics page's lists). Lists that hide
+   their markers (the comments, the editor menu) set padding-left: 0 again below. */
+ol,
+ul {
+  padding-left: 1.5rem;
+}
+
+/* Form controls use the page's font instead of the browser's smaller default. */
+input,
+select,
+textarea,
+button {
+  font: inherit;
+}
+
+/* Labels sit above their field. */
+form label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: var(--spacing-xs);
+}
+
+/* Visible keyboard focus on every control and link, for readers who don't use a mouse. */
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Hidden on the screen but still read by screen readers: for labels whose meaning the
+   placeholder already shows, and headings that only structure the page. (display: none
+   would hide them from screen readers too.) */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- 3. Page layout (Flexbox) ---------- */
+
+/* The body is a column: header, the page's content, footer. min-height and the footer's
+   margin-top: auto keep the footer at the bottom even on a short page. */
 .page-container {
   display: flex;
   flex-direction: column;
   min-height: 100vh;
 }
 
+/* The header is a darker sand bar above the white panel. sticky: it stays at the top while
+   the page scrolls (not on a phone, section 6, where it would take too much of the
+   screen); the see-through background with blur lets the page show faintly underneath. */
 .site-header {
-  background-color: var(--color-primary);
-  color: white;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background-color: var(--color-header);
+  backdrop-filter: blur(10px);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-header-border);
   padding: var(--spacing-md) var(--spacing-lg);
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: center;
+  gap: var(--spacing-sm) var(--spacing-md);
 }
 
-.site-header nav {
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
+/* The logo is the name itself, in heavy, tight letters. */
+.site-title {
+  font-size: 1.7rem;
+  font-weight: 900;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
 }
 
 .site-header a {
-  color: white;
   text-decoration: none;
 }
 
+.site-title a {
+  color: var(--color-text);
+}
+
+.site-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm) var(--spacing-md);
+  align-items: center;
+}
+
+/* The light/dark button in the header: a round icon button. hidden is restored explicitly
+   because .btn sets display, and an author's display beats the browser's [hidden] rule. */
+.site-nav .theme-toggle {
+  padding: 0.3rem 0.7rem;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+.theme-toggle[hidden] {
+  display: none;
+}
+
+/* The logout form sits in the header's row like a link. */
+.inline-form {
+  display: inline;
+}
+
+/* Public pages: the content and the sidebar side by side. */
 .main-content-wrapper {
   display: flex;
   flex: 1;
-  max-width: 1200px;
+  max-width: var(--content-width);
   margin: 0 auto;
   width: 100%;
   padding: var(--spacing-lg);
   gap: var(--spacing-lg);
 }
 
+/* Every page's content sits on one big white rounded panel over the sand: the public
+   pages' wrapper, and the main element of the pages without a sidebar. */
+.main-content-wrapper,
+.page-container > .main-content {
+  background-color: var(--color-panel);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow);
+  margin-top: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+  /* A strip of sand stays visible at the sides on screens narrower than the panel. */
+  width: calc(100% - 2 * var(--spacing-md));
+}
+
 .main-content {
   flex: 3;
+  /* min-width: 0 lets a flex item shrink below the width of a long word or a wide
+     table, so it scrolls inside its own box instead of pushing the page sideways. */
+  min-width: 0;
 }
 
 .sidebar {
   flex: 1;
 }
 
+/* Pages without a sidebar (reporter, editor, login, error): the main element is a direct
+   child of the body, so it gets the same centred width and padding as the public pages. */
+.page-container > .main-content {
+  flex: 1;
+  max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
+  padding: var(--spacing-lg);
+}
+
+/* The footer is quiet text on the sand, under the panel. */
 .site-footer {
-  background-color: var(--color-secondary);
-  color: white;
+  color: var(--color-muted);
   text-align: center;
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-lg);
   margin-top: auto;
 }
 
-/* Shared Classes (Contract) */
+/* ---------- 4. Shared components (the contract's class names) ---------- */
+
 .card {
-  background: white;
+  background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
+  border-radius: var(--radius);
   padding: var(--spacing-md);
   margin-bottom: var(--spacing-md);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  box-shadow: var(--shadow);
 }
 
+/* A feed story lifts a little under the mouse and its headline turns rust, so it reads as
+   something to click. Only for a mouse: on a touch screen "hover" would stick after a tap. */
+@media (hover: hover) {
+  .article-card {
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .article-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-raised);
+  }
+
+  .article-card:hover .article-card-title a {
+    color: var(--color-accent);
+  }
+}
+
+/* A plain .btn is a neutral button (for example Previous / Next); the colour classes
+   below mark the main action and the dangerous one. Every button is a pill. */
 .btn {
   display: inline-block;
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 4px;
+  padding: var(--spacing-sm) 1.25rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background-color: var(--color-surface-muted);
+  color: var(--color-text);
+  font-weight: 700;
   cursor: pointer;
-  font-size: 1rem;
   text-decoration: none;
+  line-height: 1.4;
+  transition: filter 0.15s ease;
 }
 
 .btn-primary {
   background-color: var(--color-accent);
-  color: white;
+  border-color: var(--color-accent);
+  color: var(--color-on-accent);
 }
 
 .btn-danger {
   background-color: var(--color-danger);
-  color: white;
+  border-color: var(--color-danger);
+  color: var(--color-on-accent);
 }
 
-.form-field {
+.btn-secondary {
+  background-color: var(--color-surface-muted);
+  color: var(--color-text);
+}
+.btn:hover:not(:disabled) {
+  filter: brightness(0.92);
+}
+
+button:disabled,
+.btn:disabled,
+input:disabled,
+textarea:disabled,
+select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* .form-field is used two ways in the views: on the control itself (input.form-field),
+   and on a div that groups a label with its control (div.form-field). Both get full-width,
+   readable controls. */
+.form-field:is(input, select, textarea),
+.form-field input,
+.form-field select,
+.form-field textarea {
+  display: block;
   width: 100%;
-  padding: 0.5rem;
+  padding: var(--spacing-sm);
   margin-bottom: var(--spacing-sm);
   border: 1px solid var(--color-border);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface);
+}
+
+/* The field being typed in gets the accent border and a soft ring (a keyboard user
+   also gets the :focus-visible outline from section 2). */
+.form-field:is(input, select, textarea):focus,
+.form-field :is(input, select, textarea):focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-accent-soft);
+  outline: none;
+}
+
+div.form-field {
+  margin-bottom: var(--spacing-md);
 }
 
 .form-error {
   color: var(--color-danger);
-  font-size: 0.875rem;
+  font-size: 0.9rem;
   margin-bottom: var(--spacing-md);
 }
 
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
+.form-error:empty {
+  margin: 0;
 }
 
-.data-table th, .data-table td {
-  padding: var(--spacing-sm);
+/* A table in a rounded box with lines only between rows (lighter than a full grid).
+   border-collapse: separate is needed for the rounded corners; overflow: hidden clips
+   the header's background to them. */
+.data-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background-color: var(--color-surface);
   border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.75rem var(--spacing-md);
+  border-bottom: 1px solid var(--color-border);
   text-align: left;
+  vertical-align: top;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Column titles: small capitals in the muted colour, so the data stands out. */
+.data-table th {
+  background-color: var(--color-surface-muted);
+  color: var(--color-muted);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* The row under the mouse is tinted, which helps follow a wide row to its buttons. */
+.data-table tbody tr:hover {
+  background-color: var(--color-background);
+}
+
+/* Buttons inside a table cell get a little space between them. */
+.data-table td .btn {
+  margin: 0 var(--spacing-xs) var(--spacing-xs) 0;
+}
+
+/* A wide table scrolls sideways inside this box on a narrow screen, never the whole page. */
+.table-scroll,
+.scroll-wrapper {
+  overflow-x: auto;
+  width: 100%;
+  margin-bottom: var(--spacing-md);
+}
+
+.table-scroll .data-table {
+  min-width: 48rem;
 }
 
 .empty-state {
   text-align: center;
   padding: var(--spacing-lg);
-  color: #666;
+  color: var(--color-muted);
 }
 
+/* While something loads: dimmed, and clicks are ignored. */
 .loading {
   opacity: 0.7;
   pointer-events: none;
 }
 
-/* Status Badges */
 .status-badge {
-  padding: 0.25rem 0.5rem;
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
   border-radius: 12px;
   font-size: 0.8rem;
   font-weight: bold;
+  /* A status never breaks over two lines, even in a narrow table cell. */
+  white-space: nowrap;
 }
 
-.status-draft { background-color: #f1c40f; color: #333; }
-.status-pending { background-color: #e67e22; color: white; }
-.status-published { background-color: #2ecc71; color: white; }
-.status-returned { background-color: var(--color-danger); color: white; }
+.status-draft { background-color: var(--status-draft); color: var(--color-text); }
+.status-pending { background-color: var(--status-pending); color: white; }
+.status-published { background-color: var(--status-published); color: white; }
+.status-returned { background-color: var(--status-returned); color: white; }
 
-/* Responsive adjustments */
+/* Two versions side by side (the editor's review page): a Flexbox row of two equal columns;
+   one column on a phone (section 6). */
+.two-column {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: flex-start;
+}
+
+.two-column > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+/* Previous / Next under a paged list. */
+#pagination,
+nav[aria-label="User list pages"] {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin: var(--spacing-md) 0;
+}
+
+/* Shared confirm dialog (public/js/shared/confirmDialog.js). The min() keeps a gap at the
+   sides on a phone narrower than 400px. */
+.confirm-dialog {
+  margin: auto;
+  max-width: min(400px, calc(100% - 2 * var(--spacing-md)));
+  padding: var(--spacing-lg);
+  border: none;
+  border-radius: var(--radius);
+  background-color: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: var(--shadow-raised);
+}
+
+/* The dark overlay behind the dialog */
+.confirm-dialog::backdrop {
+  background: var(--color-overlay);
+}
+
+.confirm-message {
+  white-space: pre-line;
+  margin-bottom: var(--spacing-lg);
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-sm);
+}
+
+/* ---------- 5. Area styles ---------- */
+
+/* Feed (views/public/feed.ejs, public/js/public/feed.js). A card has the same classes
+   whether the server rendered it or feed.js built it. */
+.feed-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+}
+
+.feed-filter-row .form-field {
+  /* Grow to share the row, but wrap to their own line on a narrow phone. */
+  flex: 1 1 10rem;
+  width: auto;
+}
+
+/* The feed is a grid of stories: Flexbox rows that wrap, two cards per row (one on a
+   phone, section 6), each card with its image on top. Everything else in the list (the
+   featured first story, the sentinel, a message) takes a whole row. */
+#feed-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+}
+
+#feed-list > * {
+  flex: 0 0 100%;
+}
+
+#feed-list > .article-card {
+  /* Half the row, minus half the gap between the two cards. */
+  flex: 0 0 calc(50% - var(--spacing-md) / 2);
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* The article's category (feed cards and the article page): a pill with a dot in the
+   category's own colour, on a light tint of the same colour. data-category says which
+   category it is; the rules below pick its colour from the tokens. */
+.category-badge {
+  --category-color: var(--color-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-text);
+  /* The plain fill is for a browser without color-mix(); the next line overrides it. */
+  background-color: var(--color-surface-muted);
+  /* Mixed with the panel colour, not with white: in the dark theme the pill is a tint of
+     the dark panel, so the text colour stays readable on it. */
+  background-color: color-mix(in srgb, var(--category-color) 14%, var(--color-panel));
+}
+
+.category-badge::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--category-color);
+}
+
+.category-badge[data-category="Politics"] { --category-color: var(--category-politics); }
+.category-badge[data-category="Economy"] { --category-color: var(--category-economy); }
+.category-badge[data-category="World"] { --category-color: var(--category-world); }
+.category-badge[data-category="Technology"] { --category-color: var(--category-technology); }
+.category-badge[data-category="Science"] { --category-color: var(--category-science); }
+.category-badge[data-category="Health"] { --category-color: var(--category-health); }
+.category-badge[data-category="Sports"] { --category-color: var(--category-sports); }
+.category-badge[data-category="Culture"] { --category-color: var(--category-culture); }
+
+/* position: relative lets the title's link (below) cover the whole card. */
+.article-card {
+  position: relative;
+}
+
+.article-card-title {
+  margin: var(--spacing-sm) 0;
+}
+
+.article-card-title a {
+  color: inherit;
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+/* The whole card is clickable: an empty layer from the title's link stretches over the
+   card. There is still one link per card (screen readers and keyboards see no change),
+   and nothing else in a card is clickable, so the layer hides nothing. */
+.article-card-title a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+}
+
+.article-card-title a:hover,
+.article-card-title a:focus {
+  text-decoration: underline;
+}
+
+.article-card-meta {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  margin-bottom: var(--spacing-sm);
+}
+
+.article-card-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--spacing-sm);
+}
+
+/* The first story of the list is featured, as on a news site's front page: the whole row,
+   a bigger title, and (with an image) the text over the image. CSS picks it (the first
+   card in #feed-list), so it follows the list after every search, filter or sort. */
+#feed-list > .article-card:first-child {
+  flex-basis: 100%;
+}
+
+#feed-list > .article-card:first-child .article-card-title {
+  font-size: 2rem;
+  letter-spacing: -0.02em;
+}
+
+/* The image fills the card behind the text: absolute, under it (z-index: -1 inside the
+   card's own layer, isolation: isolate). The text stays in the normal flow, so a long
+   title makes the card taller instead of overflowing, and the title's link still covers
+   the whole card. */
+#feed-list > .article-card-with-image:first-child {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 24rem;
+  padding: 0;
+  overflow: hidden;
+  border: none;
+  isolation: isolate;
+}
+
+#feed-list > .article-card-with-image:first-child .article-card-image {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  height: 100%;
+  aspect-ratio: auto;
+  margin: 0;
+  border-radius: 0;
+}
+
+/* A dark fade from the bottom, so the white text is readable on any photo (the top of the
+   text box is padding, where the fade is still clear). */
+#feed-list > .article-card-with-image:first-child .article-card-text {
+  padding: 6rem var(--spacing-lg) var(--spacing-lg);
+  background: linear-gradient(to top, rgba(28, 20, 16, 0.92), rgba(28, 20, 16, 0.7) 60%, rgba(28, 20, 16, 0));
+  color: white;
+}
+
+#feed-list > .article-card-with-image:first-child .article-card-meta {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* On the dark photo the title stays white under the mouse (rust would be hard to read). */
+#feed-list > .article-card-with-image:first-child:hover .article-card-title a {
+  color: white;
+  text-decoration: underline;
+}
+
+/* The element the IntersectionObserver watches; 1px tall so it can be "seen" even when empty. */
+.feed-sentinel {
+  min-height: 1px;
+  text-align: center;
+  padding: var(--spacing-md);
+  color: var(--color-muted);
+}
+
+/* Full article page (views/public/article.ejs) */
+/* The article sits directly on the white panel, not in a second box. */
+.article-full {
+  padding: 0 0 var(--spacing-lg);
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+.article-full-title {
+  margin: var(--spacing-sm) 0;
+  font-size: 2.6rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.article-full figure {
+  margin: var(--spacing-md) 0 var(--spacing-lg);
+}
+
+.article-full figure .article-card-image {
+  border-radius: var(--radius);
+}
+
+/* Long text is easiest to read in lines of about 70 characters, slightly larger and with
+   more space between lines than the rest of the site. */
+.article-body {
+  max-width: 70ch;
+  font-size: 1.1rem;
+  line-height: 1.8;
+}
+
+.article-body p {
+  margin-bottom: var(--spacing-md);
+  /* A single line break inside a paragraph is kept, as the reporter typed it. */
+  white-space: pre-line;
+}
+
+/* The opening paragraph is the lead: larger, like in a magazine. */
+.article-body p:first-child {
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1.5;
+  color: var(--color-primary);
+}
+
+/* Related articles under the article: cards side by side, wrapping on narrow screens. */
+.related-articles-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.related-articles-grid > .card {
+  flex: 1 1 14rem;
+  margin-bottom: 0;
+  font-weight: 700;
+}
+
+/* Titles like the feed's: plain text that turns to the accent under the mouse. */
+.related-articles-grid a {
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.related-articles-grid a:hover,
+.related-articles-grid a:focus {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+/* The article page's reading progress bar (public/js/public/readingProgress.js sets the width)
+   and its "Back to top" link. */
+#reading-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 3px;
+  background-color: var(--color-accent);
+  z-index: 1000;
+  transition: width 0.1s ease-out;
+}
+
+.back-to-top {
+  display: inline-block;
+  margin-top: var(--spacing-lg);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.back-to-top:hover {
+  text-decoration: underline;
+}
+
+/* Comments (views/public/article.ejs and the same markup from articleComments.js) */
+#comment-list {
+  list-style: none;
+  padding-left: 0;
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Each comment is a soft speech bubble. */
+.comment {
+  background-color: var(--color-surface-muted);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem var(--spacing-md);
+  margin-bottom: 0.75rem;
+}
+
+.comment:last-child {
+  margin-bottom: 0;
+}
+
+.comment-meta {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin-bottom: var(--spacing-xs);
+}
+
+.comment-author {
+  font-weight: bold;
+  color: var(--color-primary);
+  margin-right: var(--spacing-sm);
+}
+
+.comment-text {
+  /* Keeps the line breaks the reader typed, without turning them into HTML. */
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+/* Weather widget (views/partials/sidebar.ejs, public/js/public/weatherWidget.js): a
+   gradient sets it apart from the white cards. */
+#weather-widget {
+  background: var(--gradient-feature);
+  border-color: var(--color-accent-soft);
+}
+
+.weather-info {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.weather-info p {
+  margin: 0;
+}
+
+.weather-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.weather-updated {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+}
+
+/* Login page (views/public/login.ejs) */
+.login-card {
+  max-width: 26rem;
+  margin: var(--spacing-lg) auto;
+  padding: var(--spacing-lg);
+  box-shadow: var(--shadow-raised);
+  /* A thin accent line along the top edge, as on a ticket. */
+  border-top: 4px solid var(--color-accent);
+}
+
+.login-card h2,
+.login-intro {
+  text-align: center;
+}
+
+.login-intro {
+  color: var(--color-muted);
+  margin-bottom: var(--spacing-md);
+}
+
+.btn-block {
+  width: 100%;
+}
+
+/* Editor navigation (views/editor/partials/editorNav.ejs): a row of pill links on the sand,
+   above the panel; the current page (aria-current="page") is a white pill in the accent
+   colour, so the editor sees where they are. */
+.editor-nav {
+  padding: 0 var(--spacing-lg);
+}
+
+.editor-nav-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-sm);
+  list-style: none;
+  padding-left: 0;
+  max-width: var(--content-width);
+  margin: 0 auto;
+}
+
+.editor-nav-link {
+  display: inline-block;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  color: var(--color-text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.editor-nav-link:hover,
+.editor-nav-link[aria-current="page"] {
+  background-color: var(--color-panel);
+  color: var(--color-accent);
+}
+
+/* An article's image on the editor's review page. */
+.review-image {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+/* Editor dashboard counters (views/editor/dashboard.ejs) */
+#status-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.status-summary-card {
+  flex: 1;
+  min-width: 150px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--spacing-md);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* The number on a counter. A span (a button may hold only inline content); the card is a
+   flex column, so it still sits on its own line above the badge. */
+.summary-count {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: var(--spacing-sm);
+}
+
+/* Lifts like the feed cards (it used to fade, which looked like "disabled"). */
+.status-summary-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raised);
+}
+
+/* Each counter has a top edge in its status colour. :has() looks at the badge inside the
+   card, so the view needs no extra class. */
+.status-summary-card {
+  border-top-width: 4px;
+}
+
+.status-summary-card:has(.status-draft) { border-top-color: var(--status-draft); }
+.status-summary-card:has(.status-pending) { border-top-color: var(--status-pending); }
+.status-summary-card:has(.status-published) { border-top-color: var(--status-published); }
+.status-summary-card:has(.status-returned) { border-top-color: var(--status-returned); }
+
+/* Reporter's article editor (views/reporter/articleEditor.ejs, public/js/reporter/articleEditor.js) */
+
+/* The character counter under a field ("142 / 200"): small, quiet text on the right. The
+   script adds a class when the text is close to the limit (90%) and when it is at it.
+   The colours are tokens that exist already: the amber of the "pending" status for a
+   warning and the danger red for the limit. Both pass the 4.5:1 text contrast on the white
+   panel (about 4.7 and 6.3). Bold as well as coloured, so the warning does not depend on
+   colour alone (a colour-blind reader still sees the change). */
+.char-counter {
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.char-counter-near {
+  color: var(--status-pending);
+  font-weight: 700;
+}
+
+.char-counter-full {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* The preview card hides its image and its category pill with the HTML "hidden" attribute
+   until the reporter fills them in. The card's own rules set display (block, inline-flex),
+   and an author's display beats the browser's built-in [hidden] rule, so it is restored
+   here for the preview only. */
+#card-preview [hidden] {
+  display: none;
+}
+
+/* The form and the preview card side by side (Flexbox). flex-wrap makes it stack by itself
+   on a narrow screen: when the form (at least 24rem) and the preview (at least 18rem)
+   don't fit in one row, the preview drops below the form, so no media query is needed. */
+.editor-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--spacing-lg);
+}
+
+/* min-width: 0 lets the form shrink instead of pushing the page sideways. */
+.editor-layout > form {
+  flex: 2 1 24rem;
+  min-width: 0;
+}
+
+/* Sticky: the card stays in view while the reporter scrolls a long text. 6rem keeps it
+   under the sticky header (the same distance as scroll-padding-top above). */
+.editor-preview {
+  flex: 1 1 18rem;
+  max-width: 28rem;
+  min-width: 0;
+  position: sticky;
+  top: 6rem;
+}
+
+/* The preview card is not a link, so it must not lift like a feed card does on hover. */
+.editor-preview .article-card:hover {
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
+/* Reduced motion, for a reader whose system asks for less movement: the cards no longer
+   lift on hover. The block near the top of this file already removes every transition and
+   the smooth scrolling (a transition of "none" would make the lift jump instead of glide,
+   but it would still move). This block comes AFTER every hover rule on purpose: they have
+   the same specificity, so only a later rule wins. The shadow change stays, because it is a
+   colour cue, not movement. */
+@media (prefers-reduced-motion: reduce) {
+  .article-card:hover,
+  .status-summary-card:hover {
+    transform: none;
+  }
+}
+
+/* ---------- 6. Narrow screens (phones and small tablets) ---------- */
+
 @media (max-width: 768px) {
+  .site-header,
+  .main-content-wrapper,
+  .page-container > .main-content {
+    padding: var(--spacing-md);
+  }
+
+  .site-title {
+    font-size: 1.25rem;
+    /* The site name never breaks over two lines. If the title and the buttons do not fit
+       in one row (a very small screen), the header wraps and the buttons go to a second
+       row, instead of squeezing the title into three short lines. */
+    white-space: nowrap;
+  }
+
+  /* The preview under the form takes the full width and scrolls with the page. */
+  .editor-preview {
+    position: static;
+    max-width: none;
+  }
+
+  /* On a phone the header is one compact row (title on the left, buttons on the right) and
+     scrolls away with the page: kept at the top it would cover too much of a small screen.
+     It used to take three rows (title, "Welcome, ...", buttons). */
+  .site-header {
+    position: static;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-sm) var(--spacing-md);
+  }
+
+  /* The welcome text is hidden on the screen but still read by screen readers (not
+     display: none, which would hide it from them too): the same technique as
+     .visually-hidden in section 2. */
+  .site-welcome {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* Smaller buttons that never break their text over two lines. */
+  .site-nav {
+    flex-wrap: nowrap;
+    gap: var(--spacing-sm);
+  }
+
+  .site-nav .btn {
+    padding: 0.3rem 0.85rem;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
+  .article-full-title,
+  #feed-list > .article-card:first-child .article-card-title {
+    font-size: 1.45rem;
+  }
+
+  /* Flexbox: the sidebar moves below the content instead of beside it. */
   .main-content-wrapper {
     flex-direction: column;
   }
-  .sidebar {
-    order: 2; /* Moves sidebar below main content on mobile */
+
+  .editor-nav {
+    padding: 0 var(--spacing-md);
+  }
+
+  /* A smaller panel corner, and the feed in one column. */
+  .main-content-wrapper,
+  .page-container > .main-content {
+    border-radius: var(--radius);
+  }
+
+  #feed-list > .article-card {
+    flex-basis: 100%;
+  }
+
+  #feed-list > .article-card-with-image:first-child {
+    min-height: 20rem;
+  }
+
+  #feed-list > .article-card-with-image:first-child .article-card-text {
+    padding: 5rem var(--spacing-md) var(--spacing-md);
+  }
+
+  /* Flexbox: rows become columns. */
+  .two-column {
+    flex-direction: column;
+  }
+}
+
+/* ---------- 7. Very narrow phones (400px and less) ---------- */
+
+/* The header's title and buttons shrink a little more, so they still fit on one row on the
+   narrowest common phones (320px and 360px wide). */
+@media (max-width: 400px) {
+  .site-header {
+    padding: var(--spacing-sm) 0.75rem;
+  }
+
+  .site-title {
+    font-size: 1.05rem;
+  }
+
+  .site-nav {
+    gap: var(--spacing-xs);
+  }
+
+  .site-nav .btn {
+    padding: 0.25rem 0.65rem;
+    font-size: 0.8rem;
   }
 }

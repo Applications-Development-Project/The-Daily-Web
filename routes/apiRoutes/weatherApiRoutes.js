@@ -1,11 +1,10 @@
 /**
  * routes/apiRoutes/weatherApiRoutes.js
  *
- * JSON API route for the weather widget. Mounted at "/api" in app.js, so "/weather"
- * here is "/api/weather" in the browser.
- * Created by OS in phase 0 with the path and access from the routes table in
- * "Shared contracts"; the controller behind it is a PLACEHOLDER until SH replaces it.
+ * GET /api/weather for the sidebar widget, mounted at "/api" in app.js. The browser calls
+ * only this route, never the weather service itself.
  *
+ * Related: controllers/weatherController.js.
  * Owner: SH.
  */
 

@@ -1,0 +1,93 @@
+<%#
+  views/editor/users.ejs
+
+  The user management page, sent as an empty frame; public/js/editor/users.js loads the
+  users and does every change without reloading. data-current-user-id lets the script
+  disable the editor's own Delete button (only a convenience: the server refuses anyway).
+
+  Rendered by: showUserManagementPage (controllers/userController.js), for GET /editor/users.
+  Owner: OS.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: 'Users - The Daily Web' }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'users' }) %>
+
+  <main class="main-content" id="user-management" data-current-user-id="<%= currentUser.id %>">
+    <h2>Users</h2>
+
+    <section class="card" aria-labelledby="add-user-title">
+      <h3 id="add-user-title">Add a user</h3>
+      <%# A quick answer in the browser; the server checks the same rules (pattern = USERNAME_PATTERN). %>
+      <form id="add-user-form">
+        <div class="form-field">
+          <label for="new-username">Username</label>
+          <input id="new-username" name="username" type="text" autocomplete="off" minlength="3" maxlength="30" required
+            pattern="[A-Za-z0-9._\-]+" title="Letters, digits, dots, dashes and underscores only">
+        </div>
+        <div class="form-field">
+          <label for="new-display-name">Display name</label>
+          <input id="new-display-name" name="displayName" type="text" maxlength="50" required>
+        </div>
+        <div class="form-field">
+          <label for="new-role">Role</label>
+          <select id="new-role" name="role">
+            <option value="reporter">Reporter</option>
+            <option value="editor">Editor</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label for="new-password">Password (8 characters or more)</label>
+          <%# new-password: the browser won't fill in the editor's own password. %>
+          <input id="new-password" name="password" type="password" autocomplete="new-password" minlength="8" maxlength="200" required>
+        </div>
+        <p id="add-user-message" role="status" hidden></p>
+        <button class="btn btn-primary" type="submit">Add user</button>
+      </form>
+    </section>
+
+    <section aria-labelledby="user-list-title">
+      <h3 id="user-list-title">All users</h3>
+
+      <form id="user-search-form" role="search">
+        <label for="user-search">Search by username or display name</label>
+        <input id="user-search" name="search" type="search" class="form-field" maxlength="100" autocomplete="off">
+      </form>
+
+      <p id="user-list-error" class="form-error" role="alert" hidden></p>
+
+      <%# On a narrow screen the table scrolls sideways inside this box. %>
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th scope="col">Username</th>
+              <th scope="col">Display name</th>
+              <th scope="col">Role</th>
+              <th scope="col">Created</th>
+              <th scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="user-table-body"></tbody>
+        </table>
+      </div>
+      <p id="user-list-status" class="loading">Loading users...</p>
+
+      <nav aria-label="User list pages">
+        <button id="previous-page" class="btn" type="button" disabled>Previous</button>
+        <span id="page-info"></span>
+        <button id="next-page" class="btn" type="button" disabled>Next</button>
+      </nav>
+    </section>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/shared/confirmDialog.js"></script>
+  <script src="/js/editor/users.js"></script>
+</body>
+</html>

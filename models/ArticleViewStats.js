@@ -1,59 +1,44 @@
 /**
  * models/ArticleViewStats.js
  *
- * Mongoose model for view statistics: how many times an article was viewed in
- * one hour. Fields follow "Data models" in "Shared contracts".
+ * View statistics: how many times an article was viewed in one hour.
  *
- * Why one counter per article per hour, and not one document per view:
- * the requirements say the site may serve thousands of readers at the same time.
- * One document per view would mean millions of documents, and drawing a 30-day
- * chart would have to read and count all of them. With hourly counters an article
- * has at most 24 documents a day (720 for 30 days), however many readers it has,
- * and the chart reads them as they are. Each view is a single atomic
- * { $inc: { views: 1 } } with upsert in services/viewTracker.js, so views that
- * arrive at the same moment are all counted and never overwrite each other.
- * The price is detail: we can't tell at which minute inside an hour a view
- * happened, which is fine for a chart over days.
+ * One counter per article per hour, not one document per view: thousands of readers
+ * would create millions of documents, while hourly counters give at most 720 per
+ * article for a 30-day chart. Each view is an atomic $inc (services/viewTracker.js).
  *
- * Used by: services/viewTracker.js (recordView adds views),
- * controllers/analyticsController.js (chart data and reset), scripts/seed.js,
- * controllers/editorController.js (removes the stats when an article is deleted).
- * Related: models/Article.js (article, and its running totalViews).
+ * Used by: services/viewTracker.js, controllers/analyticsController.js,
+ * controllers/editorController.js (delete), scripts/seed.js.
  * Owner: SM.
  */
 
 const mongoose = require('mongoose');
 
 const articleViewStatsSchema = new mongoose.Schema({
-  // The article these views belong to.
   article: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Article',
     required: [true, 'Article is required'],
   },
 
-  // The start of the hour this counter covers, for example 14:00:00.000 for every
-  // view between 14:00 and 14:59. Rounding every view down to the start of its
-  // hour is what makes all views of the same hour land in the same document.
+  // The start of the hour (UTC), for example 14:00 for every view from 14:00 to 14:59.
   hourStart: {
     type: Date,
     required: [true, 'Hour start is required'],
   },
 
-  // How many views the article had in that hour.
+  // min is checked by create() and save(); $inc in updateOne skips validators, which is
+  // safe because adding 1 can only make the number bigger.
   views: {
     type: Number,
     default: 0,
     min: [0, 'Views cannot be negative'],
   },
 });
-// No timestamps option: hourStart already says which time the document is about,
-// and createdAt/updatedAt would add two dates to every one of many small documents.
+// No timestamps: hourStart already says which time the document is about.
 
-// unique: MongoDB refuses a second document for the same article and hour, so two
-// simultaneous first views of a new hour can never create two counters.
-// The same index answers the chart query: "this article, hours between from and to,
-// sorted by time", without scanning other articles' stats.
+// One counter per article and hour. If two first views of an hour race, MongoDB retries
+// the losing upsert as an update, so no view is lost. The chart query uses it too.
 articleViewStatsSchema.index({ article: 1, hourStart: 1 }, { unique: true });
 
 module.exports = mongoose.model('ArticleViewStats', articleViewStatsSchema);

@@ -1,0 +1,49 @@
+<%#
+  views/editor/partials/articleContent.ejs
+
+  One version of an article (working copy or live) on the review page. Written once, so
+  both versions side by side have exactly the same layout.
+
+  Locals: heading; content (from toContentView in the controller); changedFields
+  (optional: those fields get the word "(changed)", not only a colour).
+  Everything is printed escaped, including the image address.
+
+  Included by: views/editor/articleReview.ejs.
+  Owner: SM.
+%>
+<%
+  // locals.changedFields: reading a local that wasn't passed would crash the page.
+  const changedFields = locals.changedFields || [];
+
+  function fieldHeading(fieldName, label) {
+    return changedFields.includes(fieldName) ? label + ' (changed)' : label;
+  }
+%>
+<section class="card">
+  <h3><%= heading %></h3>
+
+  <h4><%= fieldHeading('title', 'Title') %></h4>
+  <p><%= content.title || '(empty)' %></p>
+
+  <h4><%= fieldHeading('summary', 'Summary') %></h4>
+  <p><%= content.summary || '(empty)' %></p>
+
+  <h4><%= fieldHeading('category', 'Category') %></h4>
+  <p><%= content.category || '(not chosen)' %></p>
+
+  <h4><%= fieldHeading('imageUrl', 'Main image') %></h4>
+  <% if (content.imageUrl) { %>
+    <img class="review-image" src="<%= content.imageUrl %>" alt="Main image of the article" loading="lazy">
+    <p><small><%= content.imageUrl %></small></p>
+  <% } else { %>
+    <p>(no image)</p>
+  <% } %>
+
+  <h4><%= fieldHeading('body', 'Body') %></h4>
+  <% if (content.paragraphs.length === 0) { %>
+    <p>(empty)</p>
+  <% } %>
+  <% content.paragraphs.forEach(function (paragraph) { %>
+    <p><%= paragraph %></p>
+  <% }); %>
+</section>

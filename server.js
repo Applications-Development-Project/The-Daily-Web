@@ -1,21 +1,16 @@
 /**
  * server.js
  *
- * Entry point of the application ("npm start" runs this file). It does three
- * things, in this order:
- *   1. Loads settings from .env into process.env.
- *   2. Connects to MongoDB.
- *   3. Starts the HTTP server.
- * We connect before listening because every page and API reads the database
- * (and, from phase 2, every session is stored there too), so there is no point
- * accepting requests we can't answer.
+ * The entry point ("npm start"): loads .env, connects to MongoDB, then starts listening.
+ * It connects first because every page, API and login session needs the database.
+ * app.js builds the app and this file runs it, so a script can load the app without
+ * opening a port.
  *
- * Related: app.js (the Express app), config/database.js, services/logger.js.
- * Owner: OS. Shared file: after phase 0, change it only in a small, separate pull request.
+ * Related: app.js, config/database.js, services/logger.js.
+ * Owner: OS. Shared file.
  */
 
-// Must run first: the files required below read process.env, so .env has to be
-// loaded before them. quiet: true stops dotenv from printing its own message.
+// First: the files required below read process.env. quiet: no dotenv message.
 require('dotenv').config({ quiet: true });
 
 const app = require('./app');
@@ -25,9 +20,8 @@ const logger = require('./services/logger');
 const DEFAULT_PORT = 3000;
 
 /**
- * Connects to the database, then starts listening for HTTP requests.
- * If either step fails we log why and stop the process with exit code 1,
- * because a server without a database or without a port can't do anything useful.
+ * Connects to the database, then listens. If either step fails, logs why and exits with
+ * code 1 (anything but 0 tells whoever started the process that startup failed).
  *
  * @returns {Promise<void>}
  */
@@ -41,8 +35,7 @@ async function startServer() {
     process.exit(1);
   }
 
-  // In Express 5 this callback also receives an error if the port can't be used,
-  // for example when another server is already running on it.
+  // Express 5 passes an error here if the port can't be used (for example it is taken).
   app.listen(port, (error) => {
     if (error) {
       logger.error(`Server not started: could not listen on port ${port}`, error);

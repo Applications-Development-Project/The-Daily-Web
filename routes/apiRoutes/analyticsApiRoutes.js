@@ -1,11 +1,10 @@
 /**
  * routes/apiRoutes/analyticsApiRoutes.js
  *
- * JSON API routes for article view statistics. Mounted at "/api" in app.js, so
- * "/editor/articles/:id/views" here is "/api/editor/articles/:id/views" in the browser.
- * Created by OS in phase 0 with the paths and access from the routes table in
- * "Shared contracts"; the controller behind them is a PLACEHOLDER until SM replaces it.
+ * JSON API for an article's view statistics, mounted at "/api" in app.js:
+ * GET .../views?from=&to= returns the chart data, DELETE .../views resets them.
  *
+ * Related: controllers/analyticsController.js, middleware/requireRole.js.
  * Owner: SM.
  */
 
@@ -15,7 +14,7 @@ const analyticsController = require('../../controllers/analyticsController');
 
 const router = express.Router();
 
-// Editors only (guests get 401, reporters 403).
+// Checked on the server for every call: guests get 401, reporters 403.
 router.get('/editor/articles/:id/views', requireRole('editor'), analyticsController.getArticleViews);
 router.delete('/editor/articles/:id/views', requireRole('editor'), analyticsController.resetArticleViews);
 

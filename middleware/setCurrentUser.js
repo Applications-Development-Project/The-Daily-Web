@@ -1,29 +1,57 @@
 /**
  * middleware/setCurrentUser.js
  *
- * Makes the logged-in user available to every EJS view as "currentUser"
- * ({ id, role, displayName }, or null for a guest). res.locals is merged into the
- * variables of every res.render() call, so the header partial can show "Log in" or
- * the user's name on every page without each controller passing the user in.
+ * Runs on every request, before the routers:
+ * 1. Refreshes the logged-in user from the database, so a role change or a deleted
+ *    account applies on the very next request (otherwise an editor demoted to reporter
+ *    could keep editor rights for the 7 days of the session). Guests cost nothing.
+ * 2. Sets res.locals.currentUser ({ id, role, displayName } or null), which every view
+ *    gets automatically (the header's login state). Display only: permissions are
+ *    checked by requireLogin and requireRole, which run after this.
+ * 3. Tells the browser not to keep pages shown to a logged-in user, so Back after logout
+ *    asks the server again instead of showing an old page that still looks logged in.
  *
- * This is for display only. It never grants access: permissions are checked by
- * requireLogin and requireRole on the server.
- *
- * Used by: app.js (after the session middleware, before the routers).
- * Read by: views/partials/header.ejs (SH) and any view that shows login state.
+ * Used by: app.js (after the session, before the routers).
  * Owner: OS.
  */
 
+const User = require('../models/User');
+const logger = require('../services/logger');
+
 /**
- * Copies the session's user (or null) into res.locals.currentUser.
+ * Reloads the session user, then sets res.locals.currentUser. A failed lookup goes to
+ * errorHandler by itself (Express 5).
  *
  * @param {import('express').Request} request - Holds request.session.user after login.
  * @param {import('express').Response} response - Gets response.locals.currentUser.
- * @param {import('express').NextFunction} next - Continues to the next middleware.
- * @returns {void}
+ * @param {import('express').NextFunction} next
+ * @returns {Promise<void>}
  */
-function setCurrentUser(request, response, next) {
-  // We use null, not undefined, so views can simply write "if (currentUser)".
+async function setCurrentUser(request, response, next) {
+  const sessionUser = request.session.user;
+
+  if (sessionUser) {
+    // One lookup by _id, answered from MongoDB's built-in index.
+    const user = await User.findById(sessionUser.id).select('role displayName').lean();
+
+    if (!user) {
+      // The account was deleted: this browser is a guest from now on.
+      logger.info(`Logged out deleted user "${sessionUser.displayName}"`);
+      delete request.session.user;
+    } else if (user.role !== sessionUser.role || user.displayName !== sessionUser.displayName) {
+      request.session.user = { id: sessionUser.id, role: user.role, displayName: user.displayName };
+    }
+  }
+
+  // no-store: the browser keeps no copy of this answer, not even for the Back button. Without
+  // it, Back after logout shows the old page from the browser's cache (the server is never
+  // asked). Only while logged in, so guest pages keep normal caching; static files are
+  // answered before this middleware, so they are not affected.
+  if (request.session.user) {
+    response.set('Cache-Control', 'no-store');
+  }
+
+  // null, not undefined, so views can write "if (currentUser)".
   response.locals.currentUser = request.session.user || null;
   next();
 }

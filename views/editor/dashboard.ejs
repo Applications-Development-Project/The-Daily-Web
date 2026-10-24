@@ -1,0 +1,94 @@
+<%#
+  views/editor/dashboard.ejs
+
+  The editor dashboard: every article, with a status filter, a title search and pages
+  of 20. The table body starts empty; public/js/editor/dashboard.js fills it from the
+  API, so the row layout exists in one place only.
+
+  Rendered by: showEditorDashboard (controllers/editorController.js), for GET /editor.
+  Locals: title, statusOptions ([{ value, label }] for the filter), statusCounts.
+  Owner: SM.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+  <%- include('../partials/header') %>
+  <%- include('partials/editorNav', { activePage: 'dashboard' }) %>
+
+  <main class="main-content">
+    <h2>All articles</h2>
+
+    <%#
+      One counter per status. Clicking one filters the table by that status (dashboard.js).
+      Known limit: the numbers are from when the page opened (a delete doesn't update them),
+      which is enough for an overview.
+    %>
+    <section id="status-summary">
+      <% statusOptions.forEach(function (option) { %>
+        <button type="button" class="card status-summary-card" data-status="<%= option.value %>">
+          <span class="summary-count"><%= statusCounts[option.value] || 0 %></span>
+          <span class="status-badge status-<%= option.value %>"><%= option.label %></span>
+        </button>
+      <% }); %>
+    </section>
+
+    <%#
+      maxlength matches the server's limit; the server checks it again. autocomplete="off" on
+      both fields: after "Back", the browser can't restore a status or search the table
+      (loaded from scratch by dashboard.js) doesn't match.
+    %>
+    <form id="article-filters" class="card" role="search">
+      <label for="status-filter">Status</label>
+      <select id="status-filter" name="status" class="form-field" autocomplete="off">
+        <option value="">All statuses</option>
+        <% statusOptions.forEach(function (option) { %>
+          <option value="<%= option.value %>"><%= option.label %></option>
+        <% }); %>
+      </select>
+
+      <label for="title-search">Search by title</label>
+      <input type="search" id="title-search" name="search" class="form-field"
+        maxlength="200" placeholder="Part of a title..." autocomplete="off">
+    </form>
+
+    <%# aria-live: screen readers announce the message when it changes. %>
+    <p id="article-list-message" class="loading" aria-live="polite">Loading articles...</p>
+    <p id="article-action-message" aria-live="polite" hidden></p>
+
+    <%# On a narrow screen the table scrolls sideways inside this box, not the whole page. %>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th scope="col">Title</th>
+            <th scope="col">Reporter</th>
+            <th scope="col">Status</th>
+            <th scope="col">Live</th>
+            <th scope="col">Last update</th>
+            <th scope="col">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="article-rows"></tbody>
+      </table>
+    </div>
+
+    <nav id="pagination" aria-label="Pages of articles">
+      <button type="button" id="previous-page" class="btn" disabled>Previous</button>
+      <span id="page-info"></span>
+      <button type="button" id="next-page" class="btn" disabled>Next</button>
+    </nav>
+
+    <noscript>
+      <p class="form-error">The article list needs JavaScript. Please turn it on.</p>
+    </noscript>
+  </main>
+
+  <%- include('../partials/footer') %>
+
+  <script src="/js/shared/apiClient.js"></script>
+  <script src="/js/shared/confirmDialog.js"></script>
+  <script src="/js/editor/dashboard.js"></script>
+</body>
+</html>

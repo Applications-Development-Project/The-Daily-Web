@@ -1,10 +1,10 @@
 /**
  * routes/pageRoutes/articlePageRoutes.js
  *
- * Page route for a single article. Mounted at "/" in app.js.
- * Created by OS in phase 0 with the path and access from the routes table in
- * "Shared contracts"; the controller behind it is a PLACEHOLDER until SH replaces it.
+ * The full article page, mounted at "/" in app.js. The controller checks the id
+ * (404 for a malformed, unknown or not-live article).
  *
+ * Related: controllers/articlePageController.js.
  * Owner: SH.
  */
 

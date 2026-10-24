@@ -1,31 +1,22 @@
 /**
  * middleware/requireLogin.js
  *
- * Protects a route so only logged-in users (reporters and editors) reach it.
- * A guest gets:
- * - 401 JSON { success: false, error } for /api requests, which fetch code can show, or
- * - a redirect to /login for pages, so a person lands where they can log in.
+ * Lets only logged-in users through. A guest gets 401 JSON for /api requests, or a
+ * redirect to /login for pages. "Logged in" means the server-side session has a user,
+ * which the browser can't fake (it only holds a signed session id).
  *
- * "Logged in" means the server-side session has a user (set at login by
- * authController). The browser only holds a signed session id, so it can't fake this.
- *
- * Usage in a route file:
- *   router.get('/reporter', requireLogin, requireRole('reporter'), showReporterDashboard);
- * (requireRole also checks login by itself, so requireRole alone is enough too.)
- *
- * Used by: every protected route file, and middleware/requireRole.js.
- * Related: middleware/isApiRequest.js, middleware/errorHandler.js (sends the 401 JSON).
+ * Used by: protected routes and middleware/requireRole.js.
  * Owner: OS.
  */
 
-const isApiRequest = require('./isApiRequest');
+const isApiRequest = require('../utils/isApiRequest');
 
 /**
  * Lets the request through only if someone is logged in.
  *
- * @param {import('express').Request} request - request.session.user is set after login.
- * @param {import('express').Response} response - Used to redirect guests on pages.
- * @param {import('express').NextFunction} next - Continues, or passes a 401 error on.
+ * @param {import('express').Request} request - request.session.user is set at login.
+ * @param {import('express').Response} response - Redirects guests on pages.
+ * @param {import('express').NextFunction} next - Continues, or passes a 401 on.
  * @returns {void}
  */
 function requireLogin(request, response, next) {

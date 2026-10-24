@@ -1,0 +1,40 @@
+<%#
+  views/partials/header.ejs
+
+  The site header: the site name, and "Log in" for a guest or the user's name, a link to
+  their area and "Log out". currentUser is set for every view by middleware/setCurrentUser.js.
+  The role only chooses the link; every protected page checks it again on the server.
+
+  The last item is the light/dark theme button, for everyone (see public/js/shared/theme.js).
+
+  "Log out" is a POST form: it works without JavaScript, and another site can't log a
+  reader out with a plain link.
+
+  Included by: every page view.
+  Owner: SH (layout). The login state and the logout form are a contract with OS.
+%>
+<header class="site-header">
+    <h1 class="site-title"><a href="/">The Daily Web</a></h1>
+    <nav class="site-nav" aria-label="Account">
+        <% if (currentUser) { %>
+            <%# site-welcome: the stylesheet hides it on a phone so the header fits on one row. %>
+            <span class="site-welcome">Welcome, <%= currentUser.displayName %></span>
+            <% if (currentUser.role === 'reporter') { %>
+                <a href="/reporter" class="btn btn-primary">My articles</a>
+            <% } else if (currentUser.role === 'editor') { %>
+                <a href="/editor" class="btn btn-primary">Editor area</a>
+            <% } %>
+            <form method="post" action="/logout" class="inline-form">
+                <button type="submit" class="btn btn-danger">Log out</button>
+            </form>
+        <% } else { %>
+            <span class="site-welcome">Welcome, Guest</span>
+            <a href="/login" class="btn btn-primary">Log in</a>
+        <% } %>
+        <%#
+          The light/dark button, on every page. hidden until public/js/shared/theme.js shows it
+          (without JavaScript it could do nothing). The script sets its symbol and its name.
+        %>
+        <button type="button" id="theme-toggle" class="btn theme-toggle" aria-label="Switch theme" hidden></button>
+    </nav>
+</header>

@@ -1,0 +1,101 @@
+<%#
+  views/public/feed.ejs
+
+  The home page feed. The server renders the first 20 articles (seen at once, readable by
+  search engines); public/js/public/feed.js loads more on scroll and reloads the list for
+  a search, filter or sort, without reloading the page. Its cards use the same markup.
+
+  Text from the database is printed with the escaping tag. autocomplete="off" on the
+  filters: after "Back", the browser can't restore a value that doesn't match the list.
+
+  Rendered by: showFeedPage (controllers/feedController.js), for GET /.
+  Locals: title, articles (feed cards), hasMore, categories.
+  Owner: SH.
+%>
+<!DOCTYPE html>
+<html lang="en">
+<%- include('../partials/head', { title: title }) %>
+
+<body class="page-container">
+    <%- include('../partials/header') %>
+
+    <div class="main-content-wrapper">
+        <main class="main-content">
+            <h2 class="visually-hidden">Latest news</h2>
+
+            <%# No submit button: the script reacts to every change (and to Enter). %>
+            <form id="feed-filters" class="card feed-filters" role="search">
+                <label for="search-input" class="visually-hidden">Search articles</label>
+                <input type="search" id="search-input" name="search" class="form-field"
+                    placeholder="Search articles..." maxlength="500" autocomplete="off">
+
+                <div class="feed-filter-row">
+                    <label for="category-filter" class="visually-hidden">Category</label>
+                    <select id="category-filter" name="category" class="form-field" autocomplete="off">
+                        <option value="">All categories</option>
+                        <% categories.forEach(function (category) { %>
+                            <option value="<%= category %>"><%= category %></option>
+                        <% }); %>
+                    </select>
+
+                    <%# Viewed = opened from this browser (the deviceId cookie). %>
+                    <label for="viewed-filter" class="visually-hidden">Viewed or not</label>
+                    <select id="viewed-filter" name="viewed" class="form-field" autocomplete="off">
+                        <option value="">Viewed and not viewed</option>
+                        <option value="unviewed">Not viewed yet</option>
+                        <option value="viewed">Viewed</option>
+                    </select>
+
+                    <label for="sort-select" class="visually-hidden">Sort</label>
+                    <select id="sort-select" name="sort" class="form-field" autocomplete="off">
+                        <option value="newest">Newest first</option>
+                        <option value="popular">Most popular</option>
+                    </select>
+
+                    <button type="button" id="reset-views-btn" class="btn btn-secondary">Reset viewed marks</button>
+                </div>
+                <p id="feed-action-message" class="form-error" role="alert" hidden></p>
+            </form>
+
+            <%# data-has-more tells the script whether there is a second page. %>
+            <div id="feed-list" data-has-more="<%= hasMore ? 'true' : 'false' %>" aria-live="polite">
+                <% articles.forEach(function (article) { %>
+                    <article class="card article-card<%= article.imageUrl ? ' article-card-with-image' : '' %>" data-article-id="<%= article.id %>">
+                        <% if (article.imageUrl) { %>
+                            <%# onerror: a broken image shows our placeholder (onerror = null stops a loop). %>
+                            <img class="article-card-image" src="<%= article.imageUrl %>" alt="<%= article.title %>"
+                                loading="lazy" onerror="this.onerror=null; this.src='/images/placeholder.svg';">
+                        <% } %>
+                        <div class="article-card-text">
+                            <%# data-category: the stylesheet colours the pill's dot by category. %>
+                            <span class="category-badge" data-category="<%= article.category %>"><%= article.category %></span>
+                            <h3 class="article-card-title">
+                                <a href="/articles/<%= article.id %>"><%= article.title %></a>
+                            </h3>
+                            <p class="article-card-meta">
+                                By <%= article.reporterName %> |
+                                <% if (article.publishedAt) { %>
+                                    <time datetime="<%= article.publishedAt.toISOString() %>"><%= article.publishedAt.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) %></time> |
+                                <% } %>
+                                <%= article.totalViews %> views
+                            </p>
+                            <p><%= article.summary %></p>
+                        </div>
+                    </article>
+                <% }); %>
+                <% if (articles.length === 0) { %>
+                    <p class="empty-state">No articles have been published yet.</p>
+                <% } %>
+            </div>
+        </main>
+
+        <%- include('../partials/sidebar') %>
+    </div>
+
+    <%- include('../partials/footer') %>
+
+    <script src="/js/shared/apiClient.js"></script>
+    <script src="/js/public/feed.js"></script>
+    <script src="/js/public/weatherWidget.js"></script>
+</body>
+</html>

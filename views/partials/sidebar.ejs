@@ -1,0 +1,17 @@
+<%#
+  views/partials/sidebar.ejs
+
+  The public pages' sidebar with the weather widget. It is filled in the browser by
+  public/js/public/weatherWidget.js, so a slow weather service never delays the page.
+  The including page must load /js/shared/apiClient.js and /js/public/weatherWidget.js.
+
+  Included by: views/public/feed.ejs and views/public/article.ejs.
+  Owner: SH.
+%>
+<aside class="sidebar" aria-label="Sidebar">
+    <section id="weather-widget" class="card loading" aria-labelledby="weather-title">
+        <h3 id="weather-title">Weather</h3>
+        <%# aria-live: screen readers announce the weather when it arrives or changes. %>
+        <div id="weather-content" aria-live="polite">Loading weather...</div>
+    </section>
+</aside>

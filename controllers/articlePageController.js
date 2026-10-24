@@ -1,30 +1,174 @@
 /**
  * controllers/articlePageController.js
  *
- * PLACEHOLDER, created by OS in phase 0 so every route exists from day one.
- * Owner: SH. Replace the function body with the real logic, but keep the function
- * name and module.exports: routes/pageRoutes/articlePageRoutes.js already calls it.
- * If you already wrote your own version of this file on another branch, keep yours
- * when merging (with the same exported names) and drop this placeholder.
- * Until then the page shows the shared error page with status 501.
+ * The full article page, GET /articles/:id: the published version, rendered completely on
+ * the server (readable by search engines without JavaScript), with its newest comments,
+ * and one view counted for the statistics.
  *
- * What it will do: render the full article from "published" on the server (so the
- * whole text is in the page source for search engines), with the first comments,
- * call recordView(article._id, req.deviceId), and show the 404 error page for an id
- * that is invalid, missing or not live.
+ * A malformed id, an unknown id and an article that isn't live all answer the same 404:
+ * for a reader they mean "no such article", and an unpublished article isn't revealed.
  *
  * Used by: routes/pageRoutes/articlePageRoutes.js.
+ * Owner: SH.
  */
 
+const Article = require('../models/Article');
+const Comment = require('../models/Comment');
+const { recordView } = require('../services/viewTracker');
+const { createHttpError } = require('../utils/httpErrors');
+const { isValidObjectId } = require('../utils/requestValidation');
+
 /**
- * GET /articles/:id - the full article page. PLACEHOLDER.
+ * Splits the body into paragraphs (separated by an empty line). The view prints each one
+ * escaped, so a reporter's text never becomes HTML.
  *
- * @param {import('express').Request} request
- * @param {import('express').Response} response
- * @returns {void}
+ * @param {string} body - The article text as typed.
+ * @returns {string[]} The paragraphs, in order.
  */
-function showArticlePage(request, response) {
-  response.status(501).render('public/error', { statusCode: 501, message: 'The article page is not built yet.' });
+function splitIntoParagraphs(body) {
+  return (body || '')
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph !== '');
+}
+
+// An adult reads about 200 words a minute; the usual figure for "min read" labels.
+const WORDS_READ_PER_MINUTE = 200;
+
+/**
+ * Estimates how long the article takes to read, for the "5 min read" label.
+ *
+ * @param {string} body - The article text as typed.
+ * @returns {number} Whole minutes, rounded up, at least 1 (a short text still says "1 min read").
+ */
+function estimateReadingMinutes(body) {
+  const words = (body || '').split(/\s+/).filter((word) => word !== '');
+  return Math.max(1, Math.ceil(words.length / WORDS_READ_PER_MINUTE));
+}
+
+/**
+ * Finds up to 3 related articles from the same category, excluding the current one.
+ *
+ * Fast with thousands of articles: the { 'published.category': 1, lastPublishedAt: -1 }
+ * index already holds each category's articles newest first, so MongoDB reads only the
+ * first few instead of scanning and sorting.
+ *
+ * @param {Object} article - The current article document (must have _id and published.category).
+ * @returns {Promise<Array<{id: string, title: string, imageUrl: string, category: string}>>}
+ */
+async function findRelatedArticles(article) {
+  const articles = await Article.find({
+    _id: { $ne: article._id },
+    published: { $ne: null },
+    'published.category': article.published.category,
+  })
+    .sort({ lastPublishedAt: -1, _id: -1 })
+    .limit(3)
+    .select('published.title published.imageUrl published.category lastPublishedAt')
+    .lean();
+
+  return articles.map((relatedArticle) => ({
+    id: relatedArticle._id.toString(),
+    title: relatedArticle.published.title,
+    imageUrl: relatedArticle.published.imageUrl || '',
+    category: relatedArticle.published.category,
+  }));
+}
+
+/**
+ * GET /articles/:id - the full article page.
+ *
+ * @param {import('express').Request} request - params.id; request.deviceId identifies the browser.
+ * @param {import('express').Response} response - Renders views/public/article.ejs.
+ * @returns {Promise<void>}
+ * @throws {Error} 404 for a malformed, unknown or not-live article.
+ */
+async function showArticlePage(request, response) {
+  const articleId = request.params.id;
+  if (!isValidObjectId(articleId)) {
+    throw createHttpError(404, 'Article not found.');
+  }
+
+  // Live = published not null (status only describes the working copy).
+  const article = await Article.findOne({ _id: articleId, published: { $ne: null } })
+    .select('published lastPublishedAt reporter')
+    .populate('reporter', 'displayName')
+    .lean();
+  if (!article) {
+    throw createHttpError(404, 'Article not found.');
+  }
+
+  // "Related articles" under the text, so a reader has somewhere to go next.
+  const relatedArticles = await findRelatedArticles(article);
+
+  // As many as the comments API sends; deviceId is never loaded.
+  const comments = await Comment.find({ article: article._id })
+    .sort({ createdAt: -1, _id: -1 })
+    .limit(Comment.MAX_SHOWN_PER_ARTICLE)
+    .select('authorName text createdAt')
+    .lean();
+
+  // Every visit counts. recordView never throws, so a failed count can't break the page.
+  await recordView(article._id, request.deviceId);
+
+  const published = article.published;
+  const reporterName = article.reporter ? article.reporter.displayName : 'Unknown reporter';
+
+  // Social sites and search engines need absolute addresses, so they are built from the
+  // address this request came to. The image is already absolute (draftValidation.js only
+  // accepts http:// and https://); new URL() would also complete a relative one.
+  const siteAddress = `${request.protocol}://${request.get('host')}`;
+  const pageUrl = `${siteAddress}/articles/${article._id}`;
+  const imageUrl = published.imageUrl ? new URL(published.imageUrl, siteAddress).href : '';
+
+  const openGraph = {
+    type: 'article',
+    title: published.title,
+    description: published.summary,
+    url: pageUrl,
+    image: imageUrl,
+  };
+
+  const newsArticle = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: published.title,
+    description: published.summary,
+    url: pageUrl,
+    author: { '@type': 'Person', name: reporterName },
+    articleSection: published.category,
+  };
+  // Left out when unknown rather than sent empty.
+  if (article.lastPublishedAt) {
+    newsArticle.datePublished = article.lastPublishedAt.toISOString();
+  }
+  if (imageUrl) {
+    newsArticle.image = [imageUrl];
+  }
+
+  // Printed raw inside <script type="application/ld+json"> (views/partials/head.ejs), so every
+  // "<" becomes \u003c: article text can never close the script element. JSON reads it back as "<".
+  const structuredData = JSON.stringify(newsArticle).replace(/</g, '\\u003c');
+
+  response.render('public/article', {
+    title: `${published.title} - The Daily Web`,
+    // The meta description search engines show under the link.
+    description: published.summary,
+    openGraph: openGraph,
+    structuredData: structuredData,
+    article: {
+      id: article._id.toString(),
+      title: published.title,
+      category: published.category,
+      imageUrl: published.imageUrl,
+      paragraphs: splitIntoParagraphs(published.body),
+      reporterName: reporterName,
+      publishedAt: article.lastPublishedAt,
+      readingMinutes: estimateReadingMinutes(published.body),
+    },
+    relatedArticles: relatedArticles,
+    comments: comments,
+  });
 }
 
 module.exports = { showArticlePage };

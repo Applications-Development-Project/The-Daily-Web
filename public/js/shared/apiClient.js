@@ -1,67 +1,44 @@
 /**
  * public/js/shared/apiClient.js
  *
- * Small helpers around fetch() that every browser script uses to talk to our
- * JSON API (Ajax): apiClient.get, .post, .patch and .delete.
+ * Helpers around fetch() for every browser script: apiClient.get, .post, .patch, .delete.
+ * fetch() can fail in three ways (the network fails and it rejects; the server answers an
+ * error status and it does NOT reject; the answer isn't JSON and response.json() throws).
+ * These helpers turn all three into one shape and never throw:
+ * { success, data, error, status }, where status is 0 if the server couldn't be reached.
  *
- * Why not call fetch() directly everywhere: fetch() has three different ways to
- * go wrong, and each page would have to handle all of them:
- *   1. The network fails (server down, Wi-Fi off): fetch() rejects with an error.
- *   2. The server answers with an error status (400, 401, 403, 404, 409, 429, 500):
- *      fetch() does NOT reject; we have to check response.ok ourselves.
- *   3. The answer isn't JSON (for example an HTML error page): response.json() throws.
- * These helpers turn all three into the same shape the server already uses,
- * { success: false, error: "<message a user can read>" }, so a page only checks
- * result.success and shows result.error. They never throw and never reject.
- *
- * Every helper resolves to { success, data, error, status }:
- *   success - true if the request worked
- *   data    - the server's "data" on success, otherwise null
- *   error   - a message to show the user on failure, otherwise null
- *   status  - the HTTP status code, or 0 if the server couldn't be reached.
- *             Lets a page react to a specific case, for example 401 (logged out).
- *
- * How to use it: load this file before the page's own script, then call it.
- *   <script src="/js/shared/apiClient.js"></script>
- *   <script src="/js/editorDashboard.js"></script>
- *
- *   const result = await apiClient.post('/api/editor/articles/123/return', { note: 'Fix the title' });
- *   if (!result.success) { showError(result.error); return; }
- *
- * This is a plain browser script (no modules, no build step), so apiClient is a
- * global name that the page scripts loaded after it can use.
+ * A plain browser script (no modules): load it before the page's own script, which then
+ * uses the global apiClient.
  *
  * Used by: every file in public/js/.
- * Owner: shared file, complete version by SM. Change it only in a small, separate pull request.
+ * Owner: shared file, complete version by SM.
  */
 
 const NETWORK_ERROR_MESSAGE = 'Could not reach the server. Check your connection and try again.';
 
 /**
- * Sends one request to our API and turns every possible outcome into
- * { success, data, error, status }.
+ * Sends one request and turns every outcome into { success, data, error, status }.
  *
  * @param {string} method - 'GET', 'POST', 'PATCH' or 'DELETE'.
- * @param {string} url - Path on our server, for example '/api/articles?page=2'.
- * @param {Object} [body] - Data to send as JSON. Leave out for GET and DELETE.
+ * @param {string} url - For example '/api/articles?page=2'.
+ * @param {Object} [body] - Sent as JSON; left out for GET and DELETE.
  * @returns {Promise<{success: boolean, data: *, error: (string|null), status: number}>}
  *   Never rejects.
  */
 async function sendApiRequest(method, url, body) {
-  // Accept tells the server we want JSON back, not an HTML page.
+  // Accept: we want JSON back, not an HTML page.
   const options = {
     method: method,
     headers: { Accept: 'application/json' },
   };
 
-  // Only requests that carry data get a body and the header saying it is JSON.
   // Without Content-Type: application/json, express.json() would ignore the body.
   if (body !== undefined) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(body);
   }
 
-  // Case 1: the network fails. fetch() rejects only in this case.
+  // The network fails: the only case where fetch() rejects.
   let response;
   try {
     response = await fetch(url, options);
@@ -69,7 +46,7 @@ async function sendApiRequest(method, url, body) {
     return { success: false, data: null, error: NETWORK_ERROR_MESSAGE, status: 0 };
   }
 
-  // Case 3: the answer isn't JSON. response.json() throws, for example on an HTML page.
+  // The answer isn't JSON (for example an HTML page).
   let responseBody;
   try {
     responseBody = await response.json();
@@ -82,9 +59,7 @@ async function sendApiRequest(method, url, body) {
     };
   }
 
-  // Case 2: the server answered with an error. response.ok is true only for 200-299.
-  // We also check the body's own "success" flag, so both must agree before we
-  // report success.
+  // An error status (response.ok is true only for 200-299); the body's own flag must agree too.
   if (!response.ok || responseBody.success !== true) {
     return {
       success: false,
@@ -97,13 +72,11 @@ async function sendApiRequest(method, url, body) {
   return { success: true, data: responseBody.data, error: null, status: response.status };
 }
 
-// The four helpers named in "Shared contracts". Each one only picks the HTTP method;
-// all the work is in sendApiRequest above. "delete" is allowed as a property name
-// even though it is a JavaScript keyword, so apiClient.delete(url) works.
+// Each helper only picks the method. "delete" is allowed as a property name.
 const apiClient = {
   /**
-   * Reads data. Put search and filter values in the URL's query string.
-   * @param {string} url - For example '/api/editor/articles?status=pending&page=1'.
+   * Reads data (filters go in the query string).
+   * @param {string} url
    * @returns {Promise<{success: boolean, data: *, error: (string|null), status: number}>}
    */
   get: function (url) {
@@ -112,8 +85,8 @@ const apiClient = {
 
   /**
    * Creates something or runs an action (for example approve).
-   * @param {string} url - API path.
-   * @param {Object} [body] - Data to send as JSON.
+   * @param {string} url
+   * @param {Object} [body]
    * @returns {Promise<{success: boolean, data: *, error: (string|null), status: number}>}
    */
   post: function (url, body) {
@@ -121,9 +94,9 @@ const apiClient = {
   },
 
   /**
-   * Changes part of something (for example the draft of an article).
-   * @param {string} url - API path.
-   * @param {Object} body - The fields to change, sent as JSON.
+   * Changes part of something.
+   * @param {string} url
+   * @param {Object} body - The fields to change.
    * @returns {Promise<{success: boolean, data: *, error: (string|null), status: number}>}
    */
   patch: function (url, body) {
@@ -132,7 +105,7 @@ const apiClient = {
 
   /**
    * Deletes something.
-   * @param {string} url - API path, for example '/api/editor/articles/123'.
+   * @param {string} url
    * @returns {Promise<{success: boolean, data: *, error: (string|null), status: number}>}
    */
   delete: function (url) {

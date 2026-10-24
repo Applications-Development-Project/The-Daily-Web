@@ -1,18 +1,12 @@
 /**
  * middleware/requireRole.js
  *
- * Protects a route so only users with one role reach it, for example
- * requireRole('editor') for every /editor and /api/editor route.
- * - Not logged in: handled exactly like requireLogin (401 JSON or redirect to /login).
- * - Logged in with another role: 403, as JSON for /api or the error page for pages.
- *
- * The role comes only from the server-side session (copied from the User document at
- * login), never from anything the browser sends, so editing a cookie, a hidden field
- * or a request body can't give anyone more rights. This is what the requirements mean
- * by "permissions are checked on the server; hiding buttons is not enough".
+ * Lets only users with one role through, for example requireRole('editor'). Not logged in:
+ * like requireLogin (401 or /login). Another role: 403. The role comes only from the
+ * server-side session (refreshed every request by setCurrentUser.js), never from anything
+ * the browser sends, so it can't be faked.
  *
  * Used by: the reporter and editor route files.
- * Related: middleware/requireLogin.js, models/User.js (the allowed roles).
  * Owner: OS.
  */
 
@@ -22,16 +16,14 @@ const requireLogin = require('./requireLogin');
 const KNOWN_ROLES = ['reporter', 'editor'];
 
 /**
- * Builds a middleware that allows only the given role.
- *
- * requireRole is called once, when a route file is loaded, and returns the real
- * middleware, which then runs on every request. Checking the role name here, at load
- * time, means a typo like requireRole('editr') stops the server at startup with a clear
- * message, instead of silently locking everyone out of that page.
+ * Builds a middleware that allows only the given role. The role name is checked once,
+ * when the route file loads, so a typo like requireRole('editr') stops the server at
+ * startup instead of silently locking everyone out. The returned function remembers its
+ * role (a closure).
  *
  * @param {string} role - "reporter" or "editor".
- * @returns {import('express').RequestHandler} Middleware that checks the session's role.
- * @throws {Error} If role is not one of the known roles.
+ * @returns {import('express').RequestHandler}
+ * @throws {Error} If role is unknown.
  */
 function requireRole(role) {
   if (!KNOWN_ROLES.includes(role)) {
@@ -39,11 +31,11 @@ function requireRole(role) {
   }
 
   /**
-   * Lets the request through only if the logged-in user has the required role.
+   * Lets the request through only if the logged-in user has the role.
    *
    * @param {import('express').Request} request - request.session.user holds the role.
-   * @param {import('express').Response} response - Passed to requireLogin for guests.
-   * @param {import('express').NextFunction} next - Continues, or passes a 403 error on.
+   * @param {import('express').Response} response
+   * @param {import('express').NextFunction} next - Continues, or passes a 403 on.
    * @returns {void}
    */
   function checkRole(request, response, next) {

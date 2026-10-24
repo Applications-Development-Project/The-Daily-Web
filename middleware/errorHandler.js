@@ -1,112 +1,100 @@
 /**
  * middleware/errorHandler.js
  *
- * The last middleware in app.js. Every error in the app ends up here: errors passed
- * with next(error), errors thrown in a route, and (Express 5) rejected promises in
- * async controllers. It does three things:
- *   1. Decides the HTTP status and a message a user can read.
- *   2. Logs the error (server errors with their full stack trace).
- *   3. Replies with JSON for /api requests, or the error page for normal pages.
- * Because of this, bad input or a failed database call never crashes the server
- * and never shows the user a raw stack trace.
+ * The last middleware: every error ends up here (next(error), a thrown error, or in
+ * Express 5 a rejected promise). It picks the status and a readable message, logs the
+ * error, and answers with JSON for /api or the error page otherwise. So bad input or a
+ * failed database call never crashes the server or shows a stack trace.
  *
- * How other files use it: just call next(error). To choose the status yourself,
- * set error.statusCode to a 4xx number, and error.message becomes the message
- * the user sees, for example:
- *   const error = new Error('Article not found');
- *   error.statusCode = 404;
- *   return next(error);
+ * To choose the status yourself, create the error with statusCode set to a 4xx number
+ * (utils/httpErrors.js); its message is what the user sees.
  *
  * Used by: app.js (registered last).
- * Related: middleware/isApiRequest.js, middleware/notFoundHandler.js,
- * views/public/error.ejs, services/logger.js.
  * Owner: OS.
  */
 
-const isApiRequest = require('./isApiRequest');
+const isApiRequest = require('../utils/isApiRequest');
 const logger = require('../services/logger');
 
-// Shown for every unexpected (500) error. We never send the real error message to
-// the browser in that case: it can reveal file paths, queries or other internals.
+// For every 500: the real message could reveal file paths or queries.
 const SERVER_ERROR_MESSAGE = 'Something went wrong on our side. Please try again later.';
 
-// MongoDB's error code for "a unique index already has this value",
-// for example a username that is already taken.
+// MongoDB's code for "a unique index already has this value" (a taken username).
 const DUPLICATE_KEY_ERROR_CODE = 11000;
 
 /**
- * Turns any error into the status code and message we send back.
- * Each "if" handles one known kind of error; anything we don't recognise is a 500.
+ * Turns any error into the status and message we send. Each "if" is one known kind of
+ * error; anything else is a 500.
  *
- * @param {Error} error - The error that reached the handler.
- * @returns {{statusCode: number, message: string}} What to send to the user.
+ * @param {Error} error
+ * @returns {{statusCode: number, message: string}}
  */
 function getErrorResponse(error) {
-  // express.json() couldn't parse the body, for example a missing quote or brace.
+  // express.json() couldn't parse the body.
   if (error.type === 'entity.parse.failed') {
     return { statusCode: 400, message: 'Invalid JSON in the request body' };
   }
 
-  // The body is larger than the limit set in app.js (1mb).
+  // Larger than the 1mb limit in app.js.
   if (error.type === 'entity.too.large') {
     return { statusCode: 400, message: 'The request is too large' };
   }
 
-  // Mongoose couldn't convert a value to the type in the schema. The usual case is
-  // a malformed id in the URL, for example /articles/abc instead of a 24-character id.
+  // Mongoose couldn't convert a value, usually a malformed id.
   if (error.name === 'CastError') {
     return { statusCode: 400, message: `Invalid value for ${error.path}` };
   }
 
-  // A schema rule failed (required, maxlength, enum...). Mongoose collects one error
-  // per field; we join their messages, which we wrote ourselves in the models.
+  // A schema rule failed; the messages are the ones we wrote in the models.
   if (error.name === 'ValidationError') {
     const fieldMessages = Object.values(error.errors).map((fieldError) => fieldError.message);
     return { statusCode: 400, message: fieldMessages.join('. ') };
   }
 
-  // A unique index refused a duplicate. keyValue holds the field that clashed,
-  // for example { username: 'dana' }.
+  // A unique index refused a duplicate; keyValue is for example { username: 'dana' }.
   if (error.code === DUPLICATE_KEY_ERROR_CODE) {
     const fieldName = error.keyValue ? Object.keys(error.keyValue)[0] : 'value';
     return { statusCode: 409, message: `This ${fieldName} already exists` };
   }
 
-  // An error our own code created on purpose, with a 4xx status and a readable message
-  // (see the example in the header). We accept only 4xx here: those are the user's
-  // mistakes, so their message is safe and useful to show.
-  if (Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
-    return { statusCode: error.statusCode, message: error.message };
+  // A broken "%" in a route parameter (/articles/%E0%A4%A): Express marks it 400 before
+  // any controller runs. Checking status 400 keeps a URIError from our own bug a 500.
+  if (error instanceof URIError && error.status === 400) {
+    return { statusCode: 400, message: 'The address contains invalid characters.' };
+  }
+
+  // A 4xx from our code (statusCode) or from Express (status): the user's mistake, so the
+  // message is safe to show.
+  const clientStatus = error.statusCode || error.status;
+  if (Number.isInteger(clientStatus) && clientStatus >= 400 && clientStatus < 500) {
+    return { statusCode: clientStatus, message: error.message };
   }
 
   return { statusCode: 500, message: SERVER_ERROR_MESSAGE };
 }
 
 /**
- * Express error-handling middleware. Express recognises it as an error handler
- * because it has four parameters, so "next" must stay in the list even though
- * it is only used in one case.
+ * The error-handling middleware. Express recognises it by its four parameters, so "next"
+ * must stay even though it is rarely used.
  *
- * @param {Error} error - The error passed to next(error) or thrown in a route.
- * @param {import('express').Request} request - The request that failed.
- * @param {import('express').Response} response - Used to send the error reply.
- * @param {import('express').NextFunction} next - Express's own error handler.
+ * @param {Error} error
+ * @param {import('express').Request} request
+ * @param {import('express').Response} response
+ * @param {import('express').NextFunction} next - Express's own handler.
  * @returns {void}
  */
 function handleError(error, request, response, next) {
   const { statusCode, message } = getErrorResponse(error);
   const requestDescription = `${request.method} ${request.originalUrl}`;
 
-  // 500s are our bugs or outages: log everything, including the stack trace.
-  // 4xx are the user's mistakes: one short line is enough.
+  // A 500 is our bug or an outage: log the stack trace. A 4xx: one short line.
   if (statusCode >= 500) {
     logger.error(`${requestDescription} failed with ${statusCode}`, error);
   } else {
     logger.info(`${requestDescription} answered ${statusCode}: ${message}`);
   }
 
-  // If part of the reply was already sent, we can't change the status any more.
-  // Express's built-in handler then closes the connection properly.
+  // Part of the reply was already sent: Express's own handler closes the connection.
   if (response.headersSent) {
     return next(error);
   }
@@ -118,8 +106,7 @@ function handleError(error, request, response, next) {
     return;
   }
 
-  // The callback form of render lets us notice if the error page itself fails
-  // (for example a broken view); then we fall back to plain text instead of crashing.
+  // The callback notices if the error page itself fails, and falls back to plain text.
   response.render('public/error', { statusCode, message }, (renderError, html) => {
     if (renderError) {
       logger.error('Could not render the error page', renderError);
