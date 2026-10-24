@@ -4,8 +4,8 @@ A news site where reporters write articles, an editor reviews and publishes them
 comment. Built with Node.js, Express, EJS and MongoDB (Mongoose) in the MVC pattern, with plain JavaScript
 and Ajax in the browser.
 
-For a tour of the code (every folder, where each requirement lives, every URL and the design decisions),
-see the [guide to the code](docs/PROJECT_GUIDE.md).
+For a detailed tour of the code (every file, where each requirement lives, every URL and the design
+decisions), see the [guide to the code](docs/PROJECT_GUIDE.md).
 
 <!--
   Shared file: every student adds or corrects the part about their own area in a small pull request.
@@ -54,21 +54,45 @@ Log in at <http://localhost:3000/login> with the `SEED_DEMO_PASSWORD` from your 
 | `editor` | Editor |
 | `reporter1` to `reporter5` | Reporter |
 
-## What to try
+## Main features
 
-1. **As a guest** (no login): scroll the feed (20 articles at a time), search, filter by category or "not viewed
-   yet", sort by most popular; open an article and post a comment (at most 3 a minute). The sidebar shows the weather.
-2. **As `reporter1`**: create an article. It saves itself while you type (no Save button), even after a refresh
-   or from another computer. Submit it for approval, or update an article that is already live: readers keep the
-   approved version until the editor approves the new one.
-3. **As `editor`**: filter the dashboard by "Awaiting editor approval", open an article to see the live version
-   and the submitted changes side by side, then approve it or return it with a note. The editor can also edit or
-   delete any article, moderate comments and manage users.
-4. **Impact Analytics** (editor): pick an article and a period to see its views on a chart, with a numbered dashed
-   line at every publish.
+- **Guests** (no login): a feed of published articles with infinite scroll (20 at a time), search, a category
+  filter, a "viewed / not viewed" filter and sorting by newest or most popular, all without reloading; the full
+  article page; comments (at most 3 a minute per device); a weather widget.
+- **Reporters**: their own articles and statuses; an article editor that saves while they type (no Save button,
+  nothing lost after a refresh or on another computer); submitting for approval; updating a live article, while
+  readers keep the approved version until the editor approves the new one.
+- **Editor**: all articles with a status filter and search; the live version and the submitted changes side by
+  side; approve, return with a note, edit or delete any article; comment moderation; user management.
+- **Impact Analytics** (editor): an article's views over time on a chart, with a numbered dashed line at every
+  publish, to compare the views before and after each update.
 
 An article's status is one of: **In preparation**, **Awaiting editor approval**, **Published**, or **Returned for
-corrections**.
+corrections**. Logins survive a server restart (sessions are stored in MongoDB).
+
+## Project structure
+
+The project follows MVC: **models** (data), **views** (pages), **controllers** (handle a request).
+
+```
+The-Daily-Web/
+├── server.js            Starts the app: loads .env, connects to MongoDB, listens
+├── app.js               The Express app: middleware, routes, 404 and error handling
+├── config/              Database connection and login sessions
+├── models/              Mongoose schemas: User, Article, Comment, ArticleViewStats, DeviceArticleView
+├── routes/
+│   ├── pageRoutes/      URLs that return pages (HTML)
+│   └── apiRoutes/       URLs that return JSON, under /api
+├── controllers/         One per area: feed, article page, comments, auth, users, reporter, editor, analytics, weather
+├── middleware/          Login and role checks, the comment limit, the device cookie, error handling
+├── services/            Shared rules: article statuses, draft rules, view counting, weather, logger
+├── utils/               Small helpers: request validation, HTTP errors
+├── views/               EJS pages, by area: public/, reporter/, editor/, and partials/ (header, footer...)
+├── public/              Files sent to the browser: css/main.css, images/, and js/ (one script per page)
+├── scripts/seed.js      Demo data (npm run seed)
+├── tests/               Self-check scripts
+└── docs/PROJECT_GUIDE.md  A detailed guide to the code
+```
 
 ## Self-check scripts
 
