@@ -258,17 +258,18 @@ async function showEditorDashboard(request, response) {
   // Known limit: the numbers are from when the page opened (a delete doesn't update them),
   // which is enough for an overview.
   const counts = await Promise.all(
-    statusValues.map(status => Article.countDocuments({ status }))
+    statusValues.map((status) => Article.countDocuments({ status: status }))
   );
 
+  // Promise.all keeps the order, so counts[statusIndex] belongs to statusValues[statusIndex].
   const statusCounts = {};
-  statusValues.forEach((status, i) => {
-    statusCounts[status] = counts[i];
+  statusValues.forEach((status, statusIndex) => {
+    statusCounts[status] = counts[statusIndex];
   });
 
   // From the shared status list, so the filter offers exactly what the API accepts.
   const statusOptions = statusValues.map((status) => ({ value: status, label: STATUS_LABELS[status] }));
-  
+
   response.render('editor/dashboard', {
     title: 'Articles - Editor - The Daily Web',
     statusOptions: statusOptions,
