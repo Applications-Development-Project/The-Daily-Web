@@ -1008,6 +1008,71 @@ nav[aria-label="User list pages"] {
 .status-summary-card:has(.status-published) { border-top-color: var(--status-published); }
 .status-summary-card:has(.status-returned) { border-top-color: var(--status-returned); }
 
+/* Reporter's article editor (views/reporter/articleEditor.ejs, public/js/reporter/articleEditor.js) */
+
+/* The character counter under a field ("142 / 200"): small, quiet text on the right. The
+   script adds a class when the text is close to the limit (90%) and when it is at it.
+   The colours are tokens that exist already: the amber of the "pending" status for a
+   warning and the danger red for the limit. Both pass the 4.5:1 text contrast on the white
+   panel (about 4.7 and 6.3). Bold as well as coloured, so the warning does not depend on
+   colour alone (a colour-blind reader still sees the change). */
+.char-counter {
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.char-counter-near {
+  color: var(--status-pending);
+  font-weight: 700;
+}
+
+.char-counter-full {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
+/* The preview card hides its image and its category pill with the HTML "hidden" attribute
+   until the reporter fills them in. The card's own rules set display (block, inline-flex),
+   and an author's display beats the browser's built-in [hidden] rule, so it is restored
+   here for the preview only. */
+#card-preview [hidden] {
+  display: none;
+}
+
+/* The form and the preview card side by side (Flexbox). flex-wrap makes it stack by itself
+   on a narrow screen: when the form (at least 24rem) and the preview (at least 18rem)
+   don't fit in one row, the preview drops below the form, so no media query is needed. */
+.editor-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--spacing-lg);
+}
+
+/* min-width: 0 lets the form shrink instead of pushing the page sideways. */
+.editor-layout > form {
+  flex: 2 1 24rem;
+  min-width: 0;
+}
+
+/* Sticky: the card stays in view while the reporter scrolls a long text. 6rem keeps it
+   under the sticky header (the same distance as scroll-padding-top above). */
+.editor-preview {
+  flex: 1 1 18rem;
+  max-width: 28rem;
+  min-width: 0;
+  position: sticky;
+  top: 6rem;
+}
+
+/* The preview card is not a link, so it must not lift like a feed card does on hover. */
+.editor-preview .article-card:hover {
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
@@ -1023,6 +1088,12 @@ nav[aria-label="User list pages"] {
        in one row (a very small screen), the header wraps and the buttons go to a second
        row, instead of squeezing the title into three short lines. */
     white-space: nowrap;
+  }
+
+  /* The preview under the form takes the full width and scrolls with the page. */
+  .editor-preview {
+    position: static;
+    max-width: none;
   }
 
   /* On a phone the header is one compact row (title on the left, buttons on the right) and
