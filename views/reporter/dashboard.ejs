@@ -7,8 +7,8 @@
   button is never the protection. User text is printed with the escaping tag.
 
   Rendered by: showReporterDashboard (controllers/reporterController.js), for GET /reporter.
-  Locals: title, articles (from findReporterArticles), STATUS.
-  Script: public/js/reporter/dashboard.js (New article, Submit for approval).
+  Locals: title, articles (from findReporterArticles), STATUS, statusOptions.
+  Script: public/js/reporter/dashboard.js (New article, Submit for approval, status filter).
   Owner: EZ.
 %>
 <!DOCTYPE html>
@@ -30,6 +30,22 @@
     <% if (articles.length === 0) { %>
       <p class="empty-state">You have no articles yet.</p>
     <% } else { %>
+      <%#
+        Status filter. Every one of the reporter's articles is already in the table (no paging),
+        so dashboard.js filters the rows in the browser: no request, no reload. Each row's
+        data-status says which status it has.
+      %>
+      <form id="status-filter-form" class="card" role="search">
+        <label for="status-filter">Show articles that are</label>
+        <select id="status-filter" class="form-field">
+          <option value="">All statuses</option>
+          <% statusOptions.forEach(function (option) { %>
+            <option value="<%= option.value %>"><%= option.label %></option>
+          <% }); %>
+        </select>
+      </form>
+      <p id="status-filter-empty" class="empty-state" hidden>No articles with this status.</p>
+
       <%# On a narrow screen the table scrolls sideways inside this box. %>
       <div class="table-scroll">
         <table class="data-table">
@@ -44,7 +60,7 @@
           </thead>
           <tbody>
             <% articles.forEach(function (article) { %>
-              <tr>
+              <tr data-status="<%= article.status %>">
                 <td>
                   <%= article.title || '(Untitled)' %>
 
