@@ -329,10 +329,10 @@ function setUpEditorDashboard() {
   }
 
   /**
-   * Task 1: Handles clicks on a summary card. 
-   * Sets the dropdown to match the card's status and reuses applyFilters().
+   * A click on a status counter: sets the status filter to that status and reuses
+   * applyFilters(), so the table loads exactly as if the editor had chosen it in the list.
    *
-   * @param {MouseEvent} event 
+   * @param {MouseEvent} event - The click; currentTarget is the counter's button.
    * @returns {void}
    */
   function handleSummaryCardClick(event) {
