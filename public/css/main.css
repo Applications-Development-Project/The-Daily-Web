@@ -1040,6 +1040,38 @@ nav[aria-label="User list pages"] {
   display: none;
 }
 
+/* The form and the preview card side by side (Flexbox). flex-wrap makes it stack by itself
+   on a narrow screen: when the form (at least 24rem) and the preview (at least 18rem)
+   don't fit in one row, the preview drops below the form, so no media query is needed. */
+.editor-layout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--spacing-lg);
+}
+
+/* min-width: 0 lets the form shrink instead of pushing the page sideways. */
+.editor-layout > form {
+  flex: 2 1 24rem;
+  min-width: 0;
+}
+
+/* Sticky: the card stays in view while the reporter scrolls a long text. 6rem keeps it
+   under the sticky header (the same distance as scroll-padding-top above). */
+.editor-preview {
+  flex: 1 1 18rem;
+  max-width: 28rem;
+  min-width: 0;
+  position: sticky;
+  top: 6rem;
+}
+
+/* The preview card is not a link, so it must not lift like a feed card does on hover. */
+.editor-preview .article-card:hover {
+  transform: none;
+  box-shadow: var(--shadow);
+}
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
@@ -1051,6 +1083,12 @@ nav[aria-label="User list pages"] {
 
   .site-title {
     font-size: 1.4rem;
+  }
+
+  /* The preview under the form takes the full width and scrolls with the page. */
+  .editor-preview {
+    position: static;
+    max-width: none;
   }
 
   /* On a phone the header wraps to two rows; kept at the top it would cover too much. */
