@@ -10,6 +10,9 @@
  * the page closes (fetch with keepalive), handles a login session that ends while editing
  * (401), and runs "Submit for approval" (save first, then submit).
  *
+ * It also shows a character counter under the title, summary and body (a convenience: the
+ * server enforces the same limits).
+ *
  * Loaded by: views/reporter/articleEditor.ejs, after public/js/shared/apiClient.js.
  * Owner: EZ.
  */
@@ -65,6 +68,31 @@ function isEmptyOrHttpUrl(imageUrl) {
     // new URL() throws for text that isn't an address: that just means "not valid".
     return false;
   }
+}
+
+// A counter turns "near" at this share of the limit.
+const COUNTER_NEAR_SHARE = 0.9;
+
+/**
+ * Shows "142 / 200" for a field and marks the counter when the text is close to or at the
+ * limit. The limit is the field's own maxlength, so it is written once, in the view (the
+ * server checks the same lengths again in services/draftValidation.js: this is only help
+ * for the reporter, and changing maxlength in the browser's tools bypasses nothing).
+ *
+ * @param {HTMLInputElement|HTMLTextAreaElement} field - The text control.
+ * @param {HTMLElement} counterElement - Where the count is shown.
+ * @returns {void}
+ */
+function updateCharacterCounter(field, counterElement) {
+  const limit = field.maxLength;
+  const length = field.value.length;
+
+  // maxLength is -1 when a field has no limit: then only the count is shown.
+  const hasLimit = limit >= 0;
+  counterElement.textContent = hasLimit ? length + ' / ' + limit : String(length);
+
+  counterElement.classList.toggle('char-counter-near', hasLimit && length >= limit * COUNTER_NEAR_SHARE && length < limit);
+  counterElement.classList.toggle('char-counter-full', hasLimit && length >= limit);
 }
 
 /**
@@ -407,6 +435,23 @@ function setUpReporterEditor() {
   // fire only when the field loses focus.
   fields.forEach(function (field) {
     field.addEventListener('input', scheduleSave);
+  });
+
+  // The counters have their own listener, next to the autosave's: the autosave code is not
+  // touched. A counter that is missing from the page is skipped.
+  [
+    { field: articleForm.elements.title, counterId: 'title-counter' },
+    { field: articleForm.elements.summary, counterId: 'summary-counter' },
+    { field: articleForm.elements.body, counterId: 'body-counter' },
+  ].forEach(function (pair) {
+    const counterElement = document.getElementById(pair.counterId);
+    if (!counterElement) {
+      return;
+    }
+    updateCharacterCounter(pair.field, counterElement);
+    pair.field.addEventListener('input', function () {
+      updateCharacterCounter(pair.field, counterElement);
+    });
   });
 
   if (submitButton && submitError) {

@@ -53,11 +53,14 @@
       <div class="form-field">
         <label for="article-title">Title</label>
         <input type="text" id="article-title" name="title" maxlength="200" value="<%= article.draft.title %>">
+        <%# The script fills the counters (it reads each field's maxlength). aria-live: screen readers hear the change. %>
+        <p class="char-counter" id="title-counter" aria-live="polite"></p>
       </div>
 
       <div class="form-field">
         <label for="article-summary">Summary</label>
         <textarea id="article-summary" name="summary" rows="3" maxlength="500"><%= article.draft.summary %></textarea>
+        <p class="char-counter" id="summary-counter" aria-live="polite"></p>
       </div>
 
       <div class="form-field">
@@ -79,6 +82,7 @@
       <div class="form-field">
         <label for="article-body">Article text</label>
         <textarea id="article-body" name="body" rows="15" maxlength="50000"><%= article.draft.body %></textarea>
+        <p class="char-counter" id="body-counter" aria-live="polite"></p>
       </div>
     </form>
 
