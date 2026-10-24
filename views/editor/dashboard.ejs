@@ -34,10 +34,14 @@
       <% }); %>
     </section>
 
-    <%# maxlength matches the server's limit; the server checks it again. %>
+    <%#
+      maxlength matches the server's limit; the server checks it again. autocomplete="off" on
+      both fields: after "Back", the browser can't restore a status or search the table
+      (loaded from scratch by dashboard.js) doesn't match.
+    %>
     <form id="article-filters" class="card" role="search">
       <label for="status-filter">Status</label>
-      <select id="status-filter" name="status" class="form-field">
+      <select id="status-filter" name="status" class="form-field" autocomplete="off">
         <option value="">All statuses</option>
         <% statusOptions.forEach(function (option) { %>
           <option value="<%= option.value %>"><%= option.label %></option>
