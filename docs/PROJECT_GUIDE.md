@@ -125,10 +125,12 @@ The-Daily-Web/
 │   └── editor/               dashboard, articleReview, analytics, users, comments, partials/ (nav, article content)
 ├── public/                   Served as static files
 │   ├── css/main.css          The one stylesheet
-│   ├── images/               placeholder.svg (when an article image can't load), favicon.svg
+│   ├── images/               placeholder.svg (when an article image can't load), favicon.svg,
+│   │                         categories/ (two pictures per category, used by the seed's articles)
 │   └── js/
-│       ├── shared/apiClient.js   fetch() wrapper every page script uses: always { success, data, error, status }
-│       ├── public/               feed.js, articleComments.js, weatherWidget.js, login.js
+│       ├── shared/               apiClient.js (fetch() wrapper: always { success, data, error, status }),
+│       │                         theme.js (light / dark theme), confirmDialog.js (the editor's confirm box)
+│       ├── public/               feed.js, articleComments.js, weatherWidget.js, login.js, readingProgress.js
 │       ├── reporter/             dashboard.js, articleEditor.js (autosave)
 │       └── editor/               dashboard.js, articleReview.js, analytics.js (chart), users.js, comments.js
 ├── scripts/seed.js           Demo data (npm run seed)
@@ -224,7 +226,8 @@ The areas are `feed`, `articlePage`, `weather`, `auth`, `user`, `comment`, `repo
 
 Split by who uses them, the same three areas as the browser scripts:
 
-- `partials/`: `head.ejs` (title, stylesheet), `header.ejs` (site name, login state, logout button),
+- `partials/`: `head.ejs` (title, stylesheet, the theme script), `header.ejs` (site name, login state,
+  logout button, theme button),
   `footer.ejs`, `sidebar.ejs` (the weather widget).
 - `public/`: `feed.ejs`, `article.ejs`, `login.ejs`, `error.ejs` (every error page, including 404).
 - `reporter/`: `dashboard.ejs`, `articleEditor.ejs`.
@@ -236,11 +239,18 @@ Split by who uses them, the same three areas as the browser scripts:
 Express serves this folder at `/`, so `public/css/main.css` is at `/css/main.css`.
 
 - `css/main.css`: the one stylesheet, in sections (tokens, base, layout, shared components, areas, phones).
-- `images/`: `placeholder.svg` (shown when an article image can't load) and `favicon.svg` (the tab icon).
+- `images/`: `placeholder.svg` (shown when an article image can't load), `favicon.svg` (the tab icon), and
+  `categories/`, two pictures per category that the seed gives its articles (our own files, so the demo
+  needs no outside image site).
 - `js/shared/apiClient.js`: the `fetch` wrapper every page script uses. It always resolves to
   `{ success, data, error, status }` and never throws, so a page only checks `result.success`.
+- `js/shared/theme.js`: the light and dark theme. It runs in the `<head>` before the page is drawn (no white
+  flash), sets `data-theme` on `<html>` (main.css has a dark value for every colour token), runs the header's
+  theme button, and saves the choice in this browser.
+- `js/shared/confirmDialog.js`: the editor pages' confirmation box (an HTML5 `<dialog>` instead of
+  `window.confirm()`). It only prevents slips; the server still checks every permission.
 - `js/public/`: `feed.js` (infinite scroll, search, filters), `articleComments.js` (posting comments),
-  `weatherWidget.js`, `login.js`.
+  `weatherWidget.js`, `login.js`, `readingProgress.js` (the bar at the top of the article page).
 - `js/reporter/`: `dashboard.js` (new article, submit), `articleEditor.js` (autosave).
 - `js/editor/`: `dashboard.js`, `articleReview.js` (approve, return, edit), `analytics.js` (the chart),
   `users.js`, `comments.js`.
