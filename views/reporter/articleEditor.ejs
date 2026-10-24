@@ -48,16 +48,21 @@
       then come back here: your work is saved automatically, or click "Submit for approval".
     </p>
 
+    <%# The form and the preview of its card: side by side on a wide screen (see main.css). %>
+    <div class="editor-layout">
     <%# No action or submit button: the script sends the fields with fetch (no page reload). %>
     <form id="article-form" data-article-id="<%= article.id %>">
       <div class="form-field">
         <label for="article-title">Title</label>
         <input type="text" id="article-title" name="title" maxlength="200" value="<%= article.draft.title %>">
+        <%# The script fills the counters (it reads each field's maxlength). aria-live: screen readers hear the change. %>
+        <p class="char-counter" id="title-counter" aria-live="polite"></p>
       </div>
 
       <div class="form-field">
         <label for="article-summary">Summary</label>
         <textarea id="article-summary" name="summary" rows="3" maxlength="500"><%= article.draft.summary %></textarea>
+        <p class="char-counter" id="summary-counter" aria-live="polite"></p>
       </div>
 
       <div class="form-field">
@@ -79,8 +84,30 @@
       <div class="form-field">
         <label for="article-body">Article text</label>
         <textarea id="article-body" name="body" rows="15" maxlength="50000"><%= article.draft.body %></textarea>
+        <p class="char-counter" id="body-counter" aria-live="polite"></p>
       </div>
     </form>
+
+    <%#
+      How the article's card will look in the feed: the same classes as a card in
+      views/public/feed.ejs, so it gets the same style. The script copies the form into it
+      while the reporter types (textContent only, never innerHTML). The text shown here
+      before the script runs is only a placeholder. It is not a live region (aria-live):
+      announcing every keystroke twice would only be noise for a screen reader.
+    %>
+    <section id="card-preview" class="editor-preview" aria-labelledby="card-preview-heading">
+      <h3 id="card-preview-heading">Preview in the feed</h3>
+      <article class="card article-card article-card-with-image">
+        <img class="article-card-image" id="preview-image" src="/images/placeholder.svg" alt="" hidden>
+        <div class="article-card-text">
+          <span class="category-badge" id="preview-category" hidden></span>
+          <h3 class="article-card-title" id="preview-title">Your headline appears here</h3>
+          <p class="article-card-meta">By <%= currentUser.displayName %> | Preview</p>
+          <p id="preview-summary">Your summary appears here.</p>
+        </div>
+      </article>
+    </section>
+    </div>
 
     <%# type="button", outside the form: it never submits the form the normal way. The script saves first, then submits. %>
     <p>After you submit, the editor reviews the article and you can't change it until they decide.</p>
