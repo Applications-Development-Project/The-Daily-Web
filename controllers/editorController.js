@@ -54,14 +54,16 @@ function formatDateTime(date) {
 
 /**
  * Prepares one content object (draft or published) for the page, with the body split
- * into paragraphs (they are separated by a blank line).
+ * into paragraphs (they are separated by a blank line). A "blank" line may hold spaces,
+ * the same rule as the public article page (articlePageController.js), so the editor
+ * sees the paragraphs exactly as readers will.
  *
  * @param {{title: string, summary: string, body: string, imageUrl: string, category: string}} content
  * @returns {{title: string, summary: string, category: string, imageUrl: string, paragraphs: string[]}}
  */
 function toContentView(content) {
   const paragraphs = (content.body || '')
-    .split('\n\n')
+    .split(/\n\s*\n/)
     .map((paragraph) => paragraph.trim())
     .filter((paragraph) => paragraph !== '');
   return {
