@@ -310,6 +310,18 @@ form label {
   align-items: center;
 }
 
+/* The light/dark button in the header: a round icon button. hidden is restored explicitly
+   because .btn sets display, and an author's display beats the browser's [hidden] rule. */
+.site-nav .theme-toggle {
+  padding: 0.3rem 0.7rem;
+  font-size: 1.1rem;
+  line-height: 1.4;
+}
+
+.theme-toggle[hidden] {
+  display: none;
+}
+
 /* The logout form sits in the header's row like a link. */
 .inline-form {
   display: inline;
