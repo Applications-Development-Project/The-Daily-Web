@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Science illustration 1: an original picture drawn for The Daily Web from simple shapes (no outside
+  source, so it is free to use). The seed (scripts/seed.js) uses it for science articles.
+  Size 800x450 (16:9) like the photos it replaced; the background is the category colour.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Science illustration 1">
+  <rect width="800" height="450" fill="#3f51b5"/>
+  <rect x="0" y="330" width="800" height="120" fill="#000" opacity=".12"/>
+  <path d="M350 90 H450 M370 90 V190 L270 340 Q255 375 295 375 H505 Q545 375 530 340 L430 190 V90" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+     <path d="M310 300 H490 L520 350 Q525 365 505 365 H295 Q275 365 280 350 Z" fill="#fff" opacity=".85"/>
+     <circle cx="390" cy="250" r="12" fill="#fff" opacity=".8"/><circle cx="425" cy="215" r="8" fill="#fff" opacity=".8"/>
+</svg>

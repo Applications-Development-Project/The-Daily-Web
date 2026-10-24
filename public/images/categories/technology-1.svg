@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Technology illustration 1: an original picture drawn for The Daily Web from simple shapes (no outside
+  source, so it is free to use). The seed (scripts/seed.js) uses it for technology articles.
+  Size 800x450 (16:9) like the photos it replaced; the background is the category colour.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450" width="800" height="450" role="img" aria-label="Technology illustration 1">
+  <rect width="800" height="450" fill="#6d3fb5"/>
+  <rect x="0" y="330" width="800" height="120" fill="#000" opacity=".12"/>
+  <rect x="290" y="115" width="220" height="220" rx="18" fill="#fff" opacity=".9"/><rect x="335" y="160" width="130" height="130" rx="8" fill="#6d3fb5"/>
+     <g fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" opacity=".85"><path d="M330 115V70M400 115V70M470 115V70M330 335V380M400 335V380M470 335V380M290 170H245M290 225H245M290 280H245M510 170H555M510 225H555M510 280H555"/></g>
+</svg>
