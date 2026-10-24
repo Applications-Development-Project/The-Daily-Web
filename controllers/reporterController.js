@@ -100,6 +100,8 @@ async function showArticleEditor(request, response) {
     // Only what the view needs, not the whole document.
     article: {
       id: article._id.toString(),
+      // For the badge's colour (status-draft, status-returned...), as on the dashboard.
+      status: article.status,
       statusLabel: STATUS_LABELS[article.status],
       // published is null until the first approval.
       isLive: article.published !== null && article.published !== undefined,
