@@ -89,8 +89,14 @@
               <% }); %>
             </select>
 
-            <label for="edit-image">Main image address (optional, http:// or https://)</label>
-            <input type="url" id="edit-image" name="imageUrl" class="form-field" maxlength="2000" value="<%= review.editableDraft.imageUrl %>">
+            <%#
+              type="text", not "url": the browser's url check refuses a picture on our own site
+              (/images/categories/...), which most articles have, and then it blocks the whole
+              form. inputmode="url" still gives phones the address keyboard. The server checks
+              the address (services/draftValidation.js).
+            %>
+            <label for="edit-image">Main image address (optional: http://, https:// or a picture on this site)</label>
+            <input type="text" inputmode="url" id="edit-image" name="imageUrl" class="form-field" maxlength="2000" value="<%= review.editableDraft.imageUrl %>">
 
             <label for="edit-body">Body (leave an empty line between paragraphs)</label>
             <textarea id="edit-body" name="body" class="form-field" rows="14" maxlength="50000" required><%= review.editableDraft.body %></textarea>

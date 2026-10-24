@@ -291,7 +291,7 @@ function setUpReporterEditor() {
       // The server's time: the moment the draft was really saved.
       let message = 'Saved at ' + formatSavedTime(result.data.savedAt);
       if (imageUrlIsInvalid) {
-        message += '. The image address is not saved yet: it must be empty or start with http:// or https://';
+        message += '. The image address is not saved yet: it must be empty, start with http:// or https://, or be a picture on this site (/images/...)';
       }
       showStatus(message);
     } else {
@@ -363,7 +363,7 @@ function setUpReporterEditor() {
 
     // Autosave quietly keeps the old address; submitting must not, so stop and say why.
     if (!isEmptyOrHttpUrl(articleForm.elements.imageUrl.value)) {
-      stopSubmitting('The image address must be empty or start with http:// or https:// before you can submit.');
+      stopSubmitting('The image address must be empty, start with http:// or https://, or be a picture on this site (/images/...) before you can submit.');
       return;
     }
 
