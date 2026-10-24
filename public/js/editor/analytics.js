@@ -204,6 +204,8 @@ function setUpAnalyticsPage() {
   let chosenArticle = null;
   // Kept so it can be destroyed before the next chart is drawn on the same canvas.
   let chart = null;
+  // What the chart shows now, so a theme switch can draw it again without a new request.
+  let drawnChartData = null;
   let searchTimer = null;
 
   // Late answers to older requests are ignored, as on the dashboard.
@@ -378,6 +380,7 @@ function setUpAnalyticsPage() {
     if (chart) {
       chart.destroy();
     }
+    drawnChartData = { points: points, publishTimes: publishTimes, period: period };
     const unitWord = period.perDay ? 'day' : 'hour';
     // Chart.js's own grey text and grid are made for a white page: in the dark theme the
     // grid disappears. These tokens have a light and a dark value in main.css.
@@ -547,6 +550,14 @@ function setUpAnalyticsPage() {
   pickerForm.addEventListener('submit', searchNow);
   rangeSelect.addEventListener('change', loadChart);
   resetButton.addEventListener('click', resetStatistics);
+
+  // A canvas keeps the colours it was painted with, so after a theme switch
+  // (public/js/shared/theme.js) the open chart is drawn again with the new ones.
+  document.addEventListener('themechange', function () {
+    if (drawnChartData) {
+      drawChart(drawnChartData.points, drawnChartData.publishTimes, drawnChartData.period);
+    }
+  });
 
   // Opened from the review page's link: the server put the article on the page.
   if (page.dataset.initialArticleId) {
