@@ -20,10 +20,10 @@
   <main class="main-content">
     <h2>All articles</h2>
 
-    <%# 
-      Task 1: Editor dashboard counters
-      Note: The numbers are from when the page opened. A delete doesn't update them,
-      but it's enough for an overview.
+    <%#
+      One counter per status. Clicking one filters the table by that status (dashboard.js).
+      Known limit: the numbers are from when the page opened (a delete doesn't update them),
+      which is enough for an overview.
     %>
     <section id="status-summary">
       <% statusOptions.forEach(function (option) { %>
