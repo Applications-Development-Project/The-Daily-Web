@@ -379,6 +379,10 @@ function setUpAnalyticsPage() {
       chart.destroy();
     }
     const unitWord = period.perDay ? 'day' : 'hour';
+    // Chart.js's own grey text and grid are made for a white page: in the dark theme the
+    // grid disappears. These tokens have a light and a dark value in main.css.
+    const axisTextColour = readCssColour('--color-muted', '#6b5f57');
+    const gridColour = readCssColour('--color-border', '#ece3d8');
 
     chart = new Chart(canvas, {
       type: 'line',
@@ -415,14 +419,19 @@ function setUpAnalyticsPage() {
             ticks: {
               maxRotation: 0,
               autoSkip: true,
+              color: axisTextColour,
               callback: (value) => formatAxisLabel(value, period.rangeDays),
             },
+            grid: { color: gridColour },
+            border: { color: gridColour },
           },
           y: {
             beginAtZero: true,
             // Whole numbers only: no "2.5 views".
-            ticks: { precision: 0 },
-            title: { display: true, text: `Views per ${unitWord}` },
+            ticks: { precision: 0, color: axisTextColour },
+            grid: { color: gridColour },
+            border: { color: gridColour },
+            title: { display: true, text: `Views per ${unitWord}`, color: axisTextColour },
           },
         },
         plugins: {
