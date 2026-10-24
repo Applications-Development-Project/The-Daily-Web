@@ -74,7 +74,11 @@
   }
 
   /**
-   * Puts a theme on the page.
+   * Puts a theme on the page, then announces it with a "themechange" event on document.
+   * CSS follows data-theme by itself, but a <canvas> (the analytics chart) is painted once
+   * with the colours of that moment, so its script listens for this event to paint again.
+   * The first call runs in the <head>, before any script listens; that is fine, because
+   * those scripts read the colours when they first draw.
    *
    * @param {('light'|'dark')} theme - The theme to show.
    * @returns {void}
@@ -82,6 +86,7 @@
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     updateToggleButton(theme);
+    document.dispatchEvent(new CustomEvent('themechange', { detail: { theme: theme } }));
   }
 
   /**
