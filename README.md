@@ -37,8 +37,9 @@ You need **Node.js 20.6 or newer** and **MongoDB** running on your computer (`mo
 
 3. **Fill the database with demo data:** `npm run seed`.
    **Warning:** this first deletes everything in the database named in `MONGODB_URI`. It then creates the demo
-   users, 510 articles in every status and category, about 1,400 comments and 30 days of hourly view statistics.
-   The statistics end at the moment it runs, so run it again shortly before a demo.
+   users, 510 articles in every status and category, over a thousand comments (the exact number changes a
+   little with each run) and 30 days of hourly view statistics. The statistics end at the moment it runs, so run
+   it again shortly before a demo.
 
 4. **Start the server:** `npm start`, then open <http://localhost:3000>.
 
