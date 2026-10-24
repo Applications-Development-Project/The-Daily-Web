@@ -52,4 +52,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap">
     <link rel="stylesheet" href="/css/main.css">
+    <%#
+      The theme script is in the head and is NOT deferred, on purpose: it must run before the
+      page is drawn, so a reader who chose the dark theme never sees a white flash. It is a
+      normal file (no inline script), small, and wraps its own work in try/catch.
+    %>
+    <script src="/js/shared/theme.js"></script>
 </head>

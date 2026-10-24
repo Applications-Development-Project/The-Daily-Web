@@ -5,6 +5,8 @@
   their area and "Log out". currentUser is set for every view by middleware/setCurrentUser.js.
   The role only chooses the link; every protected page checks it again on the server.
 
+  The last item is the light/dark theme button, for everyone (see public/js/shared/theme.js).
+
   "Log out" is a POST form: it works without JavaScript, and another site can't log a
   reader out with a plain link.
 
@@ -29,5 +31,10 @@
             <span class="site-welcome">Welcome, Guest</span>
             <a href="/login" class="btn btn-primary">Log in</a>
         <% } %>
+        <%#
+          The light/dark button, on every page. hidden until public/js/shared/theme.js shows it
+          (without JavaScript it could do nothing). The script sets its symbol and its name.
+        %>
+        <button type="button" id="theme-toggle" class="btn theme-toggle" aria-label="Switch theme" hidden></button>
     </nav>
 </header>
