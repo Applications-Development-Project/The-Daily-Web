@@ -148,7 +148,7 @@ The sections below go through each folder file by file.
 | `app.js` | The Express app. Read its header first: it lists the middleware order and why |
 | `package.json` | The packages and the `npm` commands (`start`, `dev`, `seed`, `test:*`) |
 | `.env.example` | The settings each of us copies into our own `.env` (which is never committed) |
-| `README.md` | For the lecturer: how to install and run the project, the demo users and the main features |
+| `README.md` | For the lecturer: how to install and run the project, the demo users, the main features and the folder structure |
 | `CONVENTIONS.md` | How we write code: comments, naming, where files go, Git |
 
 ### `config/`: connecting to outside pieces
