@@ -1007,6 +1007,31 @@ nav[aria-label="User list pages"] {
 .status-summary-card:has(.status-published) { border-top-color: var(--status-published); }
 .status-summary-card:has(.status-returned) { border-top-color: var(--status-returned); }
 
+/* Reporter's article editor (views/reporter/articleEditor.ejs, public/js/reporter/articleEditor.js) */
+
+/* The character counter under a field ("142 / 200"): small, quiet text on the right. The
+   script adds a class when the text is close to the limit (90%) and when it is at it.
+   The colours are tokens that exist already: the amber of the "pending" status for a
+   warning and the danger red for the limit. Both pass the 4.5:1 text contrast on the white
+   panel (about 4.7 and 6.3). Bold as well as coloured, so the warning does not depend on
+   colour alone (a colour-blind reader still sees the change). */
+.char-counter {
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin: 0 0 var(--spacing-sm);
+}
+
+.char-counter-near {
+  color: var(--status-pending);
+  font-weight: 700;
+}
+
+.char-counter-full {
+  color: var(--color-danger);
+  font-weight: 700;
+}
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
