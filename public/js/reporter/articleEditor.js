@@ -11,7 +11,7 @@
  * (401), and runs "Submit for approval" (save first, then submit).
  *
  * It also shows a character counter under the title, summary and body (a convenience: the
- * server enforces the same limits).
+ * server enforces the same limits), and a live preview of the article's feed card.
  *
  * Loaded by: views/reporter/articleEditor.ejs, after public/js/shared/apiClient.js.
  * Owner: EZ.
@@ -436,6 +436,58 @@ function setUpReporterEditor() {
   fields.forEach(function (field) {
     field.addEventListener('input', scheduleSave);
   });
+
+  // The preview card (optional, like the counters): the elements the script fills in.
+  const previewImage = document.getElementById('preview-image');
+  const previewCategory = document.getElementById('preview-category');
+  const previewTitle = document.getElementById('preview-title');
+  const previewSummary = document.getElementById('preview-summary');
+
+  /**
+   * Copies the form into the preview card, the way the feed will show the article. Text
+   * goes in with textContent, so something like "<b>" in the title shows as those
+   * characters and never becomes HTML. The image address is used only if it passes the
+   * same check as the autosave (empty, a site path or http(s)): a "javascript:" address
+   * never reaches the image's src.
+   *
+   * @returns {void}
+   */
+  function updateCardPreview() {
+    previewTitle.textContent = articleForm.elements.title.value.trim() || 'Your headline appears here';
+    previewSummary.textContent = articleForm.elements.summary.value.trim() || 'Your summary appears here.';
+
+    // The category pill is hidden until a category is chosen. data-category is what the
+    // stylesheet reads to colour the pill's dot, as on a feed card.
+    const category = articleForm.elements.category.value;
+    previewCategory.hidden = category === '';
+    previewCategory.textContent = category;
+    previewCategory.dataset.category = category;
+
+    // Set the src only when the address really changed, so the browser doesn't reload the
+    // picture on every keystroke in another field.
+    const imageUrl = articleForm.elements.imageUrl.value.trim();
+    const showImage = imageUrl !== '' && isEmptyOrHttpUrl(imageUrl);
+    previewImage.hidden = !showImage;
+    if (showImage && previewImage.getAttribute('src') !== imageUrl) {
+      previewImage.src = imageUrl;
+    }
+    previewImage.alt = previewTitle.textContent;
+  }
+
+  if (previewImage && previewCategory && previewTitle && previewSummary) {
+    // A broken address shows the same fallback picture as the feed does. The check on
+    // the address stops a loop if the fallback itself fails.
+    previewImage.addEventListener('error', function () {
+      if (previewImage.getAttribute('src') !== '/images/placeholder.svg') {
+        previewImage.src = '/images/placeholder.svg';
+      }
+    });
+
+    updateCardPreview();
+    fields.forEach(function (field) {
+      field.addEventListener('input', updateCardPreview);
+    });
+  }
 
   // The counters have their own listener, next to the autosave's: the autosave code is not
   // touched. A counter that is missing from the page is skipped.
