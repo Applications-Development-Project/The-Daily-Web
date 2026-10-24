@@ -1032,6 +1032,14 @@ nav[aria-label="User list pages"] {
   font-weight: 700;
 }
 
+/* The preview card hides its image and its category pill with the HTML "hidden" attribute
+   until the reporter fills them in. The card's own rules set display (block, inline-flex),
+   and an author's display beats the browser's built-in [hidden] rule, so it is restored
+   here for the preview only. */
+#card-preview [hidden] {
+  display: none;
+}
+
 /* ---------- 6. Narrow screens (phones and small tablets) ---------- */
 
 @media (max-width: 768px) {
