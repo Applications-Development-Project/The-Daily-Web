@@ -58,14 +58,18 @@ Log in at <http://localhost:3000/login> with the `SEED_DEMO_PASSWORD` from your 
 
 - **Guests** (no login): a feed of published articles with infinite scroll (20 at a time), search, a category
   filter, a "viewed / not viewed" filter and sorting by newest or most popular, all without reloading; the full
-  article page; comments (at most 3 a minute per device); a weather widget.
-- **Reporters**: their own articles and statuses; an article editor that saves while they type (no Save button,
-  nothing lost after a refresh or on another computer); submitting for approval; updating a live article, while
-  readers keep the approved version until the editor approves the new one.
-- **Editor**: all articles with a status filter and search; the live version and the submitted changes side by
-  side; approve, return with a note, edit or delete any article; comment moderation; user management.
+  article page, with related articles from the same category; comments (at most 3 a minute per device); a
+  weather widget.
+- **Reporters**: their own articles and statuses, with a status filter; an article editor that saves while they
+  type (no Save button, nothing lost after a refresh or on another computer); submitting for approval; updating a
+  live article, while readers keep the approved version until the editor approves the new one.
+- **Editor**: all articles with a count per status, a status filter and search; the live version and the
+  submitted changes side by side; approve, return with a note, edit or delete any article; comment moderation;
+  user management.
 - **Impact Analytics** (editor): an article's views over time on a chart, with a numbered dashed line at every
   publish, to compare the views before and after each update.
+- **Everyone**: pages that fit a phone, a tablet and a desktop, and a light or dark theme (a button in the
+  header; until the reader chooses, it follows their system, and the choice is kept in that browser).
 
 An article's status is one of: **In preparation**, **Awaiting editor approval**, **Published**, or **Returned for
 corrections**. Logins survive a server restart (sessions are stored in MongoDB).
@@ -88,7 +92,8 @@ The-Daily-Web/
 ├── services/            Shared rules: article statuses, draft rules, view counting, weather, logger
 ├── utils/               Small helpers: request validation, HTTP errors
 ├── views/               EJS pages, by area: public/, reporter/, editor/, and partials/ (header, footer...)
-├── public/              Files sent to the browser: css/main.css, images/, and js/ (one script per page)
+├── public/              Files sent to the browser: css/main.css, images/, and js/ (one script per page,
+│                        plus js/shared/: the fetch wrapper, the theme and the confirm box)
 ├── scripts/seed.js      Demo data (npm run seed)
 ├── tests/               Self-check scripts
 └── docs/PROJECT_GUIDE.md  A detailed guide to the code
