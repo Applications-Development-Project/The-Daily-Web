@@ -8,7 +8,8 @@
  * interface that works on a computer, a tablet and a phone (responsive).
  *
  * How it is organised (in this order):
- *   1. Design tokens: colours and spacing as CSS variables, defined once and reused.
+ *   1. Design tokens: colours and spacing as CSS variables, defined once and reused; right
+ *      after them the dark theme, which redefines only the colour tokens.
  *   2. Base elements: body, links, headings, form controls.
  *   3. Page layout (Flexbox): header, the content + sidebar row, pages without a sidebar, footer.
  *   4. Shared components: the class names fixed in "Shared contracts" (btn, card, form-field,
@@ -92,6 +93,53 @@
      browser's own font is used, so the site still works. */
   --font: "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
   --content-width: 1200px;
+}
+
+/* ---------- The dark theme ---------- */
+
+/* The dark theme redefines only the colour tokens (and the shadows); no rule below needs to
+   know about it. public/js/shared/theme.js puts data-theme="dark" on <html> before the page
+   draws. It keeps the same warm brown family as the light theme: a very dark brown page,
+   a slightly lighter panel, and a lighter orange accent (the light theme's rust is too dark
+   to read as a link on a dark background). Every text colour has a contrast of at least
+   4.5:1 on the colour it sits on, and the category dots at least 3:1.
+   color-scheme: dark makes what the browser draws itself (scrollbars, the checkbox,
+   the date picker, a form control with no style of its own) dark too. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-primary: #f1e7dd;
+  --color-secondary: #d8c9bb;
+  --color-accent: #e8895f;
+  --color-danger: #f0708c;
+  /* Dark text on the now light accent and danger buttons. */
+  --color-on-accent: #1d1410;
+  --color-overlay: rgba(0, 0, 0, 0.7);
+  --color-background: #14100e;
+  --color-panel: #1f1916;
+  --color-surface: #28211d;
+  --color-surface-muted: #322a25;
+  --color-accent-soft: #4a2e22;
+  --color-text: #f1e7dd;
+  --color-muted: #b3a498;
+  --color-border: #3a312b;
+  --color-header: rgba(42, 34, 29, 0.92);
+  --color-header-border: #3d332c;
+  --gradient-feature: linear-gradient(135deg, #2e231e, #3b2a21);
+  /* The statuses keep their strong fills with white text. "Returned" uses the light
+     theme's crimson, because the dark theme's danger colour is too light for white text. */
+  --status-returned: #be123c;
+  --category-politics: #d9714a;
+  --category-economy: #d9a033;
+  --category-world: #4fb3b0;
+  --category-technology: #8a94f5;
+  --category-science: #5fc07a;
+  --category-health: #ee7a9b;
+  --category-sports: #5aa7e6;
+  --category-culture: #b883e6;
+  /* Shadows are black here: a brown shadow would not show on a dark page. */
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+  --shadow-raised: 0 2px 4px rgba(0, 0, 0, 0.45), 0 12px 28px rgba(0, 0, 0, 0.45);
 }
 
 /* ---------- 2. Base elements ---------- */
