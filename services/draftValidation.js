@@ -22,14 +22,22 @@ const DRAFT_FIELDS = ['title', 'summary', 'category', 'imageUrl', 'body'];
 const DRAFT_MAX_LENGTHS = { title: 200, summary: 500, imageUrl: 2000, body: 50000 };
 
 /**
- * Checks that a text is empty or an http(s) address, so a link like
- * "javascript:alert(1)" is never saved as an image address.
+ * Checks that a text is empty, a path on our own site, or an http(s) address, so a link
+ * like "javascript:alert(1)" is never saved as an image address.
+ *
+ * A path such as "/images/categories/politics-1.svg" is allowed because the seed gives
+ * its articles our own pictures. Without this, a reporter could not submit a seeded
+ * draft: the form sends the saved address back and the server would refuse it. "//" and
+ * "/\" are not paths: a browser reads them as another website's address.
  *
  * @param {string} imageUrl - The text to check.
- * @returns {boolean} true if it is empty or a valid http(s) address.
+ * @returns {boolean} true if it is empty, a site path or a valid http(s) address.
  */
 function isEmptyOrHttpUrl(imageUrl) {
   if (imageUrl === '') {
+    return true;
+  }
+  if (imageUrl.startsWith('/') && !imageUrl.startsWith('//') && !imageUrl.startsWith('/\\')) {
     return true;
   }
   try {
