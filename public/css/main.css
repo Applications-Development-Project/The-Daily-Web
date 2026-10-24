@@ -40,6 +40,11 @@
   /* Crimson: reads as a warning, and the analytics chart's publish markers (this colour)
      stand out from its rust line (the accent); analytics.js reads both from here. */
   --color-danger: #be123c;
+  /* The text on a button filled with the accent or danger colour. A token, because in the
+     dark theme those fills are light, and white text on them would be unreadable. */
+  --color-on-accent: #ffffff;
+  /* The dim layer behind the confirm dialog. */
+  --color-overlay: rgba(0, 0, 0, 0.5);
   /* The page behind the panel, the panel itself, and the cards on the panel. */
   --color-background: #efe6dc;
   --color-panel: #ffffff;
@@ -362,13 +367,13 @@ form label {
 .btn-primary {
   background-color: var(--color-accent);
   border-color: var(--color-accent);
-  color: white;
+  color: var(--color-on-accent);
 }
 
 .btn-danger {
   background-color: var(--color-danger);
   border-color: var(--color-danger);
-  color: white;
+  color: var(--color-on-accent);
 }
 
 .btn-secondary {
@@ -548,7 +553,7 @@ nav[aria-label="User list pages"] {
 
 /* The dark overlay behind the dialog */
 .confirm-dialog::backdrop {
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-overlay);
 }
 
 .confirm-message {
@@ -614,7 +619,9 @@ nav[aria-label="User list pages"] {
   color: var(--color-text);
   /* The plain fill is for a browser without color-mix(); the next line overrides it. */
   background-color: var(--color-surface-muted);
-  background-color: color-mix(in srgb, var(--category-color) 14%, white);
+  /* Mixed with the panel colour, not with white: in the dark theme the pill is a tint of
+     the dark panel, so the text colour stays readable on it. */
+  background-color: color-mix(in srgb, var(--category-color) 14%, var(--color-panel));
 }
 
 .category-badge::before {
