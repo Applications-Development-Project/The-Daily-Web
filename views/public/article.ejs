@@ -75,9 +75,9 @@
                 <section class="related-articles" aria-labelledby="related-heading">
                     <h3 id="related-heading">Related articles</h3>
                     <div class="related-articles-grid">
-                        <% relatedArticles.forEach(function (relArticle) { %>
+                        <% relatedArticles.forEach(function (relatedArticle) { %>
                             <div class="card">
-                                <a href="/articles/<%= relArticle.id %>"><%= relArticle.title %></a>
+                                <a href="/articles/<%= relatedArticle.id %>"><%= relatedArticle.title %></a>
                             </div>
                         <% }); %>
                     </div>

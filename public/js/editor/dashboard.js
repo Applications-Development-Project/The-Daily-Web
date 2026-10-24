@@ -363,15 +363,13 @@ function setUpEditorDashboard() {
     applyFilters();
   }
 
-  // Event Listeners
   statusFilter.addEventListener('change', applyFilters);
   titleSearch.addEventListener('input', searchAfterTyping);
   filterForm.addEventListener('submit', searchNow);
   previousButton.addEventListener('click', showPreviousPage);
   nextButton.addEventListener('click', showNextPage);
-  
-  // Attach listeners to summary cards
-  statusSummaryCards.forEach(card => {
+  // Each status counter filters the table by its status.
+  statusSummaryCards.forEach((card) => {
     card.addEventListener('click', handleSummaryCardClick);
   });
 
