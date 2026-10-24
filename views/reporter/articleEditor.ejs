@@ -77,8 +77,13 @@
       </div>
 
       <div class="form-field">
+        <%#
+          type="text", not "url": the browser's url check calls a picture on our own site
+          (/images/categories/...) invalid, though the server accepts it. inputmode="url" still
+          gives phones the address keyboard. articleEditor.js and the server check the address.
+        %>
         <label for="article-image-url">Image URL</label>
-        <input type="url" id="article-image-url" name="imageUrl" maxlength="2000" value="<%= article.draft.imageUrl %>">
+        <input type="text" inputmode="url" id="article-image-url" name="imageUrl" maxlength="2000" value="<%= article.draft.imageUrl %>">
       </div>
 
       <div class="form-field">
