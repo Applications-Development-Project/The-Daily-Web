@@ -15,7 +15,8 @@
     <h1 class="site-title"><a href="/">The Daily Web</a></h1>
     <nav class="site-nav" aria-label="Account">
         <% if (currentUser) { %>
-            <span>Welcome, <%= currentUser.displayName %></span>
+            <%# site-welcome: the stylesheet hides it on a phone so the header fits on one row. %>
+            <span class="site-welcome">Welcome, <%= currentUser.displayName %></span>
             <% if (currentUser.role === 'reporter') { %>
                 <a href="/reporter" class="btn btn-primary">My articles</a>
             <% } else if (currentUser.role === 'editor') { %>
@@ -25,7 +26,7 @@
                 <button type="submit" class="btn btn-danger">Log out</button>
             </form>
         <% } else { %>
-            <span>Welcome, Guest</span>
+            <span class="site-welcome">Welcome, Guest</span>
             <a href="/login" class="btn btn-primary">Log in</a>
         <% } %>
     </nav>
