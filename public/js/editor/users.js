@@ -177,13 +177,17 @@ function setUpUserManagement() {
   function createEditRow(user) {
     const row = document.createElement('tr');
 
+    // "form-field" gives the three controls the site's style (colours, border, dark theme),
+    // like every other field, instead of the browser's plain boxes.
     const nameInput = document.createElement('input');
     nameInput.type = 'text';
+    nameInput.className = 'form-field';
     nameInput.maxLength = 50;
     nameInput.value = user.displayName;
     nameInput.setAttribute('aria-label', `Display name of ${user.username}`);
 
     const roleSelect = document.createElement('select');
+    roleSelect.className = 'form-field';
     roleSelect.setAttribute('aria-label', `Role of ${user.username}`);
     for (const role of Object.keys(ROLE_LABELS)) {
       const option = createElementWithText('option', ROLE_LABELS[role]);
@@ -194,6 +198,7 @@ function setUpUserManagement() {
 
     const passwordInput = document.createElement('input');
     passwordInput.type = 'password';
+    passwordInput.className = 'form-field';
     // "new-password": the browser won't fill in the editor's own saved password here.
     passwordInput.autocomplete = 'new-password';
     passwordInput.placeholder = 'New password (optional)';
